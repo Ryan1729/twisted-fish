@@ -17,7 +17,7 @@ pub fn run<S: State + 'static>(mut state: S) {
     let event_loop = EventLoop::new();
 
     let builder = WindowBuilder::new()
-        .with_title("bartog");
+        .with_title("rename-me");
 
     #[cfg(target_arch = "wasm32")]
     let builder = wasm::set_canvas(builder);

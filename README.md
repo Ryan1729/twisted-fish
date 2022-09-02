@@ -1,14 +1,8 @@
-# Bartog
+# rename-me
 
-This is a single player only implementation of Bartog, A.K.A. Bartok, A.K.A. Warthog.
+This is a template, designed to make using a particular method of cross-platform (desktop and web) development, in a new project, faster.
 
-See [the included rules folder](./design/rules/README.md) for more info on the game, but essentially it's Crazy Eights but if you win a round, you get to pick a new rule that applies to future rounds.
-
-Because of the extremely flexible nature of Bartog, in some sense this project may never be truly complete. It is presented here in its current form, and I make no promises about where it will eventually get.
-
-You can play the live version of the latest release build [here](https://ryan1729.github.io/bartog/bartog/).
-
-I have also made a version of "plain" Crazy Eights, the live version of which can be played [here](https://ryan1729.github.io/bartog/crazy-eights/).
+See below for build/run instructions, and see the `checklist` script for how to get started modifying a copy of the template to suit your needs.
 
 ## WASM version
 
@@ -22,7 +16,7 @@ rustup target add wasm32-unknown-unknown
 ```
 3. Start dev server:
 ```
-cargo run-wasm bartog --release
+cargo run-wasm rename-me --release
 ```
 4. Visit `http://localhost:8000` with your browser.
 
@@ -30,7 +24,7 @@ cargo run-wasm bartog --release
 
 These extra features can be adding then to the run-wasm `features` flag. Note that these are comma separated. For instance to activate `invariant-checking` and `logging` you can run:
 ```
-cargo run-wasm bartog --release --features invariant-checking,logging
+cargo run-wasm rename-me --release --features invariant-checking,logging
 ```
 ## Desktop
 
@@ -42,11 +36,11 @@ The desktop version attempts to be cross platform. Only Linux and Windows have b
 
 2. Build via cargo
 ```
-cargo build --release --bin bartog
+cargo build --release --bin rename-me
 ```
 3. Run the executable
 ```
-./target/release/bartog
+./target/release/rename-me
 ```
 
 #### Linux specific notes
@@ -61,7 +55,7 @@ sudo apt install libasound2-dev pkg-config
 If you don't care about sound you can build with the enabled-by-default `"non-web-sound"` feature flag turned off:
 
 ```
-cargo build --release --bin bartog --no-default-features
+cargo build --release --bin rename-me --no-default-features
 ```
 
 ##### Wayland
@@ -69,7 +63,7 @@ As of this writing, [a library that this program uses does not allow specifying 
 For now, you can run the executable with the `WINIT_UNIX_BACKEND` environment variable set to `"x11"` as a workaround.
 
 ```
-WINIT_UNIX_BACKEND="x11" ./target/release/bartog
+WINIT_UNIX_BACKEND="x11" ./target/release/rename-me
 ```
 
 ## Feature flags
