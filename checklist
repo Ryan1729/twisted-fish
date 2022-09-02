@@ -14,7 +14,10 @@ echo '* ./README.md'
 echo '* ./rename-me/Cargo.toml'
 echo '  * This also contains authorship information that may need updating.'
 echo '* ./libs/platform/src/platform.rs'
-echo '* static/index.html'
+echo '* ./static/index.html'
+echo '* ./.project.gf'
+echo '  * This is only needed if you plan to debug with rust-gdb via gf. Otherwise both ./.project.gf and ./rust-gdb can be deleted'
+
 
 echo "After swapping out \"rename-me\" for your chosen name, building with the updated instuctions should work."
 

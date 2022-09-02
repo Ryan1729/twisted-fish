@@ -2,5 +2,5 @@
 path=./rust-gdb
 
 [commands]
-Compile bartog=shell cargo b --bin bartog --profile debugging
-Run bartog=file target/debugging/bartog;run&
+Compile rename-me=shell cargo b --bin rename-me --profile debugging
+Run rename-me=file target/debugging/rename-me;run&
