@@ -14,6 +14,6 @@ mod wasm {
 
 fn run() {
     let params = platform::get_state_params();
-    let state = game::BartogState::new(params);
+    let state = game::AppState::new(params);
     platform::run(state);
 }

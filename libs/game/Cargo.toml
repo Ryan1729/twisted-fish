@@ -9,26 +9,17 @@ path = "src/game.rs"
 
 [dependencies]
 
-[dependencies.choices]
-path = "../choices"
-
-[dependencies.animations]
-path = "../animations"
+[dependencies.common]
+path = "../common"
 
 [dependencies.game_state]
 path = "../game_state"
-
-[dependencies.common]
-path = "../common"
 
 [dependencies.features]
 path = "../features"
 
 [dependencies.platform_types]
 path = "../platform_types"
-
-[dependencies.rule_changes]
-path = "../rule_changes"
 
 [features]
 default = []

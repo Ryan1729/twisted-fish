@@ -34,16 +34,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "animations"
-version = "0.1.0"
-dependencies = [
- "choices",
- "common",
- "game_state",
- "platform_types",
-]
-
-[[package]]
 name = "anyhow"
 version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -199,15 +189,6 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
-
-[[package]]
-name = "choices"
-version = "0.1.0"
-dependencies = [
- "common",
- "game_state",
- "platform_types",
-]
 
 [[package]]
 name = "clang-sys"
@@ -658,13 +639,10 @@ checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 name = "game"
 version = "0.1.0"
 dependencies = [
- "animations",
- "choices",
  "common",
  "features",
  "game_state",
  "platform_types",
- "rule_changes",
 ]
 
 [[package]]
@@ -672,9 +650,7 @@ name = "game_state"
 version = "0.1.0"
 dependencies = [
  "common",
- "lazy_static",
  "platform_types",
- "quickcheck",
 ]
 
 [[package]]
@@ -1431,14 +1407,6 @@ checksum = "ec0939e9f626e6c6f1989adb6226a039c855ca483053f0ee7c98b90e41cf731e"
 dependencies = [
  "cpal",
  "lewton",
-]
-
-[[package]]
-name = "rule_changes"
-version = "0.1.0"
-dependencies = [
- "common",
- "game_state",
 ]
 
 [[package]]

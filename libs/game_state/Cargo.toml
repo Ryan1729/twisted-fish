@@ -4,11 +4,8 @@ version = "0.1.0"
 authors = ["Ryan1729 <Ryan1729@gmail.com>"]
 edition = "2021"
 
-[dependencies]
-lazy_static = "1.1.0"
-
-[dev-dependencies]
-quickcheck = "0.6"
+[lib]
+path = "src/game_state.rs"
 
 [dependencies.common]
 path = "../common"
