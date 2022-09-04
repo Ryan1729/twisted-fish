@@ -89,16 +89,6 @@ pub trait CardSubChoice: BorrowMut<Card> {
     fn get_status_lines(&self, card: Card) -> StatusLines;
 }
 
-use card_flags::CardFlags;
-/// A trait that is used to avoid having multiple copies of the card flags/card set menu procedure.
-pub trait CardFlagsSubChoice: BorrowPairMut<Card, CardFlags> {
-    fn mark_done(&mut self);
-    fn reset(&mut self);
-    fn get_status_lines(&self) -> StatusLines {
-        d!()
-    }
-}
-
 pub trait BorrowPair<Borrowed1: ?Sized, Borrowed2: ?Sized> {
     fn borrow_pair(&self) -> (&Borrowed1, &Borrowed2);
 }

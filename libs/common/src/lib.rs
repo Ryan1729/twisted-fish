@@ -104,17 +104,11 @@ extern crate platform_types;
 extern crate inner_common;
 pub use inner_common::*;
 
-extern crate card_flags;
-pub use card_flags::*;
-
 extern crate features;
 pub use features::*;
 
 mod rendering;
 pub use self::rendering::*;
-
-mod card_animation;
-pub use self::card_animation::*;
 
 mod text;
 pub use self::text::*;

@@ -4,7 +4,6 @@ pub struct State {
     pub current_player: PlayerID,
     
     pub winners: Vec<PlayerID>,
-    pub card_animations: Vec<CardAnimation>,
     // control state
     pub hand_index: u8,
 }

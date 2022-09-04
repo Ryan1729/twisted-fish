@@ -138,14 +138,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "card_flags"
-version = "0.1.0"
-dependencies = [
- "inner_common",
- "quickcheck",
-]
-
-[[package]]
 name = "cast"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -266,7 +258,6 @@ dependencies = [
 name = "common"
 version = "0.1.0"
 dependencies = [
- "card_flags",
  "criterion",
  "features",
  "inner_common",

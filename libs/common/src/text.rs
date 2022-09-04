@@ -338,10 +338,6 @@ mod tests {
         assert_eq!(bytes_reflow(b"12345 67890", 5), b"12345\n67890");
     }
 
-    // #[test]
-    fn test_bytes_reflow_in_place_matches_bytes_reflow() {
-        quickcheck(bytes_reflow_in_place_matches_bytes_reflow as fn((Vec<u8>, usize)) -> TestResult)
-    }
     fn bytes_reflow_in_place_matches_bytes_reflow((s, width): (Vec<u8>, usize)) -> TestResult {
         if width == 0 {
             return TestResult::discard();
