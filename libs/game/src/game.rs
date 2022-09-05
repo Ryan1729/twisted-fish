@@ -196,6 +196,7 @@ fn draw_hand_with_cursor(framebuffer: &mut Framebuffer, hand: &Hand, index: usiz
 fn update(state: &mut GameState, input: Input, speaker: &mut Speaker) {
     if input.gamepad != <_>::default() {
         state.add_splat();
+        speaker.request_sfx(SFX::CardPlace);
     }
 }
 
