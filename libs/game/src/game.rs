@@ -1,5 +1,5 @@
 use common::{xs::Xs, *};
-use game_state::GameState;
+use game_state::{GameState, Splat};
 use platform_types::{Button, Input, Speaker, State, SFX};
 pub use platform_types::StateParams;
 
@@ -194,7 +194,9 @@ fn draw_hand_with_cursor(framebuffer: &mut Framebuffer, hand: &Hand, index: usiz
 }
 
 fn update(state: &mut GameState, input: Input, speaker: &mut Speaker) {
-
+    if input.gamepad != <_>::default() {
+        state.add_splat();
+    }
 }
 
 fn print_number_below_card(framebuffer: &mut Framebuffer, number: u8, x: u8, y: u8) {
@@ -208,41 +210,9 @@ fn print_number_below_card(framebuffer: &mut Framebuffer, number: u8, x: u8, y: 
 
 #[inline]
 fn render_in_game(framebuffer: &mut Framebuffer, state: &GameState) {
-    for hand in state.cpu_hands.iter() {
-        draw_hand(framebuffer, hand, Face::Down);
+    for &Splat { kind, x, y } in &state.splats {
+        framebuffer.draw_card(kind, x, y);
     }
-
-    let deck_len = state.deck.len();
-    if deck_len > 0 {
-        framebuffer.draw_card_back(DECK_X, DECK_Y);
-    }
-
-    print_number_below_card(framebuffer, deck_len, DECK_X, DECK_Y);
-
-    match state.top_wild_declared_as {
-        Some(suit) => {
-            let (colour, suit_char) = get_suit_colour_and_char(suit);
-
-            framebuffer.print_char(
-                suit_char,
-                DECK_X + card::WIDTH + 2,
-                DECK_Y + (card::HEIGHT - FONT_SIZE) / 2,
-                colour,
-            );
-        }
-        None => {}
-    }
-
-    if let Some(&c) = state
-        .discard
-        .iter()
-        .last() {
-        framebuffer.draw_card(c, DISCARD_X, DISCARD_Y);
-    }
-
-    print_number_below_card(framebuffer, state.discard.len(), DISCARD_X, DISCARD_Y);
-
-    draw_hand_with_cursor(framebuffer, &state.hand, state.hand_index as usize);
 }
 
 #[inline]
