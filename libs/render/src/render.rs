@@ -390,16 +390,28 @@ pub fn render(
                 let d_x_max = d_x + w;
                 let d_y_max = d_y + h;
 
+                let x_range = (d_x * multiplier + left_bar_width)..(
+                    d_x_max * multiplier + left_bar_width
+                );
+
                 let mut clip_rect = clip::Rect {
-                    x: (d_x * multiplier + left_bar_width)..(
-                        d_x_max * multiplier + left_bar_width
-                    ),
+                    x: x_range.clone(),
                     y: (d_y * multiplier + top_bar_height)..(
                         d_y_max * multiplier + top_bar_height
                     ),
                 };
 
                 clip::to(&mut clip_rect, &outer_clip_rect);
+
+                macro_rules! advance {
+                    ($src_i: ident, $x_remaining: ident) => {
+                        $x_remaining -= 1;
+                        if $x_remaining == 0 {
+                            $src_i += 1;
+                            $x_remaining = multiplier;
+                        }
+                    }
+                }
 
                 match kind {
                     Kind::Gfx((sprite_x, sprite_y)) => {
@@ -428,11 +440,13 @@ pub fn render(
                                     }
                                 }
 
-                                x_remaining -= 1;
-                                if x_remaining == 0 {
-                                    src_i += 1;
-                                    x_remaining = multiplier;
-                                }
+                                advance!(src_i, x_remaining);
+                            }
+
+                            // If we would have went off the edge, advance `src_i`
+                            // as if we actually drew past the edge.
+                            for _ in clip_rect.x.end..x_range.end {
+                                advance!(src_i, x_remaining);
                             }
 
                             // Go back to the beginning of the row.
@@ -470,11 +484,13 @@ pub fn render(
                                     }
                                 }
 
-                                x_remaining -= 1;
-                                if x_remaining == 0 {
-                                    src_i += 1;
-                                    x_remaining = multiplier;
-                                }
+                                advance!(src_i, x_remaining);
+                            }
+
+                            // If we would have went off the edge, advance `src_i`
+                            // as if we actually drew past the edge.
+                            for _ in clip_rect.x.end..x_range.end {
+                                advance!(src_i, x_remaining);
                             }
 
                             // Go back to the beginning of the row.
