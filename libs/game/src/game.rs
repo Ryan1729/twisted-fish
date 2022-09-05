@@ -21,8 +21,11 @@ impl AppState {
         // not the macro.
         log(&format!("{:?}", seed));
 
+        let mut game_state = GameState::new(seed);
+        game_state.add_splat();
+
         Self {
-            game_state: GameState::new(seed),
+            game_state,
             framebuffer: Framebuffer::default(),
             input: Input::default(),
             speaker: Speaker::default(),

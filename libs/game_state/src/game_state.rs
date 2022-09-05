@@ -40,6 +40,9 @@ impl GameState {
         let kind: Card = gen_card(rng);
         let x = xs::range(rng, 0..SCREEN_WIDTH as _) as X;
         let y = xs::range(rng, 0..SCREEN_HEIGHT as _) as Y;
+        // TODO remove
+        let x = 120;
+        let y = 60;
 
         self.splats.push(Splat {
             kind,
