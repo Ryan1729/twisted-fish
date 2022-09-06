@@ -196,34 +196,6 @@ pub fn bytes_split_whitespace(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quickcheck::*;
-
-    #[test]
-    fn test_bytes_reflow_then_lines_produces_lines_of_the_correct_length() {
-        quickcheck(
-            bytes_reflow_then_lines_produces_lines_of_the_correct_length
-                as fn((Vec<u8>, usize)) -> TestResult,
-        )
-    }
-    fn bytes_reflow_then_lines_produces_lines_of_the_correct_length(
-        (s, width): (Vec<u8>, usize),
-    ) -> TestResult {
-        if width == 0 {
-            return TestResult::discard();
-        }
-        let bytes = &s;
-
-        if byte_reflow_early_out(bytes, width) {
-            return TestResult::discard();
-        }
-
-        let reflowed = bytes_reflow(bytes, width);
-        for line in bytes_lines(&reflowed) {
-            assert!(line.len() <= width);
-        }
-
-        TestResult::from_bool(true)
-    }
 
     #[test]
     fn test_bytes_reflow_works_for_this_generated_case() {
@@ -253,27 +225,6 @@ mod tests {
         assert!(is_byte_whitespace(128 + 1));
         assert!(is_byte_whitespace(128 + 32));
         assert!(!is_byte_whitespace(128 + 48));
-    }
-
-    #[test]
-    fn test_reflow_retains_all_non_whitespace() {
-        quickcheck(reflow_retains_all_non_whitespace as fn((String, usize)) -> TestResult)
-    }
-    fn reflow_retains_all_non_whitespace((s, width): (String, usize)) -> TestResult {
-        if width == 0 {
-            return TestResult::discard();
-        }
-
-        let non_whitespace: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-
-        let reflowed = reflow(&s, width);
-
-        let reflowed_non_whitespace: String =
-            reflowed.chars().filter(|c| !c.is_whitespace()).collect();
-
-        assert_eq!(non_whitespace, reflowed_non_whitespace);
-
-        TestResult::from_bool(non_whitespace == reflowed_non_whitespace)
     }
 
     #[test]
@@ -308,66 +259,5 @@ mod tests {
     #[test]
     fn bytes_reflow_does_not_add_a_space_if_there_is_no_room() {
         assert_eq!(bytes_reflow(b"12345 67890", 5), b"12345\n67890");
-    }
-
-    fn bytes_reflow_in_place_matches_bytes_reflow((s, width): (Vec<u8>, usize)) -> TestResult {
-        if width == 0 {
-            return TestResult::discard();
-        }
-        let mut vec = s.clone();
-        let bytes = &mut vec;
-
-        if byte_reflow_early_out(bytes, width) {
-            return TestResult::discard();
-        }
-        let copied = bytes_reflow(bytes, width);
-        bytes_reflow_in_place(bytes, width);
-        let in_place = bytes;
-        assert_eq!(copied.len(), in_place.len());
-        for (c, i) in copied.iter().zip(in_place) {
-            assert_eq!(c, i);
-        }
-
-        TestResult::from_bool(true)
-    }
-
-    #[test]
-    fn test_bytes_reflow_in_place_matches_bytes_reflow_A() {
-        let r = bytes_reflow_in_place_matches_bytes_reflow((vec![26], 1));
-        assert!(!r.is_failure());
-    }
-
-    #[test]
-    fn test_bytes_next_word_matches_bytes_split_whitespace() {
-        quickcheck(bytes_next_word_matches_bytes_split_whitespace as fn(Vec<u8>) -> TestResult)
-    }
-    fn bytes_next_word_matches_bytes_split_whitespace(s: Vec<u8>) -> TestResult {
-        let bytes = &s;
-
-        let mut split_iter = bytes_split_whitespace(bytes);
-
-        let mut next_i = 0;
-        while let Some((w_i, len)) = bytes_next_word(&bytes, &mut next_i) {
-            let word = split_iter.next().unwrap();
-            assert_eq!(len, word.len());
-            let mut i = w_i;
-            for c in word {
-                assert_eq!(*c, bytes[i]);
-                i += 1;
-            }
-        }
-
-        TestResult::from_bool(true)
-    }
-
-    #[test]
-    fn test_bytes_next_word_matches_bytes_split_whitespace_A() {
-        let r = bytes_next_word_matches_bytes_split_whitespace(vec![0, 26]);
-        assert!(!r.is_failure());
-    }
-
-    fn byte_reflow_early_out(bytes: &[u8], width: usize) -> bool {
-        bytes.iter().cloned().all(is_byte_whitespace)
-            || bytes_split_whitespace(bytes).any(|w| w.len() > width)
     }
 }

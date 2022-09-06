@@ -15,9 +15,6 @@ macro_rules! nu8 {
     }};
 }
 
-#[cfg(test)]
-extern crate quickcheck;
-
 extern crate platform_types;
 
 extern crate inner_common;

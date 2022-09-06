@@ -18,10 +18,3 @@ path = "../features"
 [dependencies.inner_common]
 path = "../inner_common"
 
-[dev-dependencies]
-quickcheck = "0.6"
-criterion = "0.2"
-
-[[bench]]
-name = "text_benchmark"
-harness = false
