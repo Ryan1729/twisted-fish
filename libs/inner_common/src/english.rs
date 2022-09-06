@@ -86,10 +86,6 @@ mod tests {
             result.matches(",").count() == len - 1 && result.matches(", and").count() == 1
         };
 
-        if !passes {
-            test_println!("Failed with: {}", result);
-        }
-
         TestResult::from_bool(passes)
     }
 }

@@ -642,6 +642,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "platform_types",
+ "xs",
 ]
 
 [[package]]

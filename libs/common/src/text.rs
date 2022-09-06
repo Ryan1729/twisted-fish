@@ -1,7 +1,5 @@
 use inner_common::RANK_SUIT_PAIR_LAYOUT_CHAR;
 
-use inner_common::test_log;
-
 #[macro_export]
 macro_rules! bytes_concat {
     ($($byte_strings:expr),*$(,)*) => {{
@@ -47,15 +45,11 @@ pub fn bytes_reflow(bytes: &[u8], width: usize) -> Vec<u8> {
     if width == 0 || bytes.is_empty() {
         return Vec::new();
     }
-    test_log!(width);
     let mut output = Vec::with_capacity(bytes.len() + bytes.len() / width);
 
     let mut x = 0;
     for word in bytes_split_whitespace(bytes) {
-        test_log!(word);
         x += word.len();
-        test_log!(x);
-        test_log!(output);
         if x == width && x == word.len() {
             output.extend(word.iter());
             continue;
@@ -78,11 +72,8 @@ pub fn bytes_reflow(bytes: &[u8], width: usize) -> Vec<u8> {
 
 pub fn bytes_reflow_in_place(bytes: &mut Vec<u8>, width: usize) {
     if width == 0 || bytes.is_empty() {
-        test_log!("width == 0 || bytes.is_empty()");
         return;
     }
-    test_log!("start");
-    test_log!((bytes.clone(), width));
     let used_len = bytes.len();
     let extra = bytes.len() / width;
     bytes.reserve(extra);
@@ -95,10 +86,7 @@ pub fn bytes_reflow_in_place(bytes: &mut Vec<u8>, width: usize) {
     //shift used parts down to the end
     {
         let mut index = bytes.len() - 1;
-        test_log!((0..used_len).rev());
         for i in (0..used_len).rev() {
-            test_log!(index);
-            test_log!(i);
             bytes[index] = bytes[i];
             index -= 1;
         }
@@ -109,16 +97,11 @@ pub fn bytes_reflow_in_place(bytes: &mut Vec<u8>, width: usize) {
         //full length - used_len == (used_len + extra) - used_len == extra
         let shifted_start = extra;
         let mut next_i = shifted_start;
-        test_log!(bytes);
-        test_log!(shifted_start);
         //scan from the start of the (moved) used portion and copy it back to the front
         //inserting newlines where appropiate.
         let mut x = 0;
         while let Some((w_i, len)) = bytes_next_word(bytes, &mut next_i) {
-            test_log!((w_i, len));
-            test_log!(&bytes[w_i..w_i + len]);
             x += len;
-            test_log!(x);
 
             if x == width && x == len {
                 for i in w_i..w_i + len {
@@ -146,18 +129,11 @@ pub fn bytes_reflow_in_place(bytes: &mut Vec<u8>, width: usize) {
             }
         }
     }
-    test_log!("!");
-    test_log!(bytes);
-    test_log!(index);
     bytes.truncate(index);
 }
 
 fn bytes_next_word(bytes: &[u8], in_i: &mut usize) -> Option<(usize, usize)> {
-    test_log!("next");
-    test_log!(bytes);
     let end = bytes.len();
-    test_log!(end);
-    test_log!(in_i);
 
     for index in *in_i..end {
         if !is_byte_whitespace(bytes[index]) {
@@ -181,7 +157,6 @@ fn bytes_next_word(bytes: &[u8], in_i: &mut usize) -> Option<(usize, usize)> {
             return Some((out_i, len));
         }
     }
-    test_log!("None");
     None
 }
 
@@ -222,7 +197,6 @@ pub fn bytes_split_whitespace(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
 mod tests {
     use super::*;
     use quickcheck::*;
-    use inner_common::test_println;
 
     #[test]
     fn test_bytes_reflow_then_lines_produces_lines_of_the_correct_length() {
@@ -257,9 +231,7 @@ mod tests {
         let width = 6;
 
         let reflowed = bytes_reflow(&s, width);
-        if !reflowed.ends_with(&[b'\n', 27]) {
-            test_println!("reflowed {:?}", reflowed);
-        }
+
         assert!(reflowed.ends_with(&[b'\n', 27]));
     }
     #[test]
@@ -348,14 +320,9 @@ mod tests {
         if byte_reflow_early_out(bytes, width) {
             return TestResult::discard();
         }
-        test_log!("s");
-        test_log!(bytes);
-        test_log!(width);
         let copied = bytes_reflow(bytes, width);
         bytes_reflow_in_place(bytes, width);
         let in_place = bytes;
-        test_log!(copied);
-        test_log!(in_place);
         assert_eq!(copied.len(), in_place.len());
         for (c, i) in copied.iter().zip(in_place) {
             assert_eq!(c, i);
@@ -381,7 +348,6 @@ mod tests {
 
         let mut next_i = 0;
         while let Some((w_i, len)) = bytes_next_word(&bytes, &mut next_i) {
-            test_log!((w_i, len));
             let word = split_iter.next().unwrap();
             assert_eq!(len, word.len());
             let mut i = w_i;

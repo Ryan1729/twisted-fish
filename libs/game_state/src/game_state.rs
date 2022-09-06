@@ -1,4 +1,6 @@
-use common::{xs::{Xs, Seed}, *};
+use common::*;
+
+use xs::{Xs, Seed};
 
 pub struct State {
     pub current_player: PlayerID,

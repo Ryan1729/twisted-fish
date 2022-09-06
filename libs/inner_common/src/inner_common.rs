@@ -1,6 +1,9 @@
-#![allow(dead_code)]
+pub use features::*;
 
-use crate::xs::{self, Xs};
+mod english;
+pub use self::english::*;
+
+use xs::Xs;
 
 //in pixels
 pub const SCREEN_WIDTH: u8 = screen::WIDTH;
