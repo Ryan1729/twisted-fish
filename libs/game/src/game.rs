@@ -5,7 +5,7 @@ pub use platform_types::StateParams;
 
 pub struct AppState {
     pub game_state: GameState,
-    pub framebuffer: Framebuffer,
+    pub commands: Commands,
     pub input: Input,
     pub speaker: Speaker,
 }
@@ -26,7 +26,7 @@ impl AppState {
 
         Self {
             game_state,
-            framebuffer: Framebuffer::default(),
+            commands: Commands::default(),
             input: Input::default(),
             speaker: Speaker::default(),
         }
@@ -35,10 +35,10 @@ impl AppState {
 
 impl State for AppState {
     fn frame(&mut self) -> (&[platform_types::Command], &[SFX]) {
-        self.framebuffer.commands.clear();
+        self.commands.clear();
         self.speaker.clear();
         update_and_render(
-            &mut self.framebuffer,
+            &mut self.commands,
             &mut self.game_state,
             self.input,
             &mut self.speaker,
@@ -46,7 +46,7 @@ impl State for AppState {
 
         self.input.previous_gamepad = self.input.gamepad;
 
-        (&self.framebuffer.commands, self.speaker.slice())
+        (self.commands.slice(), self.speaker.slice())
     }
 
     fn press(&mut self, button: Button) {
@@ -72,21 +72,21 @@ fn update(state: &mut GameState, input: Input, speaker: &mut Speaker) {
 }
 
 #[inline]
-fn render_in_game(framebuffer: &mut Framebuffer, state: &GameState) {
+fn render_in_game(commands: &mut Commands, state: &GameState) {
     for &Splat { kind, x, y } in &state.splats {
-        framebuffer.draw_card(kind, x, y);
+        commands.draw_card(kind, x, y);
     }
 }
 
 #[inline]
 fn update_and_render(
-    framebuffer: &mut Framebuffer,
+    commands: &mut Commands,
     state: &mut GameState,
     input: Input,
     speaker: &mut Speaker,
 ) {
-    framebuffer.clearTo(1 /* green */);
+    commands.clear_to(1 /* green */);
 
     update(state, input, speaker);
-    render_in_game(framebuffer, state);
+    render_in_game(commands, state);
 }

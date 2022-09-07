@@ -13,6 +13,7 @@ pub fn log(s: &str) {
     logger_log(unsafe { GLOBAL_LOGGER }, s)
 }
 
+#[cfg(feature = "invariant-checking")]
 pub fn invariant_violation(s: &str) {
     logger_log(unsafe { GLOBAL_ERROR_LOGGER }, s)
 }
