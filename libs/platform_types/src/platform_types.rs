@@ -73,17 +73,12 @@ pub struct Input {
 }
 
 impl Input {
-    pub fn new() -> Self {
-        Input {
-            gamepad: Button::empty(),
-            previous_gamepad: Button::empty(),
-        }
-    }
-
+    #[allow(unused)]
     pub fn pressed_this_frame(&self, buttons: Button) -> bool {
         !self.previous_gamepad.contains(buttons) && self.gamepad.contains(buttons)
     }
 
+    #[allow(unused)]
     pub fn released_this_frame(&self, buttons: Button) -> bool {
         self.previous_gamepad.contains(buttons) && !self.gamepad.contains(buttons)
     }
@@ -94,16 +89,6 @@ pub enum SFX {
     CardPlace,
     CardSlide,
     ButtonPress,
-}
-
-impl SFX {
-    pub fn to_sound_key(&self) -> &'static str {
-        match *self {
-            SFX::CardPlace => "cardPlace",
-            SFX::CardSlide => "cardSlide",
-            SFX::ButtonPress => "buttonPress",
-        }
-    }
 }
 
 pub struct Speaker {

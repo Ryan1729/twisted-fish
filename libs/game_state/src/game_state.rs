@@ -2,14 +2,6 @@ use common::*;
 
 use xs::{Xs, Seed};
 
-pub struct State {
-    pub current_player: PlayerID,
-    
-    pub winners: Vec<PlayerID>,
-    // control state
-    pub hand_index: u8,
-}
-
 pub type X = u8;
 pub type Y = u8;
 
