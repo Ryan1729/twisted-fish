@@ -52,14 +52,6 @@ macro_rules! set_alpha {
     };
 }
 
-pub const BLUE_INDEX: u8 = 0;
-pub const GREEN_INDEX: u8 = 1;
-pub const RED_INDEX: u8 = 2;
-pub const YELLOW_INDEX: u8 = 3;
-pub const PURPLE_INDEX: u8 = 4;
-pub const GREY_INDEX: u8 = 5;
-pub const WHITE_INDEX: u8 = 6;
-pub const BLACK_INDEX: u8 = 7;
 
 pub mod card {
     use super::*;
@@ -281,6 +273,10 @@ pub fn get_suit(card: Card) -> Suit {
 }
 
 pub fn get_suit_colour_and_char(suit: Suit) -> (u8, u8) {
+    const RED_INDEX: u8 = 2;
+    const PURPLE_INDEX: u8 = 4;
+    const BLACK_INDEX: u8 = 7;
+
     match suit {
         suits::CLUBS => (BLACK_INDEX, CLUB_CHAR),
         suits::DIAMONDS => (RED_INDEX, DIAMOND_CHAR),
