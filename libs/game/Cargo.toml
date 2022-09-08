@@ -9,11 +9,11 @@ path = "src/game.rs"
 
 [dependencies]
 
-[dependencies.common]
-path = "../common"
-
 [dependencies.game_state]
 path = "../game_state"
+
+[dependencies.gfx]
+path = "../gfx"
 
 [dependencies.features]
 path = "../features"

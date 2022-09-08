@@ -7,8 +7,11 @@ edition = "2021"
 [lib]
 path = "src/game_state.rs"
 
-[dependencies.common]
-path = "../common"
+[dependencies.gfx]
+path = "../gfx"
+
+[dependencies.models]
+path = "../models"
 
 [dependencies.platform_types]
 path = "../platform_types"

@@ -1,5 +1,5 @@
-use common::*;
 use game_state::{GameState, Splat};
+use gfx::{Commands};
 use platform_types::{Button, Input, Speaker, State, SFX};
 pub use platform_types::StateParams;
 
@@ -13,13 +13,13 @@ pub struct AppState {
 impl AppState {
     pub fn new((seed, logger, error_logger): StateParams) -> Self {
         unsafe {
-            GLOBAL_LOGGER = logger;
-            GLOBAL_ERROR_LOGGER = error_logger;
+            features::GLOBAL_LOGGER = logger;
+            features::GLOBAL_ERROR_LOGGER = error_logger;
         }
 
         // We always want to log the seed, if there is a logger available, so use the function,
         // not the macro.
-        log(&format!("{:?}", seed));
+        features::log(&format!("{:?}", seed));
 
         let mut game_state = GameState::new(seed);
         game_state.add_splat();

@@ -194,16 +194,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common"
-version = "0.1.0"
-dependencies = [
- "features",
- "platform_types",
- "screen",
- "xs",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -438,9 +428,9 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 name = "game"
 version = "0.1.0"
 dependencies = [
- "common",
  "features",
  "game_state",
+ "gfx",
  "platform_types",
 ]
 
@@ -448,10 +438,20 @@ dependencies = [
 name = "game_state"
 version = "0.1.0"
 dependencies = [
- "common",
+ "gfx",
+ "models",
  "platform_types",
  "screen",
  "xs",
+]
+
+[[package]]
+name = "gfx"
+version = "0.1.0"
+dependencies = [
+ "models",
+ "platform_types",
+ "screen",
 ]
 
 [[package]]
@@ -659,6 +659,13 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys",
+]
+
+[[package]]
+name = "models"
+version = "0.1.0"
+dependencies = [
+ "xs",
 ]
 
 [[package]]
