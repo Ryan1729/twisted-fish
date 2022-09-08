@@ -32,8 +32,8 @@ impl GameState {
         let rng = &mut self.rng;
 
         let kind: Card = gen_card(rng);
-        let x = xs::range(rng, 0..SCREEN_WIDTH as _) as X;
-        let y = xs::range(rng, 0..SCREEN_HEIGHT as _) as Y;
+        let x = xs::range(rng, 0..screen::WIDTH as _) as X;
+        let y = xs::range(rng, 0..screen::HEIGHT as _) as Y;
 
         self.splats.push(Splat {
             kind,

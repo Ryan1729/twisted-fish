@@ -1,5 +1,5 @@
 use platform_types::{Command, Kind, PaletteIndex, Rect, FONT_WIDTH};
-use inner_common::*;
+use crate::*;
 
 #[derive(Default)]
 pub struct Commands {
@@ -64,8 +64,8 @@ impl Commands {
                 rect: Rect {
                     x: 0,
                     y: 0,
-                    w: SCREEN_WIDTH,
-                    h: SCREEN_HEIGHT,
+                    w: screen::WIDTH,
+                    h: screen::HEIGHT,
                 },
             }
         );
