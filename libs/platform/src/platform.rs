@@ -199,7 +199,11 @@ mod wasm {
                 &JsValue::from_str("soundHandler")
             ).ok()?.dyn_into::<Function>().ok()?;
 
-            let request_string = request.to_sound_key();
+            let request_string = match request {
+                SFX::CardPlace => "cardPlace",
+                SFX::CardSlide => "cardSlide",
+                SFX::ButtonPress => "buttonPress",
+            };
 
             handler.call1(&JsValue::undefined(), &request_string.into()).ok()?;
 
