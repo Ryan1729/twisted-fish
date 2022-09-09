@@ -438,10 +438,8 @@ dependencies = [
 name = "game_state"
 version = "0.1.0"
 dependencies = [
- "gfx",
  "models",
  "platform_types",
- "screen",
  "xs",
 ]
 
@@ -451,7 +449,6 @@ version = "0.1.0"
 dependencies = [
  "models",
  "platform_types",
- "screen",
 ]
 
 [[package]]
@@ -939,7 +936,6 @@ dependencies = [
  "platform_types",
  "render",
  "rodio",
- "screen",
  "softbuffer",
  "spin_sleep",
  "wasm-bindgen",
@@ -951,9 +947,6 @@ dependencies = [
 [[package]]
 name = "platform_types"
 version = "0.1.0"
-dependencies = [
- "bitflags",
-]
 
 [[package]]
 name = "proc-macro-crate"
@@ -1040,7 +1033,6 @@ name = "render"
 version = "0.1.0"
 dependencies = [
  "platform_types",
- "screen",
 ]
 
 [[package]]
@@ -1106,10 +1098,6 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
-
-[[package]]
-name = "screen"
-version = "0.1.0"
 
 [[package]]
 name = "serde"

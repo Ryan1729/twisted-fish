@@ -6,6 +6,3 @@ edition = "2021"
 
 [lib]
 path = "src/platform_types.rs"
-
-[dependencies]
-bitflags = "1"

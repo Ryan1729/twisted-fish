@@ -27,9 +27,6 @@ path = "../platform_types"
 [dependencies.render]
 path = "../render"
 
-[dependencies.screen]
-path = "../screen"
-
 [features]
 default = []
 non-web-sound = []

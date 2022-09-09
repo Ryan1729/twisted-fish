@@ -1,6 +1,6 @@
-use models::*;
+use models::{Card, Rank, Suit, get_rank, get_suit, suits};
 
-use platform_types::{Command, Kind, PaletteIndex, Rect, FONT_WIDTH};
+use platform_types::{Command, Kind, PaletteIndex, Rect, FONT_WIDTH, screen};
 
 #[derive(Default)]
 pub struct Commands {

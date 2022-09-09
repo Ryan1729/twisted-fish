@@ -1,5 +1,5 @@
 use models::{Card, gen_card};
-
+use platform_types::screen;
 use xs::{Xs, Seed};
 
 pub type X = u8;

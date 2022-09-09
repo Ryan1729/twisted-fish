@@ -6,6 +6,7 @@ use platform_types::{
     GFX_LENGTH,
     FONT_WIDTH,
     FONT_LENGTH,
+    screen,
 };
 
 pub mod clip {

@@ -1,5 +1,8 @@
-#[macro_use]
-extern crate bitflags;
+///! Values are in pixels.
+pub mod screen {
+    pub const WIDTH: u8 = 128;
+    pub const HEIGHT: u8 = 128;
+}
 
 pub const GFX_WIDTH: usize = 128;
 pub const GFX_HEIGHT: usize = 128;
@@ -30,34 +33,6 @@ pub struct Rect {
     pub y: u8,
     pub w: u8,
     pub h: u8,
-}
-
-impl From<(u8, u8, u8, u8)> for Rect {
-    #[inline]
-    fn from((x, y, w, h): (u8, u8, u8, u8)) -> Self {
-        Rect { x, y, w, h }
-    }
-}
-
-impl From<Rect> for (u8, u8, u8, u8) {
-    #[inline]
-    fn from(Rect { x, y, w, h }: Rect) -> Self {
-        (x, y, w, h)
-    }
-}
-
-impl From<((u8, u8), (u8, u8))> for Rect {
-    #[inline]
-    fn from(((x, y), (w, h)): ((u8, u8), (u8, u8))) -> Self {
-        Rect { x, y, w, h }
-    }
-}
-
-impl From<Rect> for ((u8, u8), (u8, u8)) {
-    #[inline]
-    fn from(Rect { x, y, w, h }: Rect) -> Self {
-        ((x, y), (w, h))
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -118,19 +93,34 @@ impl Speaker {
 }
 
 // These values are deliberately picked to be the same as the ones in NES' input registers.
-bitflags! {
-    #[derive(Default)]
-    pub struct Button: u8 {
-        const A          = 1 << 0;
-        const B          = 1 << 1;
-        const SELECT     = 1 << 2;
-        const START      = 1 << 3;
-        const UP         = 1 << 4;
-        const DOWN       = 1 << 5;
-        const LEFT       = 1 << 6;
-        const RIGHT      = 1 << 7;
+pub mod button {
+    #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+    pub struct Button(u8);
+
+    impl Button {
+        pub const A     : Self = Self(1 << 0);
+        pub const B     : Self = Self(1 << 1);
+        pub const SELECT: Self = Self(1 << 2);
+        pub const START : Self = Self(1 << 3);
+        pub const UP    : Self = Self(1 << 4);
+        pub const DOWN  : Self = Self(1 << 5);
+        pub const LEFT  : Self = Self(1 << 6);
+        pub const RIGHT : Self = Self(1 << 7);
+
+        pub const fn contains(&self, other: Self) -> bool {
+            self.0 & other.0 == other.0
+        }
+
+        pub fn insert(&mut self, other: Self) {
+            self.0 |= other.0;
+        }
+
+        pub fn remove(&mut self, other: Self) {
+            self.0 &= !other.0;
+        }
     }
 }
+pub use button::Button;
 
 pub type Logger = Option<fn(&str) -> ()>;
 
