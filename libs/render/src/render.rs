@@ -97,10 +97,10 @@ mod hash {
             kind,
         } = command;
 
-        byte(hash, x.get());
-        byte(hash, y.get());
-        byte(hash, w.get());
-        byte(hash, h.get());
+        u16(hash, x.get());
+        u16(hash, y.get());
+        u16(hash, w.get());
+        u16(hash, h.get());
 
         match kind {
             Gfx((x, y)) => { bytes(hash, &[0, x, y]); },

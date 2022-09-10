@@ -217,8 +217,8 @@ pub fn get_rank_char_from_rank(rank: Rank) -> u8 {
 }
 
 pub const CHAR_SIZE: u8 = 8;
-pub const CHAR_W: unscaled::W = unscaled::W(CHAR_SIZE);
-pub const CHAR_H: unscaled::H = unscaled::H(CHAR_SIZE);
+pub const CHAR_W: unscaled::W = unscaled::W(CHAR_SIZE as _);
+pub const CHAR_H: unscaled::H = unscaled::H(CHAR_SIZE as _);
 
 pub const FONT_FLIP: u8 = 128;
 

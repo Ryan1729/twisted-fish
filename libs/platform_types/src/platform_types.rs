@@ -3,12 +3,14 @@ pub mod unscaled {
 
     use xs::Xs;
 
-    pub const WIDTH: u8 = 128;
-    pub const HEIGHT: u8 = 128;
+    type Inner = u16;
+
+    pub const WIDTH: Inner = 128;
+    pub const HEIGHT: Inner = 128;
 
     macro_rules! def {
         ($($name: ident, $inner_name: ident)+) => {$(
-            pub type $inner_name = u8;
+            pub type $inner_name = Inner;
             #[derive(Copy, Clone, Default, Debug)]
             pub struct $name(pub $inner_name);
 
@@ -18,9 +20,9 @@ pub mod unscaled {
                 }
             }
 
-            impl From<$name> for u16 {
-                fn from(to_convert: $name) -> u16 {
-                    u16::from(to_convert.0)
+            impl From<$name> for $inner_name {
+                fn from(to_convert: $name) -> $inner_name {
+                    $inner_name::from(to_convert.0)
                 }
             }
         )*}
