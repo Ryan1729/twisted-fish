@@ -947,6 +947,9 @@ dependencies = [
 [[package]]
 name = "platform_types"
 version = "0.1.0"
+dependencies = [
+ "xs",
+]
 
 [[package]]
 name = "proc-macro-crate"

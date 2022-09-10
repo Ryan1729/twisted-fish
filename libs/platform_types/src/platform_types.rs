@@ -1,7 +1,139 @@
-///! Values are in pixels.
-pub mod screen {
+pub mod unscaled {
+    ///! Values are in pixels.
+
+    use xs::Xs;
+
     pub const WIDTH: u8 = 128;
     pub const HEIGHT: u8 = 128;
+
+    macro_rules! def {
+        ($($name: ident, $inner_name: ident)+) => {$(
+            pub type $inner_name = u8;
+            #[derive(Copy, Clone, Default, Debug)]
+            pub struct $name(pub $inner_name);
+
+            impl $name {
+                pub const fn get(self) -> $inner_name {
+                    self.0
+                }
+            }
+
+            impl From<$name> for u16 {
+                fn from(to_convert: $name) -> u16 {
+                    u16::from(to_convert.0)
+                }
+            }
+        )*}
+    }
+
+    def!{
+        X, XInner
+        Y, YInner
+        W, WInner
+        H, HInner
+    }
+
+    impl X {
+        pub fn gen(rng: &mut Xs) -> X {
+            X(xs::range(rng, 0..WIDTH as _) as XInner)
+        }
+    }
+
+    impl Y {
+        pub fn gen(rng: &mut Xs) -> Y {
+            Y(xs::range(rng, 0..HEIGHT as _) as YInner)
+        }
+    }
+
+    pub const fn w_const_add(a: W, b: W) -> W {
+        W(a.0 + b.0)
+    }
+
+    pub const fn w_const_sub(a: W, b: W) -> W {
+        W(a.0 - b.0)
+    }
+
+    pub const fn h_const_add(a: H, b: H) -> H {
+        H(a.0 + b.0)
+    }
+
+    pub const fn h_const_sub(a: H, b: H) -> H {
+        H(a.0 - b.0)
+    }
+
+    macro_rules! self_add_sub_def {
+        ($($name: ident)+) => {$(
+            impl core::ops::AddAssign for $name {
+                fn add_assign(&mut self, other: Self) {
+                    self.0 += other.0;
+                }
+            }
+        
+            impl core::ops::Add for $name {
+                type Output = Self;
+        
+                fn add(mut self, other: Self) -> Self::Output {
+                    self += other;
+                    self
+                }
+            }
+        
+            impl core::ops::SubAssign for $name {
+                fn sub_assign(&mut self, other: Self) {
+                    self.0 -= other.0;
+                }
+            }
+        
+            impl core::ops::Sub for $name {
+                type Output = Self;
+        
+                fn sub(mut self, other: Self) -> Self::Output {
+                    self -= other;
+                    self
+                }
+            }
+        )*}
+    }
+
+    self_add_sub_def!{W H}
+
+    impl core::ops::AddAssign<W> for X {
+        fn add_assign(&mut self, other: W) {
+            self.0 += other.0;
+        }
+    }
+
+    impl core::ops::Add<W> for X {
+        type Output = Self;
+
+        fn add(mut self, other: W) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::AddAssign<H> for Y {
+        fn add_assign(&mut self, other: H) {
+            self.0 += other.0;
+        }
+    }
+
+    impl core::ops::Add<H> for Y {
+        type Output = Self;
+
+        fn add(mut self, other: H) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Rect {
+        pub x: X,
+        pub y: Y,
+        pub w: W,
+        pub h: H,
+    }
 }
 
 pub const GFX_WIDTH: usize = 128;
@@ -28,16 +160,8 @@ pub enum Kind {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Rect {
-    pub x: u8,
-    pub y: u8,
-    pub w: u8,
-    pub h: u8,
-}
-
-#[derive(Clone, Copy, Debug)]
 pub struct Command {
-    pub rect: Rect,
+    pub rect: unscaled::Rect,
     pub kind: Kind,
 }
 

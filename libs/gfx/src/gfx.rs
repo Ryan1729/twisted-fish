@@ -1,6 +1,6 @@
 use models::{Card, Rank, Suit, get_rank, get_suit, suits};
 
-use platform_types::{Command, Kind, PaletteIndex, Rect, FONT_WIDTH, screen};
+use platform_types::{Command, Kind, PaletteIndex, FONT_WIDTH, unscaled::{self, Rect}};
 
 #[derive(Default)]
 pub struct Commands {
@@ -20,20 +20,12 @@ impl Commands {
         &mut self,
         sprite_x: u8,
         sprite_y: u8,
-        w: u8,
-        h: u8,
-        display_x: u8,
-        display_y: u8,
+        rect: unscaled::Rect,
     ) {
         self.commands.push(
             Command {
                 kind: Kind::Gfx((sprite_x, sprite_y)),
-                rect: Rect {
-                    x: display_x,
-                    y: display_y,
-                    w,
-                    h,
-                },
+                rect,
             }
         );
     }
@@ -41,19 +33,13 @@ impl Commands {
     fn print_char_raw(
         &mut self,
         sprite_xy: (u8, u8),
-        (w, h): (u8, u8),
-        (display_x, display_y): (u8, u8),
         colour: PaletteIndex,
+        rect: unscaled::Rect,
     ) {
         self.commands.push(
             Command {
                 kind: Kind::Font(sprite_xy, colour),
-                rect: Rect {
-                    x: display_x,
-                    y: display_y,
-                    w,
-                    h,
-                },
+                rect,
             }
         );
     }
@@ -63,33 +49,50 @@ impl Commands {
             Command {
                 kind: Kind::Colour(colour),
                 rect: Rect {
-                    x: 0,
-                    y: 0,
-                    w: screen::WIDTH,
-                    h: screen::HEIGHT,
+                    x: unscaled::X(0),
+                    y: unscaled::Y(0),
+                    w: unscaled::W(unscaled::WIDTH),
+                    h: unscaled::H(unscaled::HEIGHT),
                 },
             }
         );
     }
 
-    pub fn print_char(&mut self, character: u8, x: u8, y: u8, colour: u8) {
+    pub fn print_char(
+        &mut self,
+        character: u8, 
+        x: unscaled::X,
+        y: unscaled::Y,
+        colour: PaletteIndex
+    ) {
         let (sprite_x, sprite_y) = get_char_xy(character);
         self.print_char_raw(
             (sprite_x, sprite_y),
-            (FONT_SIZE, FONT_SIZE),
-            (x, y),
-            colour
+            colour,
+            Rect {
+                x,
+                y,
+                w: CHAR_W,
+                h: CHAR_H,
+            }
         );
     }
 
-    pub fn draw_card(&mut self, card: Card, x: u8, y: u8) {
+    pub fn draw_card(
+        &mut self,
+        card: Card,
+        x: unscaled::X,
+        y: unscaled::Y
+    ) {
         self.sspr(
             card::FRONT_SPRITE_X,
             card::FRONT_SPRITE_Y,
-            card::WIDTH,
-            card::HEIGHT,
-            x,
-            y,
+            Rect {
+                x,
+                y,
+                w: card::WIDTH,
+                h: card::HEIGHT,
+            }
         );
 
         let (colour, suit_char) = get_suit_colour_and_char(get_suit(card));
@@ -98,61 +101,75 @@ impl Commands {
 
         self.print_char(
             rank_char,
-            x + card::LEFT_RANK_X,
-            y + card::LEFT_RANK_Y,
+            x + card::LEFT_RANK_EDGE_W,
+            y + card::LEFT_RANK_EDGE_H,
             colour,
         );
         self.print_char(
             suit_char,
-            x + card::LEFT_SUIT_X,
-            y + card::LEFT_SUIT_Y,
+            x + card::LEFT_SUIT_EDGE_W,
+            y + card::LEFT_SUIT_EDGE_H,
             colour,
         );
 
         self.print_char(
             rank_char | FONT_FLIP,
-            x + card::RIGHT_RANK_X,
-            y + card::RIGHT_RANK_Y,
+            x + card::RIGHT_RANK_EDGE_W,
+            y + card::RIGHT_RANK_EDGE_H,
             colour,
         );
         self.print_char(
             suit_char | FONT_FLIP,
-            x + card::RIGHT_SUIT_X,
-            y + card::RIGHT_SUIT_Y,
+            x + card::RIGHT_SUIT_EDGE_W,
+            y + card::RIGHT_SUIT_EDGE_H,
             colour,
         );
     }
 }
 
 pub fn get_char_xy(sprite_number: u8) -> (u8, u8) {
-    const SPRITES_PER_ROW: u8 = FONT_WIDTH as u8 / FONT_SIZE;
+    const SPRITES_PER_ROW: u8 = FONT_WIDTH as u8 / CHAR_SIZE;
 
     (
-        (sprite_number % SPRITES_PER_ROW) * FONT_SIZE,
-        (sprite_number / SPRITES_PER_ROW) * FONT_SIZE,
+        (sprite_number % SPRITES_PER_ROW) * CHAR_SIZE,
+        (sprite_number / SPRITES_PER_ROW) * CHAR_SIZE,
     )
 }
 
 pub mod card {
     use super::*;
 
-    pub const WIDTH: u8 = 20;
-    pub const HEIGHT: u8 = 30;
+    use unscaled::{W, H, w_const_add, w_const_sub, h_const_add, h_const_sub};
+
+    pub const WIDTH: W = W(20);
+    pub const HEIGHT: H = H(30);
 
     pub const FRONT_SPRITE_X: u8 = 2;
     pub const FRONT_SPRITE_Y: u8 = 1;
 
-    pub const LEFT_RANK_X: u8 = 3;
-    pub const LEFT_RANK_Y: u8 = 3;
+    pub const LEFT_RANK_EDGE_W: W = W(3);
+    pub const LEFT_RANK_EDGE_H: H = H(3);
 
-    pub const LEFT_SUIT_X: u8 = 1;
-    pub const LEFT_SUIT_Y: u8 = 10;
+    pub const LEFT_SUIT_EDGE_W: W = W(1);
+    pub const LEFT_SUIT_EDGE_H: H = H(10);
 
-    pub const RIGHT_RANK_X: u8 = WIDTH - (LEFT_RANK_X + FONT_SIZE);
-    pub const RIGHT_RANK_Y: u8 = HEIGHT - (LEFT_RANK_Y + FONT_SIZE);
+    pub const RIGHT_RANK_EDGE_W: W = w_const_sub(
+        WIDTH, 
+        w_const_add(LEFT_RANK_EDGE_W, CHAR_W)
+    );
+    pub const RIGHT_RANK_EDGE_H: H = h_const_sub(
+        HEIGHT, 
+        h_const_add(LEFT_RANK_EDGE_H, CHAR_H)
+    );
 
-    pub const RIGHT_SUIT_X: u8 = WIDTH - (LEFT_SUIT_X + FONT_SIZE);
-    pub const RIGHT_SUIT_Y: u8 = HEIGHT - (LEFT_SUIT_Y + FONT_SIZE);
+    pub const RIGHT_SUIT_EDGE_W: W = w_const_sub(
+        WIDTH, 
+        w_const_add(LEFT_SUIT_EDGE_W, CHAR_W)
+    );
+    pub const RIGHT_SUIT_EDGE_H: H = h_const_sub(
+        HEIGHT, 
+        h_const_add(LEFT_SUIT_EDGE_H, CHAR_H)
+    );
 }
 
 pub const TEN_CHAR: u8 = 27;
@@ -199,6 +216,9 @@ pub fn get_rank_char_from_rank(rank: Rank) -> u8 {
     }
 }
 
-pub const FONT_SIZE: u8 = 8;
+pub const CHAR_SIZE: u8 = 8;
+pub const CHAR_W: unscaled::W = unscaled::W(CHAR_SIZE);
+pub const CHAR_H: unscaled::H = unscaled::H(CHAR_SIZE);
+
 pub const FONT_FLIP: u8 = 128;
 

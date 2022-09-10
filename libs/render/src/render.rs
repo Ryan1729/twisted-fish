@@ -1,12 +1,11 @@
 use platform_types::{
     Command,
     Kind,
-    Rect,
     GFX_WIDTH,
     GFX_LENGTH,
     FONT_WIDTH,
     FONT_LENGTH,
-    screen,
+    unscaled::{self, Rect},
 };
 
 pub mod clip {
@@ -98,10 +97,10 @@ mod hash {
             kind,
         } = command;
 
-        byte(hash, x);
-        byte(hash, y);
-        byte(hash, w);
-        byte(hash, h);
+        byte(hash, x.get());
+        byte(hash, y.get());
+        byte(hash, w.get());
+        byte(hash, h.get());
 
         match kind {
             Gfx((x, y)) => { bytes(hash, &[0, x, y]); },
@@ -249,10 +248,10 @@ mod reset_then_hash_commands_around_a_swap_produces_identical_current_and_prev_c
 
         let commands = &[Command {
             rect: Rect {
-                x: 0,
-                y: 0,
-                w: CELLS_X,
-                h: CELLS_Y,
+                x: unscaled::X(0),
+                y: unscaled::Y(0),
+                w: unscaled::W(CELLS_X),
+                h: unscaled::H(CELLS_Y),
             },
             kind: Kind::Colour(0),
         }];
@@ -280,8 +279,8 @@ pub fn render(
     let mut output = NeedsRedraw::No;
 
     // The dimensions the commands are written in terms of.
-    let src_w = screen::WIDTH.into();
-    let src_h = screen::HEIGHT.into();
+    let src_w = unscaled::WIDTH.into();
+    let src_h = unscaled::HEIGHT.into();
 
     if frame_buffer.width < src_w
     || frame_buffer.height < src_h {

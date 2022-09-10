@@ -1,15 +1,12 @@
 use models::{Card, gen_card};
-use platform_types::screen;
+use platform_types::unscaled;
 use xs::{Xs, Seed};
-
-pub type X = u8;
-pub type Y = u8;
 
 #[derive(Clone, Default)]
 pub struct Splat {
     pub kind: Card,
-    pub x: X,
-    pub y: Y,
+    pub x: unscaled::X,
+    pub y: unscaled::Y,
 }
 
 #[derive(Clone, Default)]
@@ -32,8 +29,8 @@ impl State {
         let rng = &mut self.rng;
 
         let kind: Card = gen_card(rng);
-        let x = xs::range(rng, 0..screen::WIDTH as _) as X;
-        let y = xs::range(rng, 0..screen::HEIGHT as _) as Y;
+        let x = unscaled::X::gen(rng);
+        let y = unscaled::Y::gen(rng);
 
         self.splats.push(Splat {
             kind,
