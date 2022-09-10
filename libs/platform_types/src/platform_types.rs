@@ -5,8 +5,10 @@ pub mod unscaled {
 
     type Inner = u16;
 
-    pub const WIDTH: Inner = 128;
-    pub const HEIGHT: Inner = 128;
+    // Small enough to fit on pretty much any reasonable device, at an aspect ratio
+    // of 3:2 (1.5), which is a compromise between 4:3 (1.33...) and 16:9 (1.788...).
+    pub const WIDTH: Inner = 480;
+    pub const HEIGHT: Inner = 320;
 
     macro_rules! def {
         ($($name: ident, $inner_name: ident)+) => {$(
