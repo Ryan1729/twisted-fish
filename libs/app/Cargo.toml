@@ -1,0 +1,27 @@
+[package]
+name = "app"
+version = "0.1.0"
+authors = ["Ryan1729 <Ryan1729@gmail.com>"]
+edition = "2021"
+
+[lib]
+path = "src/app.rs"
+
+[dependencies]
+
+[dependencies.game]
+path = "../game"
+
+[dependencies.gfx]
+path = "../gfx"
+
+[dependencies.features]
+path = "../features"
+
+[dependencies.platform_types]
+path = "../platform_types"
+
+[features]
+default = []
+invariant-checking = ["features/invariant-checking"]
+logging = ["features/logging"]

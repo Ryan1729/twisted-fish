@@ -7,21 +7,11 @@ edition = "2021"
 [lib]
 path = "src/game.rs"
 
-[dependencies]
-
-[dependencies.game_state]
-path = "../game_state"
-
-[dependencies.gfx]
-path = "../gfx"
-
-[dependencies.features]
-path = "../features"
+[dependencies.models]
+path = "../models"
 
 [dependencies.platform_types]
 path = "../platform_types"
 
-[features]
-default = []
-invariant-checking = ["features/invariant-checking"]
-logging = ["features/logging"]
+[dependencies.xs]
+path = "../xs"
