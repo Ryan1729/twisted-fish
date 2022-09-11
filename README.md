@@ -1,8 +1,8 @@
-# rename-me
+# Twisted Fish
 
-This is a template, designed to make using a particular method of cross-platform (desktop and web) development, in a new project, faster.
+This is a single player only version of the card game [Twisted Fish](https://boardgamegeek.com/boardgame/24447/twisted-fish), which was published by the apparently defunct McNiell Designs ([web archive link](https://web.archive.org/web/20120215164041/http://www.mcneilldesigns.com/)).
 
-See below for build/run instructions, and see the `checklist` script for how to get started modifying a copy of the template to suit your needs.
+As of this writing, the implementation is not complete. This project was started from [this template](https://github.com/Ryan1729/cross-platform-template).
 
 ## WASM version
 
@@ -16,7 +16,7 @@ rustup target add wasm32-unknown-unknown
 ```
 3. Start dev server:
 ```
-cargo run-wasm rename-me --release
+cargo run-wasm twisted-fish --release
 ```
 4. Visit `http://localhost:8000` with your browser.
 
@@ -24,7 +24,7 @@ cargo run-wasm rename-me --release
 
 These extra features can be adding then to the run-wasm `features` flag. Note that these are comma separated. For instance to activate `invariant-checking` and `logging` you can run:
 ```
-cargo run-wasm rename-me --release --features invariant-checking,logging
+cargo run-wasm twisted-fish --release --features invariant-checking,logging
 ```
 ## Desktop
 
@@ -36,11 +36,11 @@ The desktop version attempts to be cross platform. Only Linux and Windows have b
 
 2. Build via cargo
 ```
-cargo build --release --bin rename-me
+cargo build --release --bin twisted-fish
 ```
 3. Run the executable
 ```
-./target/release/rename-me
+./target/release/twisted-fish
 ```
 
 #### Linux specific notes
@@ -55,7 +55,7 @@ sudo apt install libasound2-dev pkg-config
 If you don't care about sound you can build with the enabled-by-default `"non-web-sound"` feature flag turned off:
 
 ```
-cargo build --release --bin rename-me --no-default-features
+cargo build --release --bin twisted-fish --no-default-features
 ```
 
 ##### Wayland
@@ -63,7 +63,7 @@ As of this writing, [a library that this program uses does not allow specifying 
 For now, you can run the executable with the `WINIT_UNIX_BACKEND` environment variable set to `"x11"` as a workaround.
 
 ```
-WINIT_UNIX_BACKEND="x11" ./target/release/rename-me
+WINIT_UNIX_BACKEND="x11" ./target/release/twisted-fish
 ```
 
 ## Feature flags
@@ -82,4 +82,4 @@ Enables sound when not building for the web. On by default.
 
 ___
 
-licensed under Apache or MIT, at your option.
+Source code licensed under Apache or MIT, at your option.
