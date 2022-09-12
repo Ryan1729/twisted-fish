@@ -1,6 +1,6 @@
 # Twisted Fish
 
-This is a single player only version of the card game [Twisted Fish](https://boardgamegeek.com/boardgame/24447/twisted-fish), which was published by the apparently defunct McNiell Designs ([web archive link](https://web.archive.org/web/20120215164041/http://www.mcneilldesigns.com/)).
+This is a single player only version of the card game [Twisted Fish](https://boardgamegeek.com/boardgame/24447/twisted-fish), which was published by the apparently defunct McNeill Designs ([web archive link](https://web.archive.org/web/20120215164041/http://www.mcneilldesigns.com/)).
 
 As of this writing, the implementation is not complete. This project was started from [this template](https://github.com/Ryan1729/cross-platform-template).
 
