@@ -1,13 +1,21 @@
 use game::Splat;
-use gfx::{Commands};
-use platform_types::{Button, Input, Speaker, SFX};
+use gfx::{Commands, WIDTH_IN_CHARS, CHAR_H};
+use platform_types::{Button, Input, Speaker, SFX, unscaled};
 pub use platform_types::StateParams;
 
+#[derive(Clone, Copy, Default)]
+enum HelpVis {
+    #[default]
+    Shown,
+    Hidden
+}
+
 pub struct State {
-    pub game_state: game::State,
-    pub commands: Commands,
-    pub input: Input,
-    pub speaker: Speaker,
+    game_state: game::State,
+    commands: Commands,
+    input: Input,
+    speaker: Speaker,
+    help_vis: HelpVis
 }
 
 impl State {
@@ -29,6 +37,7 @@ impl State {
             commands: Commands::default(),
             input: Input::default(),
             speaker: Speaker::default(),
+            help_vis: HelpVis::default(),
         }
     }
 }
@@ -37,11 +46,25 @@ impl platform_types::State for State {
     fn frame(&mut self) -> (&[platform_types::Command], &[SFX]) {
         self.commands.clear();
         self.speaker.clear();
-        update_and_render(
-            &mut self.commands,
+
+        if self.input.pressed_this_frame(Button::HELP) {
+            self.help_vis = match self.help_vis {
+                HelpVis::Shown => HelpVis::Hidden,
+                HelpVis::Hidden => HelpVis::Shown,
+            };
+
+            self.speaker.request_sfx(SFX::ButtonPress);
+        }
+
+        update(
             &mut self.game_state,
             self.input,
             &mut self.speaker,
+        );
+        render(
+            &mut self.commands,
+            &self.game_state,
+            self.help_vis
         );
 
         self.input.previous_gamepad = self.input.gamepad;
@@ -71,22 +94,98 @@ fn update(state: &mut game::State, input: Input, speaker: &mut Speaker) {
     }
 }
 
-#[inline]
-fn render(commands: &mut Commands, state: &game::State) {
+fn render(
+    commands: &mut Commands,
+    state: &game::State,
+    help_vis: HelpVis,
+) {
     commands.clear_to(1 /* green */);
 
+    match help_vis {
+        HelpVis::Shown => {
+            const HELP: &[u8] = b"press shift to show/hide this message
+HELP
+    PLACEHOLDER
+    PLACEHOLDER
+    PLACEHOLDER
+    PLACEHOLDER
+    PLACEHOLDER
+    PLACEHOLDER
+    PLACEHOLDER
+";
+
+            // TODO Is it worth it to avoid reflowing every frame?
+            let help_text = text::reflow(HELP, WIDTH_IN_CHARS.into());
+
+            let mut y = 0;
+
+            for line in text::lines(&help_text)
+                //.skip(self.top_index)
+                //.take(HEIGHT_IN_CHARS)
+            {
+                commands.print_line(
+                    line,
+                    unscaled::X(0),
+                    unscaled::Y(0)
+                    + y * CHAR_H,
+                    0 /* blue */
+                );
+
+                y += 1;
+            }
+        },
+        HelpVis::Hidden => render_game(commands, state),
+    }
+}
+
+fn render_game(
+    commands: &mut Commands,
+    state: &game::State,
+) {
     for &Splat { kind, x, y } in &state.splats {
         commands.draw_card(kind, x, y);
     }
 }
 
-#[inline]
-fn update_and_render(
-    commands: &mut Commands,
-    state: &mut game::State,
-    input: Input,
-    speaker: &mut Speaker,
-) {
-    update(state, input, speaker);
-    render(commands, state);
+mod text {
+    pub fn reflow(bytes: &[u8], width: usize) -> Vec<u8> {
+        if width == 0 || bytes.is_empty() {
+            return Vec::new();
+        }
+
+        let mut output = Vec::with_capacity(bytes.len() + bytes.len() / width);
+    
+        let mut x = 0;
+        for word in split_whitespace(bytes) {
+            x += word.len();
+
+            if x == width && x == word.len() {
+                output.extend(word.iter());
+                continue;
+            }
+    
+            if x >= width {
+                output.push(b'\n');
+    
+                x = word.len();
+            } else if x > word.len() {
+                output.push(b' ');
+    
+                x += 1;
+            }
+            output.extend(word.iter());
+        }
+    
+        output
+    }
+
+    pub fn split_whitespace(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
+        bytes
+            .split(|b| b.is_ascii_whitespace())
+            .filter(|word| !word.is_empty())
+    }
+
+    pub fn lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
+        bytes.split(|&b| b == b'\n')
+    }
 }

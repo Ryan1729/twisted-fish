@@ -3,7 +3,11 @@ pub mod unscaled {
 
     use xs::Xs;
 
-    type Inner = u16;
+    pub type Inner = u16;
+
+    pub const fn inner_from_u8(byte: u8) -> Inner {
+        byte as Inner
+    }
 
     // Small enough to fit on pretty much any reasonable device, at an aspect ratio
     // of 3:2 (1.5), which is a compromise between 4:3 (1.33...) and 16:9 (1.788...).
@@ -37,6 +41,9 @@ pub mod unscaled {
         H, HInner
     }
 
+    pub const WIDTH_W: W = W(WIDTH);
+    pub const HEIGHT_H: H = H(HEIGHT);
+
     impl X {
         pub fn gen(rng: &mut Xs) -> X {
             X(xs::range(rng, 0..WIDTH as _) as XInner)
@@ -57,12 +64,28 @@ pub mod unscaled {
         W(a.0 - b.0)
     }
 
+    pub const fn w_const_mul(a: W, b: Inner) -> W {
+        W(a.0 * b)
+    }
+
+    pub const fn w_const_div(a: W, b: Inner) -> W {
+        W(a.0 / b)
+    }
+
     pub const fn h_const_add(a: H, b: H) -> H {
         H(a.0 + b.0)
     }
 
     pub const fn h_const_sub(a: H, b: H) -> H {
         H(a.0 - b.0)
+    }
+
+    pub const fn h_const_mul(a: H, b: Inner) -> H {
+        H(a.0 * b)
+    }
+
+    pub const fn h_const_div(a: H, b: Inner) -> H {
+        H(a.0 / b)
     }
 
     macro_rules! self_add_sub_def {
@@ -128,6 +151,54 @@ pub mod unscaled {
         fn add(mut self, other: H) -> Self::Output {
             self += other;
             self
+        }
+    }
+
+    impl core::ops::MulAssign<Inner> for W {
+        fn mul_assign(&mut self, inner: Inner) {
+            self.0 *= inner;
+        }
+    }
+
+    impl core::ops::Mul<Inner> for W {
+        type Output = Self;
+
+        fn mul(mut self, inner: Inner) -> Self::Output {
+            self *= inner;
+            self
+        }
+    }
+
+    impl core::ops::Mul<W> for Inner {
+        type Output = W;
+
+        fn mul(self, mut w: W) -> Self::Output {
+            w *= self;
+            w
+        }
+    }
+
+    impl core::ops::MulAssign<Inner> for H {
+        fn mul_assign(&mut self, inner: Inner) {
+            self.0 *= inner;
+        }
+    }
+
+    impl core::ops::Mul<Inner> for H {
+        type Output = Self;
+
+        fn mul(mut self, inner: Inner) -> Self::Output {
+            self *= inner;
+            self
+        }
+    }
+
+    impl core::ops::Mul<H> for Inner {
+        type Output = H;
+
+        fn mul(self, mut h: H) -> Self::Output {
+            h *= self;
+            h
         }
     }
 
@@ -234,6 +305,8 @@ pub mod button {
         pub const DOWN  : Self = Self(1 << 5);
         pub const LEFT  : Self = Self(1 << 6);
         pub const RIGHT : Self = Self(1 << 7);
+
+        pub const HELP: Self = Self::SELECT;
 
         pub const fn contains(&self, other: Self) -> bool {
             self.0 & other.0 == other.0

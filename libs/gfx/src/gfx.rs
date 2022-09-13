@@ -78,6 +78,19 @@ impl Commands {
         );
     }
 
+    pub fn print_line(
+        &mut self,
+        bytes: &[u8],
+        mut x: unscaled::X,
+        y: unscaled::Y,
+        colour: PaletteIndex,
+    ) {
+        for &c in bytes.iter() {
+            self.print_char(c, x, y, colour);
+            x += FONT_ADVANCE_W;
+        }
+    }
+
     pub fn draw_card(
         &mut self,
         card: Card,
@@ -220,5 +233,12 @@ pub const CHAR_SIZE: u8 = 8;
 pub const CHAR_W: unscaled::W = unscaled::W(CHAR_SIZE as _);
 pub const CHAR_H: unscaled::H = unscaled::H(CHAR_SIZE as _);
 
+const FONT_ADVANCE: u8 = 4;
+const FONT_ADVANCE_W: unscaled::W = unscaled::W(unscaled::inner_from_u8(FONT_ADVANCE));
+
 pub const FONT_FLIP: u8 = 128;
 
+// TODO `CharCount` type?
+pub const WIDTH_IN_CHARS: unscaled::Inner = 
+    unscaled::WIDTH 
+    / unscaled::inner_from_u8(FONT_ADVANCE);

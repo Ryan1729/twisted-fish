@@ -70,7 +70,7 @@ pub fn run<S: State + 'static>(mut state: S) {
 
                 let button = match keycode {
                     VK::Return => Button::START,
-                    VK::RShift => Button::SELECT,
+                    VK::LShift | VK::RShift => Button::SELECT,
                     VK::Up => Button::UP,
                     VK::Left => Button::LEFT,
                     VK::Right => Button::RIGHT,
@@ -143,7 +143,7 @@ mod wasm {
     };
     use wasm_bindgen::JsCast;
     use web_sys::HtmlCanvasElement;
-    use platform_types::{SFX, unscaled};
+    use platform_types::SFX;
 
     pub fn set_canvas(builder: WindowBuilder) -> WindowBuilder {
         let canvas = get_canvas();
@@ -152,8 +152,8 @@ mod wasm {
         // browser will stretch it for us.
         let size = winit::dpi::Size::Physical(
             winit::dpi::PhysicalSize::new(
-                unscaled::WIDTH.into(),
-                unscaled::HEIGHT.into(),
+                screen::WIDTH.into(),
+                screen::HEIGHT.into(),
             ),
         );
 
