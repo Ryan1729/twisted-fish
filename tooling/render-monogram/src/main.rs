@@ -13,6 +13,7 @@ fn main() {
     enum State {
         OpenQuote,
         Char,
+        BackslashChar,
         CloseQuote(u8),
         SkippingCloseQuote,
         SkippingOpenQuote,
@@ -37,16 +38,11 @@ fn main() {
     let mut state = State::OpenQuote;
 
     for json_char in json.chars() {
-        macro_rules! bail {
-            () => {
-                panic!("Got '{json_char}' in state {state:?}")
-            }
-        }
-
         state = match (state, json_char) {
             (OpenQuote, '"') => Char,
-            (Char, c) if c.is_ascii() => CloseQuote(c as u8),
-            (Char, _) => SkippingCloseQuote,
+            (Char, '\\') => BackslashChar,
+            (Char | BackslashChar, c) if c.is_ascii() => CloseQuote(c as u8),
+            (Char | BackslashChar, _) => SkippingCloseQuote,
             (SkippingCloseQuote, '"') => SkippingOpenQuote,
             (SkippingOpenQuote, '"') => Char,
             (CloseQuote(c), '"') => OpenBracket(c),
@@ -72,10 +68,8 @@ fn main() {
                         panic!("too many array elements for {c}");
                     }
                     RemainingDigits(c, chunks, overall_i)
-                } else if which_in_chunk == 1 {
-                    RemainingDigitsComma(c, chunks, overall_i)
                 } else {
-                    panic!("number {} for {c} has too many digits", which_chunk + 3);
+                    RemainingDigitsComma(c, chunks, overall_i)
                 }
             },
             (
@@ -89,7 +83,11 @@ fn main() {
                 }
                 RemainingDigits(c, chunks, overall_i)
             },
-            (RemainingDigits(c, chunks, _), ']') => {
+            (
+                RemainingDigits(c, chunks, _)
+                | RemainingDigitsComma(c, chunks, _),
+                ']'
+            ) => {
                 let (c_x, c_y) = (
                     c as usize % OUTPUT_W_IN_CHARS, 
                     c as usize / OUTPUT_W_IN_CHARS
@@ -142,7 +140,7 @@ fn main() {
                 | RemainingDigitsComma(..)
                 | CommaOrBrace,
                 _
-            ) => bail!(),
+            ) => panic!("Got '{json_char}' in state {state:?}"),
         };
     }
     
