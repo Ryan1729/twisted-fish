@@ -60,7 +60,7 @@ impl Commands {
 
     pub fn print_char(
         &mut self,
-        character: u8, 
+        character: u8,
         x: unscaled::X,
         y: unscaled::Y,
         colour: PaletteIndex
@@ -87,7 +87,7 @@ impl Commands {
     ) {
         for &c in bytes.iter() {
             self.print_char(c, x, y, colour);
-            x += CHAR_W;
+            x += CHAR_ADVANCE_W;
         }
     }
 
@@ -167,20 +167,20 @@ pub mod card {
     pub const LEFT_SUIT_EDGE_H: H = H(10);
 
     pub const RIGHT_RANK_EDGE_W: W = w_const_sub(
-        WIDTH, 
+        WIDTH,
         w_const_add(LEFT_RANK_EDGE_W, CHAR_W)
     );
     pub const RIGHT_RANK_EDGE_H: H = h_const_sub(
-        HEIGHT, 
+        HEIGHT,
         h_const_add(LEFT_RANK_EDGE_H, CHAR_H)
     );
 
     pub const RIGHT_SUIT_EDGE_W: W = w_const_sub(
-        WIDTH, 
+        WIDTH,
         w_const_add(LEFT_SUIT_EDGE_W, CHAR_W)
     );
     pub const RIGHT_SUIT_EDGE_H: H = h_const_sub(
-        HEIGHT, 
+        HEIGHT,
         h_const_add(LEFT_SUIT_EDGE_H, CHAR_H)
     );
 }
@@ -229,7 +229,23 @@ pub fn get_rank_char_from_rank(rank: Rank) -> u8 {
     }
 }
 
+pub const CHAR_SPACING: u8 = 2;
+pub const CHAR_SPACING_W: unscaled::W = unscaled::W(CHAR_SPACING as _);
+pub const CHAR_SPACING_H: unscaled::H = unscaled::H(CHAR_SPACING as _);
+
+const CHAR_ADVANCE_WIDTH: unscaled::Inner =
+    CHAR_WIDTH as unscaled::Inner
+    + CHAR_SPACING as unscaled::Inner;
+
+pub const CHAR_ADVANCE_W: unscaled::W = unscaled::W(CHAR_ADVANCE_WIDTH);
+
+const CHAR_ADVANCE_HEIGHT: unscaled::Inner =
+    CHAR_HEIGHT as unscaled::Inner
+    + CHAR_SPACING as unscaled::Inner;
+
+pub const CHAR_ADVANCE_H: unscaled::H = unscaled::H(CHAR_ADVANCE_HEIGHT);
+
 // TODO `CharCount` type?
-pub const WIDTH_IN_CHARS: unscaled::Inner = 
-    unscaled::WIDTH 
-    / unscaled::inner_from_u8(CHAR_WIDTH);
+pub const WIDTH_IN_CHARS: unscaled::Inner =
+    unscaled::WIDTH
+    / CHAR_ADVANCE_WIDTH;

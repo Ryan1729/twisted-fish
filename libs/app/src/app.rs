@@ -1,6 +1,6 @@
 use game::Splat;
-use gfx::{Commands, WIDTH_IN_CHARS};
-use platform_types::{Button, Input, Speaker, SFX, unscaled, CHAR_H};
+use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, WIDTH_IN_CHARS};
+use platform_types::{Button, Input, Speaker, SFX, unscaled};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -123,7 +123,8 @@ abcdefghijklmnopqrstuvwxyz
                     line,
                     unscaled::X(0),
                     unscaled::Y(0)
-                    + y * CHAR_H,
+                    + y * CHAR_ADVANCE_H
+                    + CHAR_SPACING_H,
                     0 /* blue */
                 );
 
