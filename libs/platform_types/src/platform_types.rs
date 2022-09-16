@@ -56,6 +56,14 @@ pub mod unscaled {
         }
     }
 
+    pub const fn w_to_usize(w: W) -> usize {
+        w.0 as usize
+    }
+
+    pub const fn h_to_usize(h: H) -> usize {
+        h.0 as usize
+    }
+
     pub const fn w_const_add(a: W, b: W) -> W {
         W(a.0 + b.0)
     }
@@ -215,9 +223,21 @@ pub const GFX_WIDTH: usize = 128;
 pub const GFX_HEIGHT: usize = 128;
 pub const GFX_LENGTH: usize = GFX_WIDTH * GFX_HEIGHT;
 
-pub const FONT_WIDTH: usize = 128;
-pub const FONT_HEIGHT: usize = 128;
-pub const FONT_LENGTH: usize = FONT_WIDTH * FONT_HEIGHT;
+pub const CHAR_WIDTH: u8 = 5;
+pub const CHAR_W: unscaled::W = unscaled::W(CHAR_WIDTH as _);
+
+const CHAR_ASC: u8 = 2;
+const CHAR_LOWERCASE_H: u8 = 5;
+const CHAR_DESC: u8 = 2;
+pub const CHAR_HEIGHT: u8 = CHAR_ASC + CHAR_LOWERCASE_H + CHAR_DESC;
+pub const CHAR_H: unscaled::H = unscaled::H(CHAR_HEIGHT as _);
+
+const FONT_WIDTH_IN_CHARS: u8 = 16;
+const FONT_HEIGHT_IN_CHARS: u8 = 16;
+
+pub const FONT_WIDTH: u8 = CHAR_WIDTH * FONT_WIDTH_IN_CHARS;
+pub const FONT_HEIGHT: u8 = CHAR_HEIGHT * FONT_HEIGHT_IN_CHARS;
+pub const FONT_LENGTH: usize = FONT_WIDTH as usize * FONT_HEIGHT as usize;
 
 pub type PaletteIndex = u8;
 

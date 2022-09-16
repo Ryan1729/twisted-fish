@@ -1,6 +1,6 @@
 use game::Splat;
-use gfx::{Commands, WIDTH_IN_CHARS, CHAR_H};
-use platform_types::{Button, Input, Speaker, SFX, unscaled};
+use gfx::{Commands, WIDTH_IN_CHARS};
+use platform_types::{Button, Input, Speaker, SFX, unscaled, CHAR_H};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -104,14 +104,8 @@ fn render(
     match help_vis {
         HelpVis::Shown => {
             const HELP: &[u8] = b"press shift to show/hide this message
-HELP
-    PLACEHOLDER
-    PLACEHOLDER
-    PLACEHOLDER
-    PLACEHOLDER
-    PLACEHOLDER
-    PLACEHOLDER
-    PLACEHOLDER
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyz
 ";
 
             // TODO Is it worth it to avoid reflowing every frame?

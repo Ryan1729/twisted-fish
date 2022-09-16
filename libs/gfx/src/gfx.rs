@@ -1,6 +1,6 @@
 use models::{Card, Rank, Suit, get_rank, get_suit, suits};
 
-use platform_types::{Command, Kind, PaletteIndex, FONT_WIDTH, unscaled::{self, Rect}};
+use platform_types::{Command, Kind, PaletteIndex, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
 
 #[derive(Default)]
 pub struct Commands {
@@ -87,7 +87,7 @@ impl Commands {
     ) {
         for &c in bytes.iter() {
             self.print_char(c, x, y, colour);
-            x += FONT_ADVANCE_W;
+            x += CHAR_W;
         }
     }
 
@@ -126,13 +126,13 @@ impl Commands {
         );
 
         self.print_char(
-            rank_char | FONT_FLIP,
+            rank_char,
             x + card::RIGHT_RANK_EDGE_W,
             y + card::RIGHT_RANK_EDGE_H,
             colour,
         );
         self.print_char(
-            suit_char | FONT_FLIP,
+            suit_char,
             x + card::RIGHT_SUIT_EDGE_W,
             y + card::RIGHT_SUIT_EDGE_H,
             colour,
@@ -141,11 +141,11 @@ impl Commands {
 }
 
 pub fn get_char_xy(sprite_number: u8) -> (u8, u8) {
-    const SPRITES_PER_ROW: u8 = FONT_WIDTH as u8 / CHAR_SIZE;
+    const SPRITES_PER_ROW: u8 = FONT_WIDTH / CHAR_WIDTH;
 
     (
-        (sprite_number % SPRITES_PER_ROW) * CHAR_SIZE,
-        (sprite_number / SPRITES_PER_ROW) * CHAR_SIZE,
+        (sprite_number % SPRITES_PER_ROW) * CHAR_WIDTH,
+        (sprite_number / SPRITES_PER_ROW) * CHAR_HEIGHT,
     )
 }
 
@@ -229,16 +229,7 @@ pub fn get_rank_char_from_rank(rank: Rank) -> u8 {
     }
 }
 
-pub const CHAR_SIZE: u8 = 8;
-pub const CHAR_W: unscaled::W = unscaled::W(CHAR_SIZE as _);
-pub const CHAR_H: unscaled::H = unscaled::H(CHAR_SIZE as _);
-
-const FONT_ADVANCE: u8 = 4;
-const FONT_ADVANCE_W: unscaled::W = unscaled::W(unscaled::inner_from_u8(FONT_ADVANCE));
-
-pub const FONT_FLIP: u8 = 128;
-
 // TODO `CharCount` type?
 pub const WIDTH_IN_CHARS: unscaled::Inner = 
     unscaled::WIDTH 
-    / unscaled::inner_from_u8(FONT_ADVANCE);
+    / unscaled::inner_from_u8(CHAR_WIDTH);
