@@ -113,7 +113,7 @@ fn main() {
                             .expect("chunk elements should be UTF-8")
                     ).expect("chunk shoud be a valid u8");
 
-                    for col in (0..CHAR_W as usize).rev() {
+                    for col in 0..CHAR_W as usize {
                         output[base_i + row * OUTPUT_W as usize + col]
                         = bits & 1;
                         bits >>= 1;
