@@ -89,13 +89,14 @@ fn main() {
                 ']'
             ) => {
                 let (c_x, c_y) = (
-                    c as usize % OUTPUT_W_IN_CHARS, 
+                    c as usize % OUTPUT_W_IN_CHARS,
                     c as usize / OUTPUT_W_IN_CHARS
                 );
 
-                let base_i = (
-                    OUTPUT_W * c_y + CHAR_W as usize * c_x
-                ) * CHAR_H as usize;
+                let base_i =
+                    OUTPUT_W * c_y * CHAR_H as usize
+                    + CHAR_W as usize * c_x
+                ;
 
                 let mut row = 0;
                 for chunk in chunks {
@@ -114,8 +115,7 @@ fn main() {
                     ).expect("chunk shoud be a valid u8");
 
                     for col in 0..CHAR_W as usize {
-                        output[base_i + row * OUTPUT_W as usize + col]
-                        = bits & 1;
+                        output[base_i + row * OUTPUT_W as usize + col] = bits & 1;
                         bits >>= 1;
                     }
 
@@ -129,9 +129,9 @@ fn main() {
             | (OpenBracket(_), ':'|' '|'\r'|'\n')
             => state,
             (
-                OpenQuote 
-                | FirstComma(_) 
-                | SecondComma(_) 
+                OpenQuote
+                | FirstComma(_)
+                | SecondComma(_)
                 | ThirdComma(_)
                 | SkippingCloseQuote
                 | CloseQuote(_)
@@ -143,7 +143,7 @@ fn main() {
             ) => panic!("Got '{json_char}' in state {state:?}"),
         };
     }
-    
+
     println!("[");
     for y in 0..OUTPUT_H {
         for x in 0..OUTPUT_W {

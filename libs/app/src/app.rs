@@ -106,6 +106,8 @@ fn render(
             const HELP: &[u8] = b"press shift to show/hide this message
 ABCDEFGHIJKLMNOPQRSTUVWXYZ
 abcdefghijklmnopqrstuvwxyz
+1234567890-=
+!@#$%^&*()_+
 ";
 
             // TODO Is it worth it to avoid reflowing every frame?
