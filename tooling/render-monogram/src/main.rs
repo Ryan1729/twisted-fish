@@ -114,7 +114,7 @@ fn main() {
                     ).expect("chunk shoud be a valid u8");
 
                     for col in (0..CHAR_W as usize).rev() {
-                        output[base_i + row * CHAR_W as usize + col]
+                        output[base_i + row * OUTPUT_W as usize + col]
                         = bits & 1;
                         bits >>= 1;
                     }
