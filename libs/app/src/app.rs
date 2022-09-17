@@ -1,5 +1,5 @@
 use game::Splat;
-use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, WIDTH_IN_CHARS};
+use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
 use platform_types::{Button, Input, Speaker, SFX, unscaled};
 pub use platform_types::StateParams;
 
@@ -103,25 +103,33 @@ fn render(
 
     match help_vis {
         HelpVis::Shown => {
-            const HELP: &[u8] = b"press shift to show/hide this message
-ABCDEFGHIJKLMNOPQRSTUVWXYZ
-abcdefghijklmnopqrstuvwxyz
-1234567890-=
-!@#$%^&*()_+
-";
+            const HELP: &[u8] = b"Press shift to show/hide this message.
+----------------
+Help
+----------------
+TODO
 
-            // TODO Is it worth it to avoid reflowing every frame?
-            let help_text = text::reflow(HELP, WIDTH_IN_CHARS.into());
+----------------
+Image Credits
+----------------
+\"Shark Jaws\" by Lorc, (modified)
+https://game-icons.net/1x1/lorc/shark-jaws.html
+
+----------------
+Everything Else
+----------------
+Ryan Wiedemann (Ryan1729 on github)
+";
 
             let mut y = 0;
 
-            for line in text::lines(&help_text)
+            for line in text::lines(&HELP)
                 //.skip(self.top_index)
                 //.take(HEIGHT_IN_CHARS)
             {
                 commands.print_line(
                     line,
-                    unscaled::X(0),
+                    unscaled::X(CHAR_SPACING as _),
                     unscaled::Y(0)
                     + y * CHAR_ADVANCE_H
                     + CHAR_SPACING_H,
@@ -145,6 +153,7 @@ fn render_game(
 }
 
 mod text {
+    #[allow(unused)]
     pub fn reflow(bytes: &[u8], width: usize) -> Vec<u8> {
         if width == 0 || bytes.is_empty() {
             return Vec::new();
