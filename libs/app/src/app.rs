@@ -115,6 +115,12 @@ Image Credits
 \"Shark Jaws\" by Lorc, (modified)
 https://game-icons.net/1x1/lorc/shark-jaws.html
 
+\"Jumping Dog\" by Delapouite, (modified)
+https://game-icons.net/1x1/delapouite/jumping-dog.html
+
+\"Fish Escape\" by Delapouite, (modified)
+https://game-icons.net/1x1/delapouite/fish-escape.html
+
 ----------------
 Everything Else
 ----------------
