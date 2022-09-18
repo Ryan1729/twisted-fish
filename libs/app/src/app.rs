@@ -121,6 +121,14 @@ https://game-icons.net/1x1/delapouite/jumping-dog.html
 \"Fish Escape\" by Delapouite, (modified)
 https://game-icons.net/1x1/delapouite/fish-escape.html
 
+\"Police Officer Head\" by Delapouite, (modified)
+https://game-icons.net/1x1/delapouite/police-officer-head.html
+
+\"Canned Fish\" by Delapouite, (modified)
+https://game-icons.net/1x1/delapouite/canned-fish.html
+
+All of the above icons used under CC BY 3.0.
+
 ----------------
 Everything Else
 ----------------
