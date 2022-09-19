@@ -3,10 +3,11 @@ use platform_types::{
     Kind,
     GFX_WIDTH,
     FONT_WIDTH,
+    RGBA,
     unscaled::{self, Rect},
 };
 
-use assets::{GFX, FONT};
+use assets::{GFX, GFX_TRANSPARENT, FONT, FONT_TRANSPARENT};
 
 pub mod clip {
     use core::ops::Range;
@@ -425,18 +426,16 @@ pub fn render(
                         for y in clip_rect.y {
                             let mut x_remaining = multiplier;
                             for x in clip_rect.x.clone() {
-                                let colour = GFX[src_i] as usize;
+                                let colour: RGBA = GFX[src_i];
 
-                                if
-                                //make purple transparent
-                                colour != 4
+                                if colour != GFX_TRANSPARENT
                                 && cell_clip_rect.contains(x, y)
                                 {
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
                                     if d_i < frame_buffer.buffer.len() {
-                                        frame_buffer.buffer[d_i] = PALETTE[colour];
+                                        frame_buffer.buffer[d_i] = colour;
                                     }
                                 }
 
@@ -470,11 +469,9 @@ pub fn render(
                         for y in clip_rect.y {
                             let mut x_remaining = multiplier;
                             for x in clip_rect.x.clone() {
-                                let font_pixel_colour = FONT[src_i] as usize;
+                                let font_pixel_colour = FONT[src_i];
 
-                                if
-                                //make black transparent
-                                font_pixel_colour != 0
+                                if font_pixel_colour != FONT_TRANSPARENT
                                 && cell_clip_rect.contains(x, y) {
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)

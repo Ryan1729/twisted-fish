@@ -1,3 +1,6 @@
+
+pub type RGBA = u32;
+
 pub mod unscaled {
     ///! Values are in pixels.
 
