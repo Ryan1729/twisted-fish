@@ -1,16 +1,12 @@
 [package]
-name = "render"
+name = "assets"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-path = "src/render.rs"
+path = "src/assets.rs"
 
 [dependencies]
 
-[dependencies.assets]
-path = "../assets"
-
 [dependencies.platform_types]
 path = "../platform_types"
-
