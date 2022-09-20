@@ -17,6 +17,10 @@ pub const GFX_TRANSPARENT: RGBA = 0x533354FF;
     For example, you might replace `0x22, 0x22, 0x22, 0xFF,` with `index6,`, then similarly
     replace the rest of the colours with something containing their index value, then remove
     all instances of `index`, leaving just the indices. Format further as needed.
+
+    Some possiby useful regex replaces (quotes delimit the given regex):
+    Replace "0x([0-9A-F][0-9A-F]), 0x([0-9A-F][0-9A-F]), 0x([0-9A-F][0-9A-F]), 0x([0-9A-F][0-9A-F]), "
+    with "0x\1\2\3\4, "
 */
 
 #[rustfmt::skip]
