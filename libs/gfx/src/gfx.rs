@@ -154,8 +154,8 @@ pub mod card {
 
     use unscaled::{W, H, w_const_add, w_const_sub, h_const_add, h_const_sub};
 
-    pub const WIDTH: W = W(20);
-    pub const HEIGHT: H = H(30);
+    pub const WIDTH: W = W(74);
+    pub const HEIGHT: H = H(105);
 
     pub const FRONT_SPRITE_X: u8 = 2;
     pub const FRONT_SPRITE_Y: u8 = 1;

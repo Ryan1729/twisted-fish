@@ -222,8 +222,8 @@ pub mod unscaled {
     }
 }
 
-pub const GFX_WIDTH: usize = 128;
-pub const GFX_HEIGHT: usize = 128;
+pub const GFX_WIDTH: usize = 512;
+pub const GFX_HEIGHT: usize = 1024;
 pub const GFX_LENGTH: usize = GFX_WIDTH * GFX_HEIGHT;
 
 pub const CHAR_WIDTH: u8 = 5;
