@@ -157,8 +157,8 @@ pub mod card {
     pub const WIDTH: W = W(74);
     pub const HEIGHT: H = H(105);
 
-    pub const FRONT_SPRITE_X: u8 = 2;
-    pub const FRONT_SPRITE_Y: u8 = 1;
+    pub const FRONT_SPRITE_X: u8 = 0;
+    pub const FRONT_SPRITE_Y: u8 = 0;
 
     pub const LEFT_RANK_EDGE_W: W = W(3);
     pub const LEFT_RANK_EDGE_H: H = H(3);

@@ -3,7 +3,7 @@ use platform_types::{
     Kind,
     GFX_WIDTH,
     FONT_WIDTH,
-    RGBA,
+    ARGB,
     unscaled::{self, Rect},
 };
 
@@ -426,7 +426,7 @@ pub fn render(
                         for y in clip_rect.y {
                             let mut x_remaining = multiplier;
                             for x in clip_rect.x.clone() {
-                                let colour: RGBA = GFX[src_i];
+                                let colour: ARGB = GFX[src_i];
 
                                 if colour != GFX_TRANSPARENT
                                 && cell_clip_rect.contains(x, y)
@@ -528,23 +528,25 @@ pub fn render(
 // https://twitter.com/ea_accessible/status/968595073184092160
 
 mod colours {
-    pub const BLUE: u32 = 0xFF3352E1;
-    pub const GREEN: u32 = 0xFF30B06E;
-    pub const RED: u32 = 0xFFDE4949;
-    pub const YELLOW: u32 = 0xFFFFB937;
-    pub const PURPLE: u32 = 0xFF533354;
+    use super::ARGB;
+
+    pub const BLUE: ARGB = 0xFF3352E1;
+    pub const GREEN: ARGB = 0xFF30B06E;
+    pub const RED: ARGB = 0xFFDE4949;
+    pub const YELLOW: ARGB = 0xFFFFB937;
+    pub const PURPLE: ARGB = 0xFF533354;
     #[allow(unused)]
-    pub const GREY: u32 = 0xFF5A7D8B;
+    pub const GREY: ARGB = 0xFF5A7D8B;
     #[allow(unused)]
-    pub const GRAY: u32 = GREY;
-    pub const WHITE: u32 = 0xFFEEEEEE;
-    pub const BLACK: u32 = 0xFF222222;
+    pub const GRAY: ARGB = GREY;
+    pub const WHITE: ARGB = 0xFFEEEEEE;
+    pub const BLACK: ARGB = 0xFF222222;
 }
 
 use colours::*;
 
 #[rustfmt::skip]
-const PALETTE: [u32; 8] = [
+const PALETTE: [ARGB; 8] = [
     BLUE,
     GREEN,
     RED,
