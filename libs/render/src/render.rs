@@ -104,8 +104,17 @@ mod hash {
         u16(hash, h.get());
 
         match kind {
-            Gfx((x, y)) => { bytes(hash, &[0, x, y]); },
-            Font((x, y), i) => { bytes(hash, &[1, x, y, i]); },
+            Gfx((x, y)) => {
+                byte(hash, 0);
+                u16(hash, x.0);
+                u16(hash, y.0);
+            },
+            Font((x, y), i) => {
+                byte(hash, 1);
+                u16(hash, x.0);
+                u16(hash, y.0);
+                byte(hash, i);
+            },
             Colour(i) => { bytes(hash, &[2, i]); },
         };
     }

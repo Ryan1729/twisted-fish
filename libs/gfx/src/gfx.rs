@@ -1,6 +1,6 @@
 use models::{Card, Rank, Suit, get_rank, get_suit, suits};
 
-use platform_types::{Command, Kind, PaletteIndex, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
+use platform_types::{Command, Kind, PaletteIndex, sprite, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
 
 #[derive(Default)]
 pub struct Commands {
@@ -18,13 +18,12 @@ impl Commands {
 
     pub fn sspr(
         &mut self,
-        sprite_x: u8,
-        sprite_y: u8,
+        sprite_xy: sprite::XY,
         rect: unscaled::Rect,
     ) {
         self.commands.push(
             Command {
-                kind: Kind::Gfx((sprite_x, sprite_y)),
+                kind: Kind::Gfx(sprite_xy),
                 rect,
             }
         );
@@ -32,7 +31,7 @@ impl Commands {
 
     fn print_char_raw(
         &mut self,
-        sprite_xy: (u8, u8),
+        sprite_xy: sprite::XY,
         colour: PaletteIndex,
         rect: unscaled::Rect,
     ) {
@@ -65,9 +64,8 @@ impl Commands {
         y: unscaled::Y,
         colour: PaletteIndex
     ) {
-        let (sprite_x, sprite_y) = get_char_xy(character);
         self.print_char_raw(
-            (sprite_x, sprite_y),
+            get_char_xy(character),
             colour,
             Rect {
                 x,
@@ -98,8 +96,7 @@ impl Commands {
         y: unscaled::Y
     ) {
         self.sspr(
-            card::FRONT_SPRITE_X,
-            card::FRONT_SPRITE_Y,
+            card::FRONT_SPRITE_XY,
             Rect {
                 x,
                 y,
@@ -140,12 +137,16 @@ impl Commands {
     }
 }
 
-pub fn get_char_xy(sprite_number: u8) -> (u8, u8) {
+pub fn get_char_xy(sprite_number: u8) -> sprite::XY {
     const SPRITES_PER_ROW: u8 = FONT_WIDTH / CHAR_WIDTH;
 
     (
-        (sprite_number % SPRITES_PER_ROW) * CHAR_WIDTH,
-        (sprite_number / SPRITES_PER_ROW) * CHAR_HEIGHT,
+        sprite::X(Into::into(
+            (sprite_number % SPRITES_PER_ROW) * CHAR_WIDTH,
+        )),
+        sprite::Y(Into::into(
+            (sprite_number / SPRITES_PER_ROW) * CHAR_HEIGHT,
+        )),
     )
 }
 
@@ -157,8 +158,16 @@ pub mod card {
     pub const WIDTH: W = W(74);
     pub const HEIGHT: H = H(105);
 
-    pub const FRONT_SPRITE_X: u8 = 0;
-    pub const FRONT_SPRITE_Y: u8 = 0;
+    type ImageW = u16;
+    type ImageH = u16;
+
+    const IMAGE_W: ImageW = 72;
+    #[allow(unused)]
+    const IMAGE_H: ImageH = 72;
+
+    pub const FRONT_SPRITE_X: sprite::X = sprite::X(IMAGE_W * 6);
+    pub const FRONT_SPRITE_Y: sprite::Y = sprite::Y(0);
+    pub const FRONT_SPRITE_XY: sprite::XY = (FRONT_SPRITE_X, FRONT_SPRITE_Y);
 
     pub const LEFT_RANK_EDGE_W: W = W(3);
     pub const LEFT_RANK_EDGE_H: H = H(3);

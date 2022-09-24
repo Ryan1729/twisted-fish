@@ -246,16 +246,32 @@ pub const FONT_LENGTH: usize = FONT_WIDTH as usize * FONT_HEIGHT as usize;
 
 pub type PaletteIndex = u8;
 
-pub mod command {
-    pub type X = u8;
-    pub type Y = u8;
+pub mod sprite {
+    type Inner = u16;
+    #[derive(Clone, Copy, Debug)]
+    pub struct X(pub Inner);
+    #[derive(Clone, Copy, Debug)]
+    pub struct Y(pub Inner);
+
+    impl From<X> for usize {
+        fn from(x: X) -> Self {
+            x.0.into()
+        }
+    }
+
+    impl From<Y> for usize {
+        fn from(y: Y) -> Self {
+            y.0.into()
+        }
+    }
+
     pub type XY = (X, Y);
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
-    Gfx(command::XY),
-    Font(command::XY, PaletteIndex),
+    Gfx(sprite::XY),
+    Font(sprite::XY, PaletteIndex),
     Colour(PaletteIndex),
 }
 
