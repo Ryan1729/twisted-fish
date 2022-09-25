@@ -435,16 +435,71 @@ pub fn render(
                         for y in clip_rect.y {
                             let mut x_remaining = multiplier;
                             for x in clip_rect.x.clone() {
-                                let colour: ARGB = GFX[src_i];
+                                let gfx_colour: ARGB = GFX[src_i];
 
-                                if colour != GFX_TRANSPARENT
+                                if gfx_colour != GFX_TRANSPARENT
                                 && cell_clip_rect.contains(x, y)
                                 {
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
                                     if d_i < frame_buffer.buffer.len() {
-                                        frame_buffer.buffer[d_i] = colour;
+                                        fn f32_to_u8(x: f32) -> u8 {
+                                            // This saturates instead of being UB
+                                            // as of rust 1.45.0
+                                            x as u8
+                                        }
+                                        // Interprets 1.0 as full bright.
+                                        fn linear_to_gamma(x: f32) -> u8 {
+                                            f32_to_u8(255. * x.powf(1./2.2))
+                                        }
+
+                                        fn gamma_to_linear(x: u8) -> f32 {
+                                            ((x as f32)/255.).powf(2.2)
+                                        }
+
+                                        let under = frame_buffer.buffer[d_i];
+
+                                        // `_g` for gfx.
+                                        let a_g = ((gfx_colour >> 24) & 255) as u8;
+                                        let r_g = ((gfx_colour >> 16) & 255) as u8;
+                                        let g_g = ((gfx_colour >>  8) & 255) as u8;
+                                        let b_g = ((gfx_colour >>  0) & 255) as u8;
+
+                                        // `_u` for under.
+                                        let a_u = ((under >> 24) & 255) as u8;
+                                        let r_u = ((under >> 16) & 255) as u8;
+                                        let g_u = ((under >>  8) & 255) as u8;
+                                        let b_u = ((under >>  0) & 255) as u8;
+
+                                        let a_g = gamma_to_linear(a_g);
+                                        let r_g = gamma_to_linear(r_g);
+                                        let g_g = gamma_to_linear(g_g);
+                                        let b_g = gamma_to_linear(b_g);
+
+                                        let a_u = gamma_to_linear(a_u);
+                                        let r_u = gamma_to_linear(r_u);
+                                        let g_u = gamma_to_linear(g_u);
+                                        let b_u = gamma_to_linear(b_u);
+
+                                        // `_o` for output.
+                                        let a_o = a_g + a_u * (1. - a_g);
+                                        let r_o = (r_g * a_g + r_u * (1. - a_g)) / a_o;
+                                        let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
+                                        let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
+
+                                        let a_o = linear_to_gamma(a_o);
+                                        let r_o = linear_to_gamma(r_o);
+                                        let g_o = linear_to_gamma(g_o);
+                                        let b_o = linear_to_gamma(b_o);
+
+                                        let output =
+                                              (ARGB::from(a_o) << 24)
+                                            | (ARGB::from(r_o) << 16)
+                                            | (ARGB::from(g_o) <<  8)
+                                            | (ARGB::from(b_o) <<  0);
+
+                                        frame_buffer.buffer[d_i] = output;
                                     }
                                 }
 
