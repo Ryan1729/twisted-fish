@@ -127,7 +127,17 @@ https://game-icons.net/1x1/delapouite/police-officer-head.html
 \"Canned Fish\" by Delapouite, (modified)
 https://game-icons.net/1x1/delapouite/canned-fish.html
 
+\"Scuba Mask\" by Delapouite, (modified)
+https://game-icons.net/1x1/delapouite/scuba-mask.html
+
 All of the above icons used under CC BY 3.0.
+
+----------------
+Font Credits
+----------------
+
+\"Monogram\" by Vinícius Menézio (@vmenezio).
+https://datagoblin.itch.io/monogram
 
 ----------------
 Everything Else
