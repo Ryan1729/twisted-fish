@@ -130,6 +130,12 @@ https://game-icons.net/1x1/delapouite/canned-fish.html
 \"Scuba Mask\" by Delapouite, (modified)
 https://game-icons.net/1x1/delapouite/scuba-mask.html
 
+\"Wooden Sign\" by Lorc, (modified)
+https://game-icons.net/1x1/lorc/wooden-sign.html
+
+\"Fishing Hook\" by Lorc, (modified)
+https://game-icons.net/1x1/lorc/fishing-hook.html
+
 All of the above icons used under CC BY 3.0.
 
 ----------------
