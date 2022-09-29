@@ -139,6 +139,9 @@ https://game-icons.net/1x1/lorc/fishing-hook.html
 \"Fishing Net\" by Lorc, (modified)
 https://game-icons.net/1x1/lorc/fishing-net.html
 
+\"Mini Submarine\" by Delapouite, (modified)
+https://game-icons.net/1x1/delapouite/mini-submarine.html
+
 All of the above icons used under CC BY 3.0.
 
 ----------------
