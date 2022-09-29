@@ -145,6 +145,9 @@ https://game-icons.net/1x1/delapouite/mini-submarine.html
 \"Fishing Lure\" by Delapouite, (modified)
 https://game-icons.net/1x1/delapouite/fishing-lure.html
 
+\"Harpoon Trident\" by Lorc
+https://game-icons.net/1x1/lorc/harpoon-trident.html
+
 All of the above icons used under CC BY 3.0.
 
 ----------------
