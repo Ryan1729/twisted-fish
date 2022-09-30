@@ -148,6 +148,9 @@ https://game-icons.net/1x1/delapouite/fishing-lure.html
 \"Harpoon Trident\" by Lorc
 https://game-icons.net/1x1/lorc/harpoon-trident.html
 
+\"Sperm Whale\" by Delapouite
+https://game-icons.net/1x1/delapouite/sperm-whale.html
+
 All of the above icons used under CC BY 3.0.
 
 ----------------
