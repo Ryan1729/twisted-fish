@@ -154,6 +154,9 @@ https://game-icons.net/1x1/delapouite/sperm-whale.html
 \"Porcupinefish\" by Delapouite
 https://game-icons.net/1x1/delapouite/porcupinefish.html
 
+\"Sea Star\" by Delapouite
+https://game-icons.net/1x1/delapouite/sea-star.html
+
 All of the above icons used under CC BY 3.0.
 
 ----------------
