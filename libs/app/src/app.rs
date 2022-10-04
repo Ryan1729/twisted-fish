@@ -178,6 +178,9 @@ https://game-icons.net/1x1/lorc/jellyfish.html
 \"Shrimp\" by Delapouite
 https://game-icons.net/1x1/delapouite/shrimp.html
 
+\"Shark Fin\" by Delapouite
+https://game-icons.net/1x1/delapouite/shark-fin.html
+
 All of the above icons used under CC BY 3.0.
 
 ----------------
