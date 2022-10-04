@@ -172,6 +172,9 @@ https://game-icons.net/1x1/delapouite/eel.html
 \"Flying Trout\" by Cathelineau
 https://game-icons.net/1x1/cathelineau/flying-trout.html
 
+\"Jellyfish\" by Lorc
+https://game-icons.net/1x1/lorc/jellyfish.html
+
 All of the above icons used under CC BY 3.0.
 
 ----------------
