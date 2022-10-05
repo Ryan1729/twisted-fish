@@ -187,7 +187,7 @@ All of the above icons used under CC BY 3.0.
 Font Credits
 ----------------
 
-\"Monogram\" by Vinícius Menézio (@vmenezio).
+\"Monogram\" by Vin\xEDcius Men\xE9zio (@vmenezio).
 https://datagoblin.itch.io/monogram
 
 ----------------
