@@ -1,4 +1,4 @@
-use models::{Card, Rank, Suit, get_rank, get_suit, suits};
+use models::{Card, Rank, Suit, get_rank, suits};
 
 use platform_types::{Command, Kind, PaletteIndex, sprite, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
 
@@ -104,36 +104,6 @@ impl Commands {
                 h: card::HEIGHT,
             }
         );
-
-        let (colour, suit_char) = get_suit_colour_and_char(get_suit(card));
-
-        let rank_char = get_rank_char(card);
-
-        self.print_char(
-            rank_char,
-            x + card::LEFT_RANK_EDGE_W,
-            y + card::LEFT_RANK_EDGE_H,
-            colour,
-        );
-        self.print_char(
-            suit_char,
-            x + card::LEFT_SUIT_EDGE_W,
-            y + card::LEFT_SUIT_EDGE_H,
-            colour,
-        );
-
-        self.print_char(
-            rank_char,
-            x + card::RIGHT_RANK_EDGE_W,
-            y + card::RIGHT_RANK_EDGE_H,
-            colour,
-        );
-        self.print_char(
-            suit_char,
-            x + card::RIGHT_SUIT_EDGE_W,
-            y + card::RIGHT_SUIT_EDGE_H,
-            colour,
-        );
     }
 }
 
@@ -168,30 +138,6 @@ pub mod card {
     pub const FRONT_SPRITE_X: sprite::X = sprite::X(IMAGE_W * 6);
     pub const FRONT_SPRITE_Y: sprite::Y = sprite::Y(0);
     pub const FRONT_SPRITE_XY: sprite::XY = (FRONT_SPRITE_X, FRONT_SPRITE_Y);
-
-    pub const LEFT_RANK_EDGE_W: W = W(3);
-    pub const LEFT_RANK_EDGE_H: H = H(3);
-
-    pub const LEFT_SUIT_EDGE_W: W = W(1);
-    pub const LEFT_SUIT_EDGE_H: H = H(10);
-
-    pub const RIGHT_RANK_EDGE_W: W = w_const_sub(
-        WIDTH,
-        w_const_add(LEFT_RANK_EDGE_W, CHAR_W)
-    );
-    pub const RIGHT_RANK_EDGE_H: H = h_const_sub(
-        HEIGHT,
-        h_const_add(LEFT_RANK_EDGE_H, CHAR_H)
-    );
-
-    pub const RIGHT_SUIT_EDGE_W: W = w_const_sub(
-        WIDTH,
-        w_const_add(LEFT_SUIT_EDGE_W, CHAR_W)
-    );
-    pub const RIGHT_SUIT_EDGE_H: H = h_const_sub(
-        HEIGHT,
-        h_const_add(LEFT_SUIT_EDGE_H, CHAR_H)
-    );
 }
 
 pub const TEN_CHAR: u8 = 27;

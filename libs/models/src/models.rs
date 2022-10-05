@@ -21,10 +21,6 @@ pub mod suits {
     pub const SPADES: Suit = 3;
 }
 
-pub fn get_suit(card: Card) -> Suit {
-    card / RANK_COUNT
-}
-
 pub type Rank = u8;
 
 pub fn get_rank(card: Card) -> Rank {
