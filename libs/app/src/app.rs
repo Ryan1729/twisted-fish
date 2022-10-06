@@ -181,6 +181,12 @@ https://game-icons.net/1x1/delapouite/shrimp.html
 \"Shark Fin\" by Delapouite
 https://game-icons.net/1x1/delapouite/shark-fin.html
 
+\"Double Fish\" by Delapouite
+https://game-icons.net/1x1/delapouite/double-fish.html
+
+\"Fishing Pole\" by Delapouite
+https://game-icons.net/1x1/delapouite/fishing-pole.html
+
 All of the above icons used under CC BY 3.0.
 
 ----------------
