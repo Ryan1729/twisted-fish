@@ -96,7 +96,12 @@ impl Commands {
         y: unscaled::Y
     ) {
         self.sspr(
-            card::FRONT_SPRITE_XY,
+            (
+                card::BACKING_SPRITE_X,
+                card::BACKING_SPRITE_BASE_Y
+                + card::HEIGHT
+                * sprite::Inner::from(card / models::RANK_COUNT)
+            ),
             Rect {
                 x,
                 y,
@@ -123,21 +128,19 @@ pub fn get_char_xy(sprite_number: u8) -> sprite::XY {
 pub mod card {
     use super::*;
 
-    use unscaled::{W, H, w_const_add, w_const_sub, h_const_add, h_const_sub};
+    use unscaled::{W, H, Inner};
 
     pub const WIDTH: W = W(74);
     pub const HEIGHT: H = H(105);
 
-    type ImageW = u16;
-    type ImageH = u16;
+    type ImageW = Inner;
+    type ImageH = Inner;
 
     const IMAGE_W: ImageW = 72;
-    #[allow(unused)]
     const IMAGE_H: ImageH = 72;
 
-    pub const FRONT_SPRITE_X: sprite::X = sprite::X(IMAGE_W * 6);
-    pub const FRONT_SPRITE_Y: sprite::Y = sprite::Y(0);
-    pub const FRONT_SPRITE_XY: sprite::XY = (FRONT_SPRITE_X, FRONT_SPRITE_Y);
+    pub const BACKING_SPRITE_X: sprite::X = sprite::X(IMAGE_W * 6);
+    pub const BACKING_SPRITE_BASE_Y: sprite::Y = sprite::Y(0);
 }
 
 pub const TEN_CHAR: u8 = 27;
@@ -146,43 +149,6 @@ pub const CLUB_CHAR: u8 = 31;
 pub const DIAMOND_CHAR: u8 = 29;
 pub const HEART_CHAR: u8 = 30;
 pub const SPADE_CHAR: u8 = 28;
-
-pub fn get_suit_colour_and_char(suit: Suit) -> (u8, u8) {
-    const RED_INDEX: u8 = 2;
-    const PURPLE_INDEX: u8 = 4;
-    const BLACK_INDEX: u8 = 7;
-
-    match suit {
-        suits::CLUBS => (BLACK_INDEX, CLUB_CHAR),
-        suits::DIAMONDS => (RED_INDEX, DIAMOND_CHAR),
-        suits::HEARTS => (RED_INDEX, HEART_CHAR),
-        suits::SPADES => (BLACK_INDEX, SPADE_CHAR),
-        _ => (PURPLE_INDEX, 33), //purple "!"
-    }
-}
-
-pub fn get_rank_char(card: Card) -> u8 {
-    get_rank_char_from_rank(get_rank(card))
-}
-
-pub fn get_rank_char_from_rank(rank: Rank) -> u8 {
-    match rank {
-        0 => b'a',
-        1 => b'2',
-        2 => b'3',
-        3 => b'4',
-        4 => b'5',
-        5 => b'6',
-        6 => b'7',
-        7 => b'8',
-        8 => b'9',
-        9 => TEN_CHAR,
-        10 => b'j',
-        11 => b'q',
-        12 => b'k',
-        _ => b'!',
-    }
-}
 
 pub const CHAR_SPACING: u8 = 2;
 pub const CHAR_SPACING_W: unscaled::W = unscaled::W(CHAR_SPACING as _);

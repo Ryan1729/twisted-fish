@@ -247,7 +247,9 @@ pub const FONT_LENGTH: usize = FONT_WIDTH as usize * FONT_HEIGHT as usize;
 pub type PaletteIndex = u8;
 
 pub mod sprite {
-    type Inner = u16;
+    pub use super::unscaled::{W, H};
+
+    pub type Inner = u16;
     #[derive(Clone, Copy, Debug)]
     pub struct X(pub Inner);
     #[derive(Clone, Copy, Debug)]
@@ -262,6 +264,36 @@ pub mod sprite {
     impl From<Y> for usize {
         fn from(y: Y) -> Self {
             y.0.into()
+        }
+    }
+
+    impl core::ops::AddAssign<W> for X {
+        fn add_assign(&mut self, other: W) {
+            self.0 += other.0;
+        }
+    }
+
+    impl core::ops::Add<W> for X {
+        type Output = Self;
+
+        fn add(mut self, other: W) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::AddAssign<H> for Y {
+        fn add_assign(&mut self, other: H) {
+            self.0 += other.0;
+        }
+    }
+
+    impl core::ops::Add<H> for Y {
+        type Output = Self;
+
+        fn add(mut self, other: H) -> Self::Output {
+            self += other;
+            self
         }
     }
 

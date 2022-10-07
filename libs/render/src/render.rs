@@ -7,7 +7,7 @@ use platform_types::{
     unscaled::{self, Rect},
 };
 
-use assets::{GFX, GFX_TRANSPARENT, FONT, FONT_TRANSPARENT};
+use assets::{GFX, FONT, FONT_TRANSPARENT};
 
 pub mod clip {
     use core::ops::Range;
@@ -437,8 +437,7 @@ pub fn render(
                             for x in clip_rect.x.clone() {
                                 let gfx_colour: ARGB = GFX[src_i];
 
-                                if gfx_colour != GFX_TRANSPARENT
-                                && cell_clip_rect.contains(x, y)
+                                if cell_clip_rect.contains(x, y)
                                 {
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
