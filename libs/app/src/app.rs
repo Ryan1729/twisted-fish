@@ -99,7 +99,7 @@ fn render(
     state: &game::State,
     help_vis: HelpVis,
 ) {
-    commands.clear_to(1 /* green */);
+    commands.clear_to(7 /* black */);
 
     match help_vis {
         HelpVis::Shown => {
