@@ -135,11 +135,35 @@ impl Commands {
         self.sspr(
             (image_x, image_y),
             Rect {
-                x: x + W(1),
-                y: y + H(4),
+                x: x + card::IMAGE_W_OFFSET,
+                y: y + card::IMAGE_H_OFFSET,
                 w: card::IMAGE_W,
                 h: card::IMAGE_H,
             }
+        );
+
+        let (line1, line2) = match card {
+            _ => {
+                // TODO uncomment
+                //debug_assert!(false, "No lines for card: {card}");
+                (
+                    b"line 1 ???",
+                    b"line 2 ???",
+                )
+            }
+        };
+
+        self.print_line(
+            line1,
+            x + card::LINE_W_OFFSET,
+            y + card::LINE_H_1_OFFSET,
+            card::TEXT_INDEX,
+        );
+        self.print_line(
+            line2,
+            x + card::LINE_W_OFFSET,
+            y + card::LINE_H_2_OFFSET,
+            card::TEXT_INDEX,
         );
     }
 }
@@ -160,7 +184,7 @@ pub fn get_char_xy(sprite_number: u8) -> sprite::XY {
 pub mod card {
     use super::*;
 
-    use unscaled::{W, H, Inner, w_const_mul};
+    use unscaled::{W, H, Inner, w_const_mul, h_const_add};
     use sprite::{x_const_add_w};
 
     pub const WIDTH: W = W(74);
@@ -184,6 +208,15 @@ pub mod card {
             IMAGE_W
         );
     pub const BACKING_SPRITE_BASE_Y: sprite::Y = sprite::Y(0);
+
+    pub const TEXT_INDEX: PaletteIndex = 7; // black
+
+    pub const IMAGE_W_OFFSET: W = W(1);
+    pub const IMAGE_H_OFFSET: H = H(4);
+
+    pub const LINE_W_OFFSET: W = IMAGE_W_OFFSET;
+    pub const LINE_H_1_OFFSET: H = h_const_add(IMAGE_H_OFFSET, IMAGE_H);
+    pub const LINE_H_2_OFFSET: H = h_const_add(LINE_H_1_OFFSET, CHAR_ADVANCE_H);
 }
 
 pub const TEN_CHAR: u8 = 27;
