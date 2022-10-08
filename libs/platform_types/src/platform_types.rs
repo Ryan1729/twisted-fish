@@ -108,25 +108,25 @@ pub mod unscaled {
                     self.0 += other.0;
                 }
             }
-        
+
             impl core::ops::Add for $name {
                 type Output = Self;
-        
+
                 fn add(mut self, other: Self) -> Self::Output {
                     self += other;
                     self
                 }
             }
-        
+
             impl core::ops::SubAssign for $name {
                 fn sub_assign(&mut self, other: Self) {
                     self.0 -= other.0;
                 }
             }
-        
+
             impl core::ops::Sub for $name {
                 type Output = Self;
-        
+
                 fn sub(mut self, other: Self) -> Self::Output {
                     self -= other;
                     self
@@ -280,6 +280,10 @@ pub mod sprite {
             self += other;
             self
         }
+    }
+
+    pub const fn x_const_add_w(x: X, w: W) -> X {
+        X(x.0 + w.0)
     }
 
     impl core::ops::AddAssign<H> for Y {

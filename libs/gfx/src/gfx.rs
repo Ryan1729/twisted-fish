@@ -1,6 +1,6 @@
-use models::{Card, Rank, Suit, get_rank, suits};
+use models::{Card, Rank, Suit, get_rank, get_suit, get_zinger, suits};
 
-use platform_types::{Command, Kind, PaletteIndex, sprite, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
+use platform_types::{Command, Kind, PaletteIndex, sprite, unscaled::{self, W, H, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
 
 #[derive(Default)]
 pub struct Commands {
@@ -109,6 +109,38 @@ impl Commands {
                 h: card::HEIGHT,
             }
         );
+
+        let image_x = match get_suit(card) {
+            Some(suit) => card::IMAGE_BASE_X
+                + unscaled::Inner::from(suit)
+                * card::IMAGE_W,
+            None => card::ZINGER_IMAGE_X,
+        };
+
+        let image_y = match get_rank(card) {
+            Some(rank) => card::IMAGE_BASE_Y
+                + unscaled::Inner::from(rank)
+                * card::IMAGE_H,
+            None => match get_zinger(card) {
+                Some(zinger) => card::IMAGE_BASE_Y
+                + unscaled::Inner::from(zinger)
+                * card::IMAGE_H,
+                None => {
+                    debug_assert!(false, "No suit or zinger for card: {card}");
+                    card::IMAGE_BASE_Y
+                }
+            },
+        };
+
+        self.sspr(
+            (image_x, image_y),
+            Rect {
+                x: x + W(1),
+                y: y + H(4),
+                w: card::IMAGE_W,
+                h: card::IMAGE_H,
+            }
+        );
     }
 }
 
@@ -128,18 +160,29 @@ pub fn get_char_xy(sprite_number: u8) -> sprite::XY {
 pub mod card {
     use super::*;
 
-    use unscaled::{W, H, Inner};
+    use unscaled::{W, H, Inner, w_const_mul};
+    use sprite::{x_const_add_w};
 
     pub const WIDTH: W = W(74);
     pub const HEIGHT: H = H(105);
 
-    type ImageW = Inner;
-    type ImageH = Inner;
+    pub const IMAGE_W: W = W(72);
+    pub const IMAGE_H: H = H(72);
 
-    const IMAGE_W: ImageW = 72;
-    const IMAGE_H: ImageH = 72;
+    pub const IMAGE_BASE_X: sprite::X = sprite::X(0);
+    pub const IMAGE_BASE_Y: sprite::Y = sprite::Y(0);
 
-    pub const BACKING_SPRITE_X: sprite::X = sprite::X(IMAGE_W * 6);
+    pub const ZINGER_IMAGE_X: sprite::X =
+        x_const_add_w(
+            IMAGE_BASE_X,
+            w_const_mul(IMAGE_W, models::SUIT_COUNT as Inner)
+        );
+
+    pub const BACKING_SPRITE_X: sprite::X =
+        x_const_add_w(
+            ZINGER_IMAGE_X,
+            IMAGE_W
+        );
     pub const BACKING_SPRITE_BASE_Y: sprite::Y = sprite::Y(0);
 }
 
