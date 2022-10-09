@@ -14,6 +14,30 @@ pub fn gen_card(rng: &mut Xs) -> Card {
 
 pub type Rank = u8;
 
+pub mod ranks {
+    use super::*;
+
+    // Worth 5 points {
+    pub const BARNACLE: Suit = 0;
+    pub const CRAB: Suit = 1;
+    pub const DOGFISH: Suit = 2;
+    pub const EEL: Suit = 3;
+    pub const FLYING_FISH: Suit = 4;
+    pub const HAMMERHEAD: Suit = 5;
+    pub const JELLYFISH: Suit = 6;
+    pub const SHRIMP: Suit = 7;
+    // }
+    // Worth 10 points {
+    pub const BLOWFISH: Suit = 8;
+    pub const CLOWNFISH: Suit = 9;
+    pub const STARFISH: Suit = 10;
+    pub const WHALE: Suit = 11;
+    // }
+    // Worth 15 points {
+    pub const CARD_SHARK: Suit = 12;
+    // }
+}
+
 pub fn get_rank(card: Card) -> Option<Rank> {
     if card >= FISH_COUNT {
         None
