@@ -47,13 +47,11 @@ pub fn run<S: State + 'static>(mut state: S) {
     let mut just_gained_focus = true;
 
     event_loop.run(move |event, _, control_flow| {
-        let window = graphics_context.window();
-
         match event {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 window_id,
-            } if window_id == window.id() => *control_flow = ControlFlow::Exit,
+            } if window_id == graphics_context.window().id() => *control_flow = ControlFlow::Exit,
             Event::WindowEvent {
                 event: WindowEvent::KeyboardInput{
                     input: winit::event::KeyboardInput {
@@ -64,7 +62,7 @@ pub fn run<S: State + 'static>(mut state: S) {
                     ..
                 },
                 window_id,
-            } if window_id == window.id() => {
+            } if window_id == graphics_context.window().id() => {
                 use winit::event::{ElementState, VirtualKeyCode as VK};
                 use platform_types::Button;
 
@@ -94,7 +92,7 @@ pub fn run<S: State + 'static>(mut state: S) {
             Event::WindowEvent {
                 event: WindowEvent::Focused(true),
                 window_id,
-            } if window_id == window.id() => {
+            } if window_id == graphics_context.window().id() => {
                 just_gained_focus = true;
             }
             Event::MainEventsCleared => {
@@ -103,7 +101,7 @@ pub fn run<S: State + 'static>(mut state: S) {
                 handle_sounds(&mut sound_handler, sounds);
 
                 {
-                    let size = window.inner_size();
+                    let size = graphics_context.window().inner_size();
                     output_frame_buffer.width = size.width as u16;
                     output_frame_buffer.height = size.height as u16;
                 }
@@ -126,6 +124,10 @@ pub fn run<S: State + 'static>(mut state: S) {
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {
+                    if let Some(fps) = loop_helper.report_rate() {
+                        let window = graphics_context.window();
+                        window.set_title(&format!("{fps:.0} FPS"))
+                    }
                     loop_helper.loop_sleep();
                     loop_helper.loop_start();
                 }
