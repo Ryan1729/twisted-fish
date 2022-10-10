@@ -145,7 +145,7 @@ mod wasm {
     };
     use wasm_bindgen::JsCast;
     use web_sys::HtmlCanvasElement;
-    use platform_types::SFX;
+    use platform_types::{SFX, unscaled};
 
     pub fn set_canvas(builder: WindowBuilder) -> WindowBuilder {
         let canvas = get_canvas();
@@ -154,8 +154,8 @@ mod wasm {
         // browser will stretch it for us.
         let size = winit::dpi::Size::Physical(
             winit::dpi::PhysicalSize::new(
-                screen::WIDTH.into(),
-                screen::HEIGHT.into(),
+                unscaled::WIDTH.into(),
+                unscaled::HEIGHT.into(),
             ),
         );
 
