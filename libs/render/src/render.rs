@@ -50,9 +50,9 @@ pub mod clip {
     }
 }
 
-const CELLS_X: u8 = 4;
-const CELLS_Y: u8 = 4;
-const CELLS_LENGTH: usize = CELLS_X as usize * CELLS_Y as usize;
+const CELLS_W: u8 = 4;
+const CELLS_H: u8 = 4;
+const CELLS_LENGTH: usize = CELLS_W as usize * CELLS_H as usize;
 
 /// Implements a 32 bit FNV-1a hash
 mod hash {
@@ -137,6 +137,7 @@ enum CurrentCells {
 
 pub struct FrameBuffer {
     pub buffer: Vec<u32>,
+    pub z_buffer: Vec<usize>,
     pub width: clip::W,
     pub height: clip::H,
     pub cells: HashCells,
@@ -146,6 +147,9 @@ impl FrameBuffer {
     pub fn from_size((width, height): (clip::W, clip::H)) -> Self {
         Self {
             buffer: Vec::with_capacity(
+                usize::from(width) * usize::from(height)
+            ),
+            z_buffer: Vec::with_capacity(
                 usize::from(width) * usize::from(height)
             ),
             width,
@@ -194,10 +198,10 @@ impl HashCells {
         let cells = self.current_mut();
         *cells = [<_>::default(); CELLS_LENGTH];
 
-        for y in 0..CELLS_Y {
-            for x in 0..CELLS_Y {
+        for y in 0..CELLS_H {
+            for x in 0..CELLS_H {
                 let i = usize::from(y)
-                        * usize::from(CELLS_X)
+                        * usize::from(CELLS_W)
                         + usize::from(x);
                 hash::u16(&mut cells[i], w);
                 hash::u16(&mut cells[i], h);
@@ -220,7 +224,7 @@ impl HashCells {
             for y in r_y / cells_size..=(r_y + r_h) / cells_size {
                 for x in r_x / cells_size..=(r_x + r_w) / cells_size {
                     let i = usize::from(y)
-                            * usize::from(CELLS_X)
+                            * usize::from(CELLS_W)
                             + usize::from(x);
                     // We want to allow drawing things that are partially offscreen.
                     if i < cells.len() {
@@ -243,9 +247,9 @@ mod reset_then_hash_commands_around_a_swap_produces_identical_current_and_prev_c
     fn on_the_empty_slice() {
         let mut h_c = HashCells::default();
 
-        h_c.reset_then_hash_commands(&[], (CELLS_X.into(), CELLS_Y.into()), 1, 1);
+        h_c.reset_then_hash_commands(&[], (CELLS_W.into(), CELLS_H.into()), 1, 1);
         h_c.swap();
-        h_c.reset_then_hash_commands(&[], (CELLS_X.into(), CELLS_Y.into()), 1, 1);
+        h_c.reset_then_hash_commands(&[], (CELLS_W.into(), CELLS_H.into()), 1, 1);
 
         let (current, prev) = h_c.current_and_prev();
 
@@ -260,15 +264,15 @@ mod reset_then_hash_commands_around_a_swap_produces_identical_current_and_prev_c
             rect: Rect {
                 x: unscaled::X(0),
                 y: unscaled::Y(0),
-                w: unscaled::W(CELLS_X),
-                h: unscaled::H(CELLS_Y),
+                w: unscaled::W(CELLS_W),
+                h: unscaled::H(CELLS_H),
             },
             kind: Kind::Colour(0),
         }];
 
-        h_c.reset_then_hash_commands(commands, (CELLS_X.into(), CELLS_Y.into()), 1, 1);
+        h_c.reset_then_hash_commands(commands, (CELLS_W.into(), CELLS_H.into()), 1, 1);
         h_c.swap();
-        h_c.reset_then_hash_commands(commands, (CELLS_X.into(), CELLS_Y.into()), 1, 1);
+        h_c.reset_then_hash_commands(commands, (CELLS_W.into(), CELLS_H.into()), 1, 1);
 
         let (current, prev) = h_c.current_and_prev();
 
@@ -330,8 +334,8 @@ pub fn render(
     };
 
     let cells_size = core::cmp::max(
-        (outer_clip_rect.width() + 1) / clip::W::from(CELLS_X),
-        (outer_clip_rect.height() + 1) / clip::H::from(CELLS_Y),
+        (outer_clip_rect.width() + 1) / clip::W::from(CELLS_W),
+        (outer_clip_rect.height() + 1) / clip::H::from(CELLS_H),
     );
 
     // Cached software rendering based on:
@@ -362,16 +366,32 @@ pub fn render(
         for _ in 0..expected_length {
             frame_buffer.buffer.push(0);
         }
+
+        // As of this writing we could reuse a single cell sized z-buffer for each
+        // cell, instead of one largfe frame buffer sized one. But, then we'd have to
+        // calculate the indexes for that smaller z-buffer as well as the one for the
+        // frame. This way we can just use the same index. This also means we only
+        // need to clear the buffer once before the cells loop, instead of once each
+        // inner iteration. Admittedly, I have not measured the other option.
+
+        frame_buffer.z_buffer.clear();
+        // Hopefully this compiles to something not inefficent
+        frame_buffer.z_buffer.reserve(expected_length);
+        for _ in 0..expected_length {
+            frame_buffer.z_buffer.push(0);
+        }
     }
 
+    debug_assert_eq!(frame_buffer.buffer.len(), frame_buffer.z_buffer.len(), "Frame/Z buffer len mismatch");
+
     let (cells, cells_prev) = frame_buffer.cells.current_and_prev();
-    for cell_y in 0..CELLS_Y {
-        for cell_x in 0..CELLS_X {
-            let i = usize::from(cell_y)
-            * usize::from(CELLS_X)
+    for cell_y in 0..CELLS_H {
+        for cell_x in 0..CELLS_W {
+            let cell_i = usize::from(cell_y)
+            * usize::from(CELLS_W)
             + usize::from(cell_x);
 
-            if cells[i] == cells_prev[i] {
+            if cells[cell_i] == cells_prev[cell_i] {
                 continue
             }
             output = NeedsRedraw::Yes;
@@ -383,43 +403,72 @@ pub fn render(
                 y: cell_y * cells_size + top_bar_height..(cell_y + 1) * cells_size + top_bar_height,
             };
 
-            for &Command {
-                kind,
-                rect: Rect {
+            macro_rules! calc_clip_rect {
+                ($rect: ident) => ({
+                    let Rect {
+                        x: d_x,
+                        y: d_y,
+                        w,
+                        h,
+                    } = $rect;
+
+                    let d_x = clip::X::from(d_x);
+                    let d_y = clip::Y::from(d_y);
+                    let w = clip::W::from(w);
+                    let h = clip::H::from(h);
+
+                    let d_x_max = d_x + w;
+                    let d_y_max = d_y + h;
+
+                    let x_range = (d_x * multiplier + left_bar_width)..(
+                        d_x_max * multiplier + left_bar_width
+                    );
+
+                    let mut clip_rect = clip::Rect {
+                        x: x_range.clone(),
+                        y: (d_y * multiplier + top_bar_height)..(
+                            d_y_max * multiplier + top_bar_height
+                        ),
+                    };
+
+                    clip::to(&mut clip_rect, &outer_clip_rect);
+
+                    (clip_rect, x_range)
+                })
+            }
+
+            macro_rules! advance {
+                ($src_i: ident, $x_remaining: ident) => {
+                    $x_remaining -= 1;
+                    if $x_remaining == 0 {
+                        $src_i += 1;
+                        $x_remaining = multiplier;
+                    }
+                }
+            }
+
+            for (
+                command_i,
+                &Command {
+                    kind,
+                    rect,
+                }
+            ) in commands.iter().enumerate() {
+                let (clip_rect, x_range) = calc_clip_rect!(rect);
+
+                let Rect {
                     x: d_x,
                     y: d_y,
                     w,
                     h,
-                },
-            } in commands {
-                let d_x = clip::X::from(d_x);
-                let d_y = clip::Y::from(d_y);
+                } = rect;
+
                 let w = clip::W::from(w);
                 let h = clip::H::from(h);
 
-                let d_x_max = d_x + w;
-                let d_y_max = d_y + h;
-
-                let x_range = (d_x * multiplier + left_bar_width)..(
-                    d_x_max * multiplier + left_bar_width
-                );
-
-                let mut clip_rect = clip::Rect {
-                    x: x_range.clone(),
-                    y: (d_y * multiplier + top_bar_height)..(
-                        d_y_max * multiplier + top_bar_height
-                    ),
-                };
-
-                clip::to(&mut clip_rect, &outer_clip_rect);
-
-                macro_rules! advance {
-                    ($src_i: ident, $x_remaining: ident) => {
-                        $x_remaining -= 1;
-                        if $x_remaining == 0 {
-                            $src_i += 1;
-                            $x_remaining = multiplier;
-                        }
+                macro_rules! z {
+                    () => {
+                        command_i + 1
                     }
                 }
 
@@ -435,14 +484,157 @@ pub fn render(
                         for y in clip_rect.y {
                             let mut x_remaining = multiplier;
                             for x in clip_rect.x.clone() {
-                                let gfx_colour: ARGB = GFX[src_i];
-
                                 if cell_clip_rect.contains(x, y)
                                 {
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
+                                    if d_i < frame_buffer.z_buffer.len() {
+                                        let gfx_colour: ARGB = GFX[src_i];
+
+                                        let alpha = ((gfx_colour >> 24) & 255) as u8;
+                                        // If a pixel is fully opaque, then we
+                                        // can ignore all the pixels beneath it, so
+                                        // we set the z value. If it is at all
+                                        // transparent then we need to render
+                                        // whatever is behind it. So we do not set
+                                        // the z value.
+                                        if alpha == 255 {
+                                            frame_buffer.z_buffer[d_i] = z!();
+                                        }
+                                    }
+                                }
+
+                                advance!(src_i, x_remaining);
+                            }
+
+                            // If we would have went off the edge, advance `src_i`
+                            // as if we actually drew past the edge.
+                            for _ in clip_rect.x.end..x_range.end {
+                                advance!(src_i, x_remaining);
+                            }
+
+                            // Go back to the beginning of the row.
+                            src_i -= usize::from(w);
+
+                            y_remaining -= 1;
+                            if y_remaining == 0 {
+                                y_remaining = multiplier;
+                                src_i += src_w;
+                            }
+                        }
+                    },
+                    Kind::Font((sprite_x, sprite_y), colour) => {
+                        let sprite_x = usize::from(sprite_x);
+                        let sprite_y = usize::from(sprite_y);
+
+                        let src_w = FONT_WIDTH as usize;
+
+                        let mut src_i = sprite_y * src_w + sprite_x;
+                        let mut y_remaining = multiplier;
+                        for y in clip_rect.y {
+                            let mut x_remaining = multiplier;
+                            for x in clip_rect.x.clone() {
+                                let font_pixel_colour = FONT[src_i];
+
+                                if font_pixel_colour != FONT_TRANSPARENT
+                                && cell_clip_rect.contains(x, y) {
+                                    let d_i = usize::from(y)
+                                    * usize::from(d_w)
+                                    + usize::from(x);
                                     if d_i < frame_buffer.buffer.len() {
+                                        // We assume that all the palette colours are
+                                        // fully opaque
+                                        frame_buffer.z_buffer[d_i] = z!();
+                                    }
+                                }
+
+                                advance!(src_i, x_remaining);
+                            }
+
+                            // If we would have went off the edge, advance `src_i`
+                            // as if we actually drew past the edge.
+                            for _ in clip_rect.x.end..x_range.end {
+                                advance!(src_i, x_remaining);
+                            }
+
+                            // Go back to the beginning of the row.
+                            src_i -= usize::from(w);
+
+                            y_remaining -= 1;
+                            if y_remaining == 0 {
+                                y_remaining = multiplier;
+                                src_i += src_w;
+                            }
+                        }
+                    },
+                    Kind::Colour(colour) => {
+                        for y in clip_rect.y {
+                            for x in clip_rect.x.clone() {
+                                if cell_clip_rect.contains(x, y) {
+                                    let d_i = usize::from(y)
+                                    * usize::from(d_w)
+                                    + usize::from(x);
+                                    if d_i < frame_buffer.buffer.len() {
+                                        // We assume that all the palette colours are
+                                        // fully opaque
+                                        frame_buffer.z_buffer[d_i] = z!();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+            }
+
+            for (
+                command_i,
+                &Command {
+                    kind,
+                    rect,
+                }
+            ) in commands.iter().enumerate() {
+                let (clip_rect, x_range) = calc_clip_rect!(rect);
+
+                let Rect {
+                    x: d_x,
+                    y: d_y,
+                    w,
+                    h,
+                } = rect;
+
+                let w = clip::W::from(w);
+                let h = clip::H::from(h);
+
+                macro_rules! z {
+                    () => {
+                        command_i + 1
+                    }
+                }
+
+                match kind {
+                    Kind::Gfx((sprite_x, sprite_y)) => {
+                        let sprite_x = usize::from(sprite_x);
+                        let sprite_y = usize::from(sprite_y);
+
+                        let src_w = GFX_WIDTH as usize;
+
+                        let mut src_i = sprite_y * src_w + sprite_x;
+                        let mut y_remaining = multiplier;
+                        for y in clip_rect.y {
+                            let mut x_remaining = multiplier;
+                            for x in clip_rect.x.clone() {
+                                if cell_clip_rect.contains(x, y)
+                                {
+                                    let d_i = usize::from(y)
+                                    * usize::from(d_w)
+                                    + usize::from(x);
+
+                                    if d_i < frame_buffer.buffer.len()
+                                    && z!() >= frame_buffer.z_buffer[d_i]
+                                    {
+                                        let gfx_colour: ARGB = GFX[src_i];
+
                                         fn f32_to_u8(x: f32) -> u8 {
                                             // This saturates instead of being UB
                                             // as of rust 1.45.0
@@ -539,7 +731,9 @@ pub fn render(
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len() {
+                                    if d_i < frame_buffer.buffer.len()
+                                    && z!() >= frame_buffer.z_buffer[d_i]
+                                    {
                                         frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
                                     }
                                 }
@@ -567,11 +761,13 @@ pub fn render(
                         for y in clip_rect.y {
                             for x in clip_rect.x.clone() {
                                 if cell_clip_rect.contains(x, y) {
-                                    let index = usize::from(y)
+                                    let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if index < frame_buffer.buffer.len() {
-                                        frame_buffer.buffer[index] = PALETTE[colour as usize & 15];
+                                    if d_i < frame_buffer.buffer.len()
+                                    && z!() >= frame_buffer.z_buffer[d_i]
+                                    {
+                                        frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
                                     }
                                 }
                             }
