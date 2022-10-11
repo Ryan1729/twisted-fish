@@ -135,9 +135,11 @@ enum CurrentCells {
     B
 }
 
+type Z = usize;
+
 pub struct FrameBuffer {
     pub buffer: Vec<u32>,
-    pub z_buffer: Vec<usize>,
+    pub z_buffer: Vec<Z>,
     pub width: clip::W,
     pub height: clip::H,
     pub cells: HashCells,
@@ -454,6 +456,8 @@ pub fn render(
                     rect,
                 }
             ) in commands.iter().enumerate() {
+                let z = command_i + 1;
+
                 let (clip_rect, x_range) = calc_clip_rect!(rect);
 
                 let Rect {
@@ -465,12 +469,6 @@ pub fn render(
 
                 let w = clip::W::from(w);
                 let h = clip::H::from(h);
-
-                macro_rules! z {
-                    () => {
-                        command_i + 1
-                    }
-                }
 
                 match kind {
                     Kind::Gfx((sprite_x, sprite_y)) => {
@@ -500,7 +498,7 @@ pub fn render(
                                         // whatever is behind it. So we do not set
                                         // the z value.
                                         if alpha == 255 {
-                                            frame_buffer.z_buffer[d_i] = z!();
+                                            frame_buffer.z_buffer[d_i] = z;
                                         }
                                     }
                                 }
@@ -545,7 +543,7 @@ pub fn render(
                                     if d_i < frame_buffer.buffer.len() {
                                         // We assume that all the palette colours are
                                         // fully opaque
-                                        frame_buffer.z_buffer[d_i] = z!();
+                                        frame_buffer.z_buffer[d_i] = z;
                                     }
                                 }
 
@@ -578,7 +576,7 @@ pub fn render(
                                     if d_i < frame_buffer.buffer.len() {
                                         // We assume that all the palette colours are
                                         // fully opaque
-                                        frame_buffer.z_buffer[d_i] = z!();
+                                        frame_buffer.z_buffer[d_i] = z;
                                     }
                                 }
                             }
@@ -587,13 +585,34 @@ pub fn render(
                 };
             }
 
+            // The minimum z of the whole cell. If a given command's z is below this
+            // value, then we can skip that entire command, for this cell.
+            let mut min_z = Z::MAX;
+
+            for y in cell_clip_rect.y.clone() {
+                for x in cell_clip_rect.x.clone() {
+                    let d_i = usize::from(y)
+                    * usize::from(d_w)
+                    + usize::from(x);
+
+                    if d_i < frame_buffer.buffer.len() {
+                        min_z = core::cmp::min(
+                            min_z,
+                            frame_buffer.z_buffer[d_i]
+                        );
+                    }
+                }
+            }
+
             for (
                 command_i,
                 &Command {
                     kind,
                     rect,
                 }
-            ) in commands.iter().enumerate() {
+            ) in commands.iter().enumerate().skip(min_z.saturating_sub(1)) {
+                let z = command_i + 1;
+
                 let (clip_rect, x_range) = calc_clip_rect!(rect);
 
                 let Rect {
@@ -605,12 +624,6 @@ pub fn render(
 
                 let w = clip::W::from(w);
                 let h = clip::H::from(h);
-
-                macro_rules! z {
-                    () => {
-                        command_i + 1
-                    }
-                }
 
                 match kind {
                     Kind::Gfx((sprite_x, sprite_y)) => {
@@ -631,7 +644,7 @@ pub fn render(
                                     + usize::from(x);
 
                                     if d_i < frame_buffer.buffer.len()
-                                    && z!() >= frame_buffer.z_buffer[d_i]
+                                    && z >= frame_buffer.z_buffer[d_i]
                                     {
                                         let gfx_colour: ARGB = GFX[src_i];
 
@@ -732,7 +745,7 @@ pub fn render(
                                     * usize::from(d_w)
                                     + usize::from(x);
                                     if d_i < frame_buffer.buffer.len()
-                                    && z!() >= frame_buffer.z_buffer[d_i]
+                                    && z >= frame_buffer.z_buffer[d_i]
                                     {
                                         frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
                                     }
@@ -765,7 +778,7 @@ pub fn render(
                                     * usize::from(d_w)
                                     + usize::from(x);
                                     if d_i < frame_buffer.buffer.len()
-                                    && z!() >= frame_buffer.z_buffer[d_i]
+                                    && z >= frame_buffer.z_buffer[d_i]
                                     {
                                         frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
                                     }
