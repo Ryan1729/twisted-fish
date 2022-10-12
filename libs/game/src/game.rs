@@ -19,10 +19,16 @@ impl State {
     pub fn new(seed: Seed) -> State {
         let rng = xs::from_seed(seed);
 
-        State {
+        let mut state = State {
             rng,
             .. <_>::default()
+        };
+
+        for _ in 0..models::DECK_SIZE {
+            state.add_splat();
         }
+
+        state
     }
 
     pub fn add_splat(&mut self) {
@@ -37,5 +43,29 @@ impl State {
             x,
             y,
         });
+    }
+
+    pub fn tick(&mut self) {
+        let rng = &mut self.rng;
+
+        let i = xs::range(rng, 0..self.splats.len() as _) as usize;
+
+        let splat = &mut self.splats[i];
+        match xs::range(rng, 0..2 as _) {
+            0 => {
+                splat.x = splat.x.saturating_sub(unscaled::W(1));
+            },
+            _ => {
+                splat.x = splat.x.saturating_add(unscaled::W(1));
+            },
+        };
+        match xs::range(rng, 0..2 as _) {
+            0 => {
+                splat.y = splat.y.saturating_sub(unscaled::H(1));
+            },
+            _ => {
+                splat.y = splat.y.saturating_add(unscaled::H(1));
+            },
+        };
     }
 }

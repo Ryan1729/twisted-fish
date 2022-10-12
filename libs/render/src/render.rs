@@ -292,9 +292,6 @@ pub fn render(
     frame_buffer: &mut FrameBuffer,
     commands: &[Command],
 ) -> NeedsRedraw {
-    use std::time::Instant;
-    let start = Instant::now();
-
     let mut output = NeedsRedraw::No;
 
     // The dimensions the commands are written in terms of.
@@ -388,8 +385,6 @@ pub fn render(
     }
 
     debug_assert_eq!(frame_buffer.buffer.len(), frame_buffer.z_buffer.len(), "Frame/Z buffer len mismatch");
-
-    let after_setup = Instant::now();
 
     let (cells, cells_prev) = frame_buffer.cells.current_and_prev();
     for cell_y in 0..CELLS_H {
@@ -796,23 +791,7 @@ pub fn render(
         }
     }
 
-    let after_cells_loop = Instant::now();
-
     frame_buffer.cells.swap();
-
-    let after_swap = Instant::now();
-    
-    let setup_ms = after_setup.duration_since(start).as_millis();
-    let cells_loop_ms = after_cells_loop.duration_since(after_setup).as_millis();
-    let swap_ms = after_swap.duration_since(after_cells_loop).as_millis();
-    if setup_ms != 0 || cells_loop_ms != 0 || swap_ms != 0 {
-        println!(
-            "setup {} ms\ncells loop {} ms\nswap {} ms",
-            setup_ms,
-            cells_loop_ms,
-            swap_ms,
-        );
-    }
 
     output
 }

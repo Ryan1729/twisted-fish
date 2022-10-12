@@ -152,6 +152,16 @@ pub mod unscaled {
         }
     }
 
+    impl X {
+        pub const fn saturating_add(self, w: W) -> X {
+            X(self.0.saturating_add(w.0))
+        }
+        pub const fn saturating_sub(self, w: W) -> X {
+            X(self.0.saturating_sub(w.0))
+        }
+    }
+
+
     impl core::ops::AddAssign<H> for Y {
         fn add_assign(&mut self, other: H) {
             self.0 += other.0;
@@ -166,6 +176,16 @@ pub mod unscaled {
             self
         }
     }
+
+    impl Y {
+        pub const fn saturating_add(self, h: H) -> Y {
+            Y(self.0.saturating_add(h.0))
+        }
+        pub const fn saturating_sub(self, h: H) -> Y {
+            Y(self.0.saturating_sub(h.0))
+        }
+    }
+
 
     impl core::ops::MulAssign<Inner> for W {
         fn mul_assign(&mut self, inner: Inner) {

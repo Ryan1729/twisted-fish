@@ -92,6 +92,7 @@ fn update(state: &mut game::State, input: Input, speaker: &mut Speaker) {
         state.add_splat();
         speaker.request_sfx(SFX::CardPlace);
     }
+    state.tick();
 }
 
 fn render(
