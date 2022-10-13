@@ -490,7 +490,7 @@ pub fn render(
                                     // whatever is behind it. So we do not set
                                     // the z value.
                                     if alpha == 255 {
-                                        frame_buffer.z_buffer[d_i] = z;
+                                        *unsafe { frame_buffer.z_buffer.get_unchecked_mut(d_i) } = z;
                                     }
                                 }
 
@@ -533,7 +533,7 @@ pub fn render(
                                     + usize::from(x);
                                     // We assume that all the palette colours are
                                     // fully opaque
-                                    frame_buffer.z_buffer[d_i] = z;
+                                    *unsafe { frame_buffer.z_buffer.get_unchecked_mut(d_i) } = z;
                                 }
 
                                 advance!(src_i, x_remaining);
@@ -564,7 +564,7 @@ pub fn render(
                                     + usize::from(x);
                                     // We assume that all the palette colours are
                                     // fully opaque
-                                    frame_buffer.z_buffer[d_i] = z;
+                                    *unsafe { frame_buffer.z_buffer.get_unchecked_mut(d_i) } = z;
                                 }
                             }
                         }
@@ -584,7 +584,7 @@ pub fn render(
 
                     min_z = core::cmp::min(
                         min_z,
-                        frame_buffer.z_buffer[d_i]
+                        *unsafe { frame_buffer.z_buffer.get_unchecked(d_i) }
                     );
                 }
             }
@@ -620,7 +620,7 @@ pub fn render(
                                     * usize::from(d_w)
                                     + usize::from(x);
 
-                                    if z >= frame_buffer.z_buffer[d_i]
+                                    if z >= *unsafe { frame_buffer.z_buffer.get_unchecked(d_i) }
                                     {
                                         let gfx_colour: ARGB = GFX[src_i];
 
@@ -638,7 +638,7 @@ pub fn render(
                                             ((x as f32)/255.).powf(2.2)
                                         }
 
-                                        let under = frame_buffer.buffer[d_i];
+                                        let under = *unsafe { frame_buffer.buffer.get_unchecked(d_i) };
 
                                         // `_g` for gfx.
                                         let a_g = ((gfx_colour >> 24) & 255) as u8;
@@ -679,7 +679,7 @@ pub fn render(
                                             | (ARGB::from(g_o) <<  8)
                                             | (ARGB::from(b_o)      );
 
-                                        frame_buffer.buffer[d_i] = output;
+                                        *unsafe { frame_buffer.buffer.get_unchecked_mut(d_i) } = output;
                                     }
                                 }
 
@@ -720,9 +720,9 @@ pub fn render(
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if z >= frame_buffer.z_buffer[d_i]
+                                    if z >= *unsafe { frame_buffer.z_buffer.get_unchecked(d_i) }
                                     {
-                                        frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
+                                        *unsafe { frame_buffer.buffer.get_unchecked_mut(d_i) } = PALETTE[colour as usize & 15];
                                     }
                                 }
 
@@ -752,9 +752,9 @@ pub fn render(
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if z >= frame_buffer.z_buffer[d_i]
+                                    if z >= *unsafe { frame_buffer.z_buffer.get_unchecked(d_i) }
                                     {
-                                        frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
+                                        *unsafe { frame_buffer.buffer.get_unchecked_mut(d_i) } = PALETTE[colour as usize & 15];
                                     }
                                 }
                             }
