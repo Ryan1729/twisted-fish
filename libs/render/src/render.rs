@@ -400,10 +400,11 @@ pub fn render(
 
             let cell_x = clip::X::from(cell_x);
             let cell_y = clip::Y::from(cell_y);
-            let cell_clip_rect = clip::Rect {
+            let mut cell_clip_rect = clip::Rect {
                 x: cell_x * cells_size + left_bar_width..(cell_x + 1) * cells_size + left_bar_width,
                 y: cell_y * cells_size + top_bar_height..(cell_y + 1) * cells_size + top_bar_height,
             };
+            clip::to(&mut cell_clip_rect, &outer_clip_rect);
 
             macro_rules! calc_clip_rect {
                 ($rect: ident) => ({
@@ -479,19 +480,17 @@ pub fn render(
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if d_i < frame_buffer.z_buffer.len() {
-                                        let gfx_colour: ARGB = GFX[src_i];
+                                    let gfx_colour: ARGB = GFX[src_i];
 
-                                        let alpha = ((gfx_colour >> 24) & 255) as u8;
-                                        // If a pixel is fully opaque, then we
-                                        // can ignore all the pixels beneath it, so
-                                        // we set the z value. If it is at all
-                                        // transparent then we need to render
-                                        // whatever is behind it. So we do not set
-                                        // the z value.
-                                        if alpha == 255 {
-                                            frame_buffer.z_buffer[d_i] = z;
-                                        }
+                                    let alpha = ((gfx_colour >> 24) & 255) as u8;
+                                    // If a pixel is fully opaque, then we
+                                    // can ignore all the pixels beneath it, so
+                                    // we set the z value. If it is at all
+                                    // transparent then we need to render
+                                    // whatever is behind it. So we do not set
+                                    // the z value.
+                                    if alpha == 255 {
+                                        frame_buffer.z_buffer[d_i] = z;
                                     }
                                 }
 
@@ -532,11 +531,9 @@ pub fn render(
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len() {
-                                        // We assume that all the palette colours are
-                                        // fully opaque
-                                        frame_buffer.z_buffer[d_i] = z;
-                                    }
+                                    // We assume that all the palette colours are
+                                    // fully opaque
+                                    frame_buffer.z_buffer[d_i] = z;
                                 }
 
                                 advance!(src_i, x_remaining);
@@ -565,11 +562,9 @@ pub fn render(
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len() {
-                                        // We assume that all the palette colours are
-                                        // fully opaque
-                                        frame_buffer.z_buffer[d_i] = z;
-                                    }
+                                    // We assume that all the palette colours are
+                                    // fully opaque
+                                    frame_buffer.z_buffer[d_i] = z;
                                 }
                             }
                         }
@@ -587,12 +582,10 @@ pub fn render(
                     * usize::from(d_w)
                     + usize::from(x);
 
-                    if d_i < frame_buffer.buffer.len() {
-                        min_z = core::cmp::min(
-                            min_z,
-                            frame_buffer.z_buffer[d_i]
-                        );
-                    }
+                    min_z = core::cmp::min(
+                        min_z,
+                        frame_buffer.z_buffer[d_i]
+                    );
                 }
             }
 
@@ -627,8 +620,7 @@ pub fn render(
                                     * usize::from(d_w)
                                     + usize::from(x);
 
-                                    if d_i < frame_buffer.buffer.len()
-                                    && z >= frame_buffer.z_buffer[d_i]
+                                    if z >= frame_buffer.z_buffer[d_i]
                                     {
                                         let gfx_colour: ARGB = GFX[src_i];
 
@@ -728,8 +720,7 @@ pub fn render(
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len()
-                                    && z >= frame_buffer.z_buffer[d_i]
+                                    if z >= frame_buffer.z_buffer[d_i]
                                     {
                                         frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
                                     }
@@ -761,8 +752,7 @@ pub fn render(
                                     let d_i = usize::from(y)
                                     * usize::from(d_w)
                                     + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len()
-                                    && z >= frame_buffer.z_buffer[d_i]
+                                    if z >= frame_buffer.z_buffer[d_i]
                                     {
                                         frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
                                     }
