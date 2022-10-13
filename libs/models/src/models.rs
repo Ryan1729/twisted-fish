@@ -82,7 +82,7 @@ pub mod zingers {
 }
 
 pub fn get_zinger(card: Card) -> Option<Zinger> {
-    if card >= FISH_COUNT && card < DECK_SIZE {
+    if (FISH_COUNT..DECK_SIZE).contains(&card) {
         Some(card - FISH_COUNT)
     } else {
         None

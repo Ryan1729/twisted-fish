@@ -203,12 +203,13 @@ Everything Else
 Ryan Wiedemann (Ryan1729 on github)
 ";
 
-            let mut y = 0;
-
-            for line in text::lines(&HELP)
+            for (y, line) in text::lines(HELP)
                 //.skip(self.top_index)
                 //.take(HEIGHT_IN_CHARS)
+                .enumerate()
             {
+                let y = y as unscaled::Inner;
+
                 commands.print_line(
                     line,
                     unscaled::X(CHAR_SPACING as _),
@@ -217,8 +218,6 @@ Ryan Wiedemann (Ryan1729 on github)
                     + CHAR_SPACING_H,
                     0 /* blue */
                 );
-
-                y += 1;
             }
         },
         HelpVis::Hidden => render_game(commands, state),

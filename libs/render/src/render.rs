@@ -266,8 +266,8 @@ mod reset_then_hash_commands_around_a_swap_produces_identical_current_and_prev_c
             rect: Rect {
                 x: unscaled::X(0),
                 y: unscaled::Y(0),
-                w: unscaled::W(CELLS_W),
-                h: unscaled::H(CELLS_H),
+                w: unscaled::W(CELLS_W.into()),
+                h: unscaled::H(CELLS_H.into()),
             },
             kind: Kind::Colour(0),
         }];
@@ -295,8 +295,8 @@ pub fn render(
     let mut output = NeedsRedraw::No;
 
     // The dimensions the commands are written in terms of.
-    let src_w = unscaled::WIDTH.into();
-    let src_h = unscaled::HEIGHT.into();
+    let src_w = unscaled::WIDTH;
+    let src_h = unscaled::HEIGHT;
 
     if frame_buffer.width < src_w
     || frame_buffer.height < src_h {
@@ -460,15 +460,7 @@ pub fn render(
 
                 let (clip_rect, x_range) = calc_clip_rect!(rect);
 
-                let Rect {
-                    x: d_x,
-                    y: d_y,
-                    w,
-                    h,
-                } = rect;
-
-                let w = clip::W::from(w);
-                let h = clip::H::from(h);
+                let w = clip::W::from(rect.w);
 
                 match kind {
                     Kind::Gfx((sprite_x, sprite_y)) => {
@@ -522,7 +514,7 @@ pub fn render(
                             }
                         }
                     },
-                    Kind::Font((sprite_x, sprite_y), colour) => {
+                    Kind::Font((sprite_x, sprite_y), _) => {
                         let sprite_x = usize::from(sprite_x);
                         let sprite_y = usize::from(sprite_y);
 
@@ -566,7 +558,7 @@ pub fn render(
                             }
                         }
                     },
-                    Kind::Colour(colour) => {
+                    Kind::Colour(_) => {
                         for y in clip_rect.y {
                             for x in clip_rect.x.clone() {
                                 if cell_clip_rect.contains(x, y) {
@@ -615,15 +607,7 @@ pub fn render(
 
                 let (clip_rect, x_range) = calc_clip_rect!(rect);
 
-                let Rect {
-                    x: d_x,
-                    y: d_y,
-                    w,
-                    h,
-                } = rect;
-
-                let w = clip::W::from(w);
-                let h = clip::H::from(h);
+                let w = clip::W::from(rect.w);
 
                 match kind {
                     Kind::Gfx((sprite_x, sprite_y)) => {
@@ -668,13 +652,13 @@ pub fn render(
                                         let a_g = ((gfx_colour >> 24) & 255) as u8;
                                         let r_g = ((gfx_colour >> 16) & 255) as u8;
                                         let g_g = ((gfx_colour >>  8) & 255) as u8;
-                                        let b_g = ((gfx_colour >>  0) & 255) as u8;
+                                        let b_g = ((gfx_colour      ) & 255) as u8;
 
                                         // `_u` for under.
                                         let a_u = ((under >> 24) & 255) as u8;
                                         let r_u = ((under >> 16) & 255) as u8;
                                         let g_u = ((under >>  8) & 255) as u8;
-                                        let b_u = ((under >>  0) & 255) as u8;
+                                        let b_u = ((under      ) & 255) as u8;
 
                                         let a_g = gamma_to_linear(a_g);
                                         let r_g = gamma_to_linear(r_g);
@@ -701,7 +685,7 @@ pub fn render(
                                               (ARGB::from(a_o) << 24)
                                             | (ARGB::from(r_o) << 16)
                                             | (ARGB::from(g_o) <<  8)
-                                            | (ARGB::from(b_o) <<  0);
+                                            | (ARGB::from(b_o)      );
 
                                         frame_buffer.buffer[d_i] = output;
                                     }
