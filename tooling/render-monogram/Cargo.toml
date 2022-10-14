@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
+
+[dependencies]
+image = { version = "0.24", optional = true }
+
+[features]
+default = []
+png_output = ["image"]

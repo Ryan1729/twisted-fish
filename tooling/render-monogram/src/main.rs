@@ -115,7 +115,16 @@ fn main() {
                     ).expect("chunk shoud be a valid u8");
 
                     for col in 0..CHAR_W as usize {
-                        output[base_i + row * OUTPUT_W as usize + col] = bits & 1;
+                        let i = base_i + row * OUTPUT_W as usize + col;
+                        #[cfg(not(feature = "png_output"))]
+                        {
+                            output[i] = bits & 1;
+                        }
+
+                        #[cfg(feature = "png_output")]
+                        {
+                            output[i] = if bits & 1 == 1 { 255 } else { 0 };
+                        }
                         bits >>= 1;
                     }
 
@@ -144,13 +153,28 @@ fn main() {
         };
     }
 
-    println!("[");
-    for y in 0..OUTPUT_H {
-        for x in 0..OUTPUT_W {
-            let i = y * OUTPUT_W + x;
-            print!("{},", output[i]);
+    #[cfg(not(feature = "png_output"))]
+    {
+        println!("[");
+        for y in 0..OUTPUT_H {
+            for x in 0..OUTPUT_W {
+                let i = y * OUTPUT_W + x;
+                print!("{},", output[i]);
+            }
+            println!();
         }
-        println!();
+        println!("]");
     }
-    println!("]");
+
+    #[cfg(feature = "png_output")]
+    {
+        image::save_buffer_with_format(
+            "output.png",
+            &output,
+            OUTPUT_W.try_into().unwrap(),
+            OUTPUT_H.try_into().unwrap(),
+            image::ColorType::L8,
+            image::ImageFormat::Png
+        ).unwrap();
+    }
 }
