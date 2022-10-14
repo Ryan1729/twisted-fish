@@ -639,11 +639,12 @@ pub fn render(
                                         }
                                         // Interprets 1.0 as full bright.
                                         fn linear_to_gamma(x: f32) -> u8 {
-                                            f32_to_u8(255. * x.powf(1./2.2))
+                                            f32_to_u8(255. * x.sqrt())
                                         }
 
                                         fn gamma_to_linear(x: u8) -> f32 {
-                                            ((x as f32)/255.).powf(2.2)
+                                            let f = ((x as f32)/255.);
+                                            f * f
                                         }
 
                                         let under = frame_buffer.buffer[d_i];
