@@ -244,9 +244,9 @@ pub mod unscaled {
     }
 }
 
-pub const GFX_WIDTH: usize = 512;
-pub const GFX_HEIGHT: usize = 1024;
-pub const GFX_LENGTH: usize = GFX_WIDTH * GFX_HEIGHT;
+pub const GFX_WIDTH: u16 = 512;
+pub const GFX_HEIGHT: u16 = 1024;
+pub const GFX_LENGTH: usize = GFX_WIDTH as usize * GFX_HEIGHT as usize;
 
 pub const CHAR_WIDTH: u8 = 5;
 pub const CHAR_W: unscaled::W = unscaled::W(CHAR_WIDTH as _);
@@ -328,7 +328,6 @@ pub mod sprite {
 pub enum Kind {
     Gfx(sprite::XY),
     Font(sprite::XY, PaletteIndex),
-    Colour(PaletteIndex),
 }
 
 #[derive(Clone, Copy, Debug)]

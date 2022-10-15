@@ -115,7 +115,6 @@ mod hash {
                 u16(hash, y.0);
                 byte(hash, i);
             },
-            Colour(i) => { bytes(hash, &[2, i]); },
         };
     }
 
@@ -387,17 +386,31 @@ pub fn render(
     debug_assert_eq!(frame_buffer.buffer.len(), frame_buffer.z_buffer.len(), "Frame/Z buffer len mismatch");
 
     let (cells, cells_prev) = frame_buffer.cells.current_and_prev();
+    for cell_i in 0..CELLS_LENGTH {
+        if cells[cell_i] == cells_prev[cell_i] {
+            continue
+        }
+        output = NeedsRedraw::Yes;
+    }
+
+    if let NeedsRedraw::No = output {
+        frame_buffer.cells.swap();
+
+        return output;
+    }
+
+    // Hopefully this compiles to something not inefficent
+    for y in outer_clip_rect.y.clone() {
+        for x in outer_clip_rect.x.clone() {
+            let d_i = usize::from(y)
+            * usize::from(d_w)
+            + usize::from(x);
+            frame_buffer.buffer[d_i] = colours::BLACK;
+        }
+    }    
+
     for cell_y in 0..CELLS_H {
         for cell_x in 0..CELLS_W {
-            let cell_i = usize::from(cell_y)
-            * usize::from(CELLS_W)
-            + usize::from(cell_x);
-
-            if cells[cell_i] == cells_prev[cell_i] {
-                continue
-            }
-            output = NeedsRedraw::Yes;
-
             let cell_x = clip::X::from(cell_x);
             let cell_y = clip::Y::from(cell_y);
             let cell_clip_rect = clip::Rect {
@@ -558,22 +571,6 @@ pub fn render(
                             }
                         }
                     },
-                    Kind::Colour(_) => {
-                        for y in clip_rect.y {
-                            for x in clip_rect.x.clone() {
-                                if cell_clip_rect.contains(x, y) {
-                                    let d_i = usize::from(y)
-                                    * usize::from(d_w)
-                                    + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len() {
-                                        // We assume that all the palette colours are
-                                        // fully opaque
-                                        frame_buffer.z_buffer[d_i] = z;
-                                    }
-                                }
-                            }
-                        }
-                    }
                 };
             }
 
@@ -643,7 +640,7 @@ pub fn render(
                                         }
 
                                         fn gamma_to_linear(x: u8) -> f32 {
-                                            let f = ((x as f32)/255.);
+                                            let f = (x as f32)/255.;
                                             f * f
                                         }
 
@@ -755,22 +752,6 @@ pub fn render(
                             }
                         }
                     },
-                    Kind::Colour(colour) => {
-                        for y in clip_rect.y {
-                            for x in clip_rect.x.clone() {
-                                if cell_clip_rect.contains(x, y) {
-                                    let d_i = usize::from(y)
-                                    * usize::from(d_w)
-                                    + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len()
-                                    && z >= frame_buffer.z_buffer[d_i]
-                                    {
-                                        frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
-                                    }
-                                }
-                            }
-                        }
-                    }
                 };
             }
         }

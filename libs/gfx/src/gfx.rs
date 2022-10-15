@@ -43,20 +43,6 @@ impl Commands {
         );
     }
 
-    pub fn clear_to(&mut self, colour: PaletteIndex) {
-        self.commands.push(
-            Command {
-                kind: Kind::Colour(colour),
-                rect: Rect {
-                    x: unscaled::X(0),
-                    y: unscaled::Y(0),
-                    w: unscaled::W(unscaled::WIDTH),
-                    h: unscaled::H(unscaled::HEIGHT),
-                },
-            }
-        );
-    }
-
     pub fn print_char(
         &mut self,
         character: u8,
