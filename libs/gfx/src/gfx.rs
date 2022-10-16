@@ -1,6 +1,6 @@
 use models::{Card, get_rank, get_suit, get_zinger, ranks, suits, zingers};
 
-use platform_types::{Command, Kind, PaletteIndex, sprite, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
+use platform_types::{ARGB, Command, Kind, PaletteIndex, sprite, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
 
 #[derive(Default)]
 pub struct Commands {
@@ -29,35 +29,39 @@ impl Commands {
         );
     }
 
-    fn print_char_raw(
-        &mut self,
-        sprite_xy: sprite::XY,
-        colour: PaletteIndex,
-        rect: unscaled::Rect,
-    ) {
-        self.commands.push(
-            Command {
-                kind: Kind::Font(sprite_xy, colour),
-                rect,
-            }
-        );
-    }
-
     pub fn print_char(
         &mut self,
         character: u8,
         x: unscaled::X,
         y: unscaled::Y,
-        colour: PaletteIndex
+        colour: ARGB
     ) {
-        self.print_char_raw(
-            get_char_xy(character),
-            colour,
-            Rect {
-                x,
-                y,
-                w: CHAR_W,
-                h: CHAR_H,
+        let char_xy = {
+            const SPRITES_PER_ROW: u8 = FONT_WIDTH / CHAR_WIDTH;
+            const FONT_OFFSET: sprite::H = unscaled::h_const_mul(card::IMAGE_H, models::RANK_COUNT as _);
+
+            (
+                sprite::X(Into::into(
+                    (character % SPRITES_PER_ROW) * CHAR_WIDTH,
+                )),
+                sprite::Y(Into::into(
+                    (character / SPRITES_PER_ROW) * CHAR_HEIGHT,
+                )) + FONT_OFFSET,
+            )
+        };
+
+        self.commands.push(
+            Command {
+                kind: Kind::Gfx(
+                    char_xy,
+                    colour
+                ),
+                rect: Rect {
+                    x,
+                    y,
+                    w: CHAR_W,
+                    h: CHAR_H,
+                },
             }
         );
     }
@@ -67,7 +71,7 @@ impl Commands {
         bytes: &[u8],
         mut x: unscaled::X,
         y: unscaled::Y,
-        colour: PaletteIndex,
+        colour: ARGB,
     ) {
         for &c in bytes.iter() {
             self.print_char(c, x, y, colour);
@@ -439,28 +443,15 @@ impl Commands {
             line1,
             x + card::LINE_W_OFFSET,
             y + card::LINE_H_1_OFFSET,
-            card::TEXT_INDEX,
+            card::TEXT_COLOUR,
         );
         self.print_line(
             line2,
             x + card::LINE_W_OFFSET,
             y + card::LINE_H_2_OFFSET,
-            card::TEXT_INDEX,
+            card::TEXT_COLOUR,
         );
     }
-}
-
-pub fn get_char_xy(sprite_number: u8) -> sprite::XY {
-    const SPRITES_PER_ROW: u8 = FONT_WIDTH / CHAR_WIDTH;
-
-    (
-        sprite::X(Into::into(
-            (sprite_number % SPRITES_PER_ROW) * CHAR_WIDTH,
-        )),
-        sprite::Y(Into::into(
-            (sprite_number / SPRITES_PER_ROW) * CHAR_HEIGHT,
-        )),
-    )
 }
 
 pub mod card {
@@ -491,7 +482,8 @@ pub mod card {
         );
     pub const BACKING_SPRITE_BASE_Y: sprite::Y = sprite::Y(0);
 
-    pub const TEXT_INDEX: PaletteIndex = 7; // black
+    // TODO: refer to palette instead of hardcoding this.
+    pub const TEXT_COLOUR: platform_types::ARGB = 0xFF222222;
 
     pub const IMAGE_W_OFFSET: W = W(1);
     pub const IMAGE_H_OFFSET: H = H(4);

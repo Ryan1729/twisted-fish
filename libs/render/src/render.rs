@@ -105,16 +105,9 @@ mod hash {
 
         match kind {
             Gfx((x, y), colour_override) => {
-                byte(hash, 0);
                 u16(hash, x.0);
                 u16(hash, y.0);
                 bytes(hash, &colour_override.to_ne_bytes());
-            },
-            Font((x, y), i) => {
-                byte(hash, 1);
-                u16(hash, x.0);
-                u16(hash, y.0);
-                byte(hash, i);
             },
         };
     }
@@ -495,64 +488,23 @@ pub fn render(
                                     + usize::from(x);
                                     if d_i < frame_buffer.z_buffer.len() {
                                         let mut gfx_colour: ARGB = GFX[src_i];
-                                        if colour_override > 0x00FF_FFFF {
+                                        let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                                        if is_full_alpha
+                                        // is not fully transparent
+                                        && colour_override > 0x00FF_FFFF
+                                        {
                                             gfx_colour = colour_override;
                                         }
 
-                                        let alpha = ((gfx_colour >> 24) & 255) as u8;
                                         // If a pixel is fully opaque, then we
                                         // can ignore all the pixels beneath it, so
                                         // we set the z value. If it is at all
                                         // transparent then we need to render
                                         // whatever is behind it. So we do not set
                                         // the z value.
-                                        if alpha == 255 {
+                                        if is_full_alpha {
                                             frame_buffer.z_buffer[d_i] = z;
                                         }
-                                    }
-                                }
-
-                                advance!(src_i, x_remaining);
-                            }
-
-                            // If we would have went off the edge, advance `src_i`
-                            // as if we actually drew past the edge.
-                            for _ in clip_rect.x.end..x_range.end {
-                                advance!(src_i, x_remaining);
-                            }
-
-                            // Go back to the beginning of the row.
-                            src_i -= usize::from(w);
-
-                            y_remaining -= 1;
-                            if y_remaining == 0 {
-                                y_remaining = multiplier;
-                                src_i += src_w;
-                            }
-                        }
-                    },
-                    Kind::Font((sprite_x, sprite_y), _) => {
-                        let sprite_x = usize::from(sprite_x);
-                        let sprite_y = usize::from(sprite_y);
-
-                        let src_w = FONT_WIDTH as usize;
-
-                        let mut src_i = sprite_y * src_w + sprite_x;
-                        let mut y_remaining = multiplier;
-                        for y in clip_rect.y {
-                            let mut x_remaining = multiplier;
-                            for x in clip_rect.x.clone() {
-                                let font_pixel_colour = FONT[src_i];
-
-                                if font_pixel_colour != FONT_TRANSPARENT
-                                && cell_clip_rect.contains(x, y) {
-                                    let d_i = usize::from(y)
-                                    * usize::from(d_w)
-                                    + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len() {
-                                        // We assume that all the palette colours are
-                                        // fully opaque
-                                        frame_buffer.z_buffer[d_i] = z;
                                     }
                                 }
 
@@ -632,7 +584,11 @@ pub fn render(
                                     && z >= frame_buffer.z_buffer[d_i]
                                     {
                                         let mut gfx_colour: ARGB = GFX[src_i];
-                                        if colour_override > 0x00FF_FFFF {
+                                        let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                                        if is_full_alpha
+                                        // is not fully transparent
+                                        && colour_override > 0x00FF_FFFF
+                                        {
                                             gfx_colour = colour_override;
                                         }
 
@@ -693,50 +649,6 @@ pub fn render(
                                             | (ARGB::from(b_o)      );
 
                                         frame_buffer.buffer[d_i] = output;
-                                    }
-                                }
-
-                                advance!(src_i, x_remaining);
-                            }
-
-                            // If we would have went off the edge, advance `src_i`
-                            // as if we actually drew past the edge.
-                            for _ in clip_rect.x.end..x_range.end {
-                                advance!(src_i, x_remaining);
-                            }
-
-                            // Go back to the beginning of the row.
-                            src_i -= usize::from(w);
-
-                            y_remaining -= 1;
-                            if y_remaining == 0 {
-                                y_remaining = multiplier;
-                                src_i += src_w;
-                            }
-                        }
-                    },
-                    Kind::Font((sprite_x, sprite_y), colour) => {
-                        let sprite_x = usize::from(sprite_x);
-                        let sprite_y = usize::from(sprite_y);
-
-                        let src_w = FONT_WIDTH as usize;
-
-                        let mut src_i = sprite_y * src_w + sprite_x;
-                        let mut y_remaining = multiplier;
-                        for y in clip_rect.y {
-                            let mut x_remaining = multiplier;
-                            for x in clip_rect.x.clone() {
-                                let font_pixel_colour = FONT[src_i];
-
-                                if font_pixel_colour != FONT_TRANSPARENT
-                                && cell_clip_rect.contains(x, y) {
-                                    let d_i = usize::from(y)
-                                    * usize::from(d_w)
-                                    + usize::from(x);
-                                    if d_i < frame_buffer.buffer.len()
-                                    && z >= frame_buffer.z_buffer[d_i]
-                                    {
-                                        frame_buffer.buffer[d_i] = PALETTE[colour as usize & 15];
                                     }
                                 }
 

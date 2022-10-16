@@ -214,7 +214,7 @@ Ryan Wiedemann (Ryan1729 on github)
                     unscaled::Y(0)
                     + y * CHAR_ADVANCE_H
                     + CHAR_SPACING_H,
-                    0 /* blue */
+                    0 // No override
                 );
             }
         },

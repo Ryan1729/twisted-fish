@@ -327,7 +327,6 @@ pub mod sprite {
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
     Gfx(sprite::XY, ARGB),
-    Font(sprite::XY, PaletteIndex),
 }
 
 #[derive(Clone, Copy, Debug)]
