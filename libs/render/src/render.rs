@@ -104,10 +104,11 @@ mod hash {
         u16(hash, h.get());
 
         match kind {
-            Gfx((x, y)) => {
+            Gfx((x, y), colour_override) => {
                 byte(hash, 0);
                 u16(hash, x.0);
                 u16(hash, y.0);
+                bytes(hash, &colour_override.to_ne_bytes());
             },
             Font((x, y), i) => {
                 byte(hash, 1);
@@ -476,7 +477,7 @@ pub fn render(
                 let w = clip::W::from(rect.w);
 
                 match kind {
-                    Kind::Gfx((sprite_x, sprite_y)) => {
+                    Kind::Gfx((sprite_x, sprite_y), colour_override) => {
                         let sprite_x = usize::from(sprite_x);
                         let sprite_y = usize::from(sprite_y);
 
@@ -493,7 +494,10 @@ pub fn render(
                                     * usize::from(d_w)
                                     + usize::from(x);
                                     if d_i < frame_buffer.z_buffer.len() {
-                                        let gfx_colour: ARGB = GFX[src_i];
+                                        let mut gfx_colour: ARGB = GFX[src_i];
+                                        if colour_override > 0x00FF_FFFF {
+                                            gfx_colour = colour_override;
+                                        }
 
                                         let alpha = ((gfx_colour >> 24) & 255) as u8;
                                         // If a pixel is fully opaque, then we
@@ -607,7 +611,7 @@ pub fn render(
                 let w = clip::W::from(rect.w);
 
                 match kind {
-                    Kind::Gfx((sprite_x, sprite_y)) => {
+                    Kind::Gfx((sprite_x, sprite_y), colour_override) => {
                         let sprite_x = usize::from(sprite_x);
                         let sprite_y = usize::from(sprite_y);
 
@@ -627,7 +631,10 @@ pub fn render(
                                     if d_i < frame_buffer.buffer.len()
                                     && z >= frame_buffer.z_buffer[d_i]
                                     {
-                                        let gfx_colour: ARGB = GFX[src_i];
+                                        let mut gfx_colour: ARGB = GFX[src_i];
+                                        if colour_override > 0x00FF_FFFF {
+                                            gfx_colour = colour_override;
+                                        }
 
                                         fn f32_to_u8(x: f32) -> u8 {
                                             // This saturates instead of being UB

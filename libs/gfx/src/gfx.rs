@@ -23,7 +23,7 @@ impl Commands {
     ) {
         self.commands.push(
             Command {
-                kind: Kind::Gfx(sprite_xy),
+                kind: Kind::Gfx(sprite_xy, 0),
                 rect,
             }
         );
