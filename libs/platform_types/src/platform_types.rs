@@ -325,14 +325,10 @@ pub mod sprite {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Kind {
-    Gfx(sprite::XY, ARGB),
-}
-
-#[derive(Clone, Copy, Debug)]
 pub struct Command {
     pub rect: unscaled::Rect,
-    pub kind: Kind,
+    pub sprite_xy: sprite::XY,
+    pub colour_override: ARGB,
 }
 
 #[derive(Clone, Copy, Default, Debug)]

@@ -1,6 +1,5 @@
 use platform_types::{
     Command,
-    Kind,
     GFX_WIDTH,
     FONT_WIDTH,
     ARGB,
@@ -85,8 +84,6 @@ mod hash {
     }
 
     pub fn command(hash: &mut Cell, command: &Command) {
-        use Kind::*;
-
         // Pattern match so we get a compile error if the fields change.
         let &Command {
             rect: Rect {
@@ -95,7 +92,8 @@ mod hash {
                 w,
                 h,
             },
-            kind,
+            sprite_xy,
+            colour_override,
         } = command;
 
         u16(hash, x.get());
@@ -103,13 +101,10 @@ mod hash {
         u16(hash, w.get());
         u16(hash, h.get());
 
-        match kind {
-            Gfx((x, y), colour_override) => {
-                u16(hash, x.0);
-                u16(hash, y.0);
-                bytes(hash, &colour_override.to_ne_bytes());
-            },
-        };
+        u16(hash, sprite_xy.0.0);
+        u16(hash, sprite_xy.1.0);
+
+        bytes(hash, &colour_override.to_ne_bytes());
     }
 
     pub fn hash(hash: &mut Cell, hashed: Cell) {
@@ -459,7 +454,8 @@ pub fn render(
             for (
                 command_i,
                 &Command {
-                    kind,
+                    sprite_xy: (sprite_x, sprite_y),
+                    colour_override,
                     rect,
                 }
             ) in commands.iter().enumerate() {
@@ -469,65 +465,61 @@ pub fn render(
 
                 let w = clip::W::from(rect.w);
 
-                match kind {
-                    Kind::Gfx((sprite_x, sprite_y), colour_override) => {
-                        let sprite_x = usize::from(sprite_x);
-                        let sprite_y = usize::from(sprite_y);
+                let sprite_x = usize::from(sprite_x);
+                let sprite_y = usize::from(sprite_y);
 
-                        let src_w = GFX_WIDTH as usize;
+                let src_w = GFX_WIDTH as usize;
 
-                        let mut src_i = sprite_y * src_w + sprite_x;
-                        let mut y_remaining = multiplier;
-                        for y in clip_rect.y {
-                            let mut x_remaining = multiplier;
-                            for x in clip_rect.x.clone() {
-                                if cell_clip_rect.contains(x, y)
+                let mut src_i = sprite_y * src_w + sprite_x;
+                let mut y_remaining = multiplier;
+                for y in clip_rect.y {
+                    let mut x_remaining = multiplier;
+                    for x in clip_rect.x.clone() {
+                        if cell_clip_rect.contains(x, y)
+                        {
+                            let d_i = usize::from(y)
+                            * usize::from(d_w)
+                            + usize::from(x);
+                            if d_i < frame_buffer.z_buffer.len() {
+                                let mut gfx_colour: ARGB = GFX[src_i];
+                                let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                                if is_full_alpha
+                                // is not fully transparent
+                                && colour_override > 0x00FF_FFFF
                                 {
-                                    let d_i = usize::from(y)
-                                    * usize::from(d_w)
-                                    + usize::from(x);
-                                    if d_i < frame_buffer.z_buffer.len() {
-                                        let mut gfx_colour: ARGB = GFX[src_i];
-                                        let is_full_alpha = gfx_colour >= 0xFF00_0000;
-                                        if is_full_alpha
-                                        // is not fully transparent
-                                        && colour_override > 0x00FF_FFFF
-                                        {
-                                            gfx_colour = colour_override;
-                                        }
-
-                                        // If a pixel is fully opaque, then we
-                                        // can ignore all the pixels beneath it, so
-                                        // we set the z value. If it is at all
-                                        // transparent then we need to render
-                                        // whatever is behind it. So we do not set
-                                        // the z value.
-                                        if is_full_alpha {
-                                            frame_buffer.z_buffer[d_i] = z;
-                                        }
-                                    }
+                                    gfx_colour = colour_override;
                                 }
 
-                                advance!(src_i, x_remaining);
-                            }
-
-                            // If we would have went off the edge, advance `src_i`
-                            // as if we actually drew past the edge.
-                            for _ in clip_rect.x.end..x_range.end {
-                                advance!(src_i, x_remaining);
-                            }
-
-                            // Go back to the beginning of the row.
-                            src_i -= usize::from(w);
-
-                            y_remaining -= 1;
-                            if y_remaining == 0 {
-                                y_remaining = multiplier;
-                                src_i += src_w;
+                                // If a pixel is fully opaque, then we
+                                // can ignore all the pixels beneath it, so
+                                // we set the z value. If it is at all
+                                // transparent then we need to render
+                                // whatever is behind it. So we do not set
+                                // the z value.
+                                if is_full_alpha {
+                                    frame_buffer.z_buffer[d_i] = z;
+                                }
                             }
                         }
-                    },
-                };
+
+                        advance!(src_i, x_remaining);
+                    }
+
+                    // If we would have went off the edge, advance `src_i`
+                    // as if we actually drew past the edge.
+                    for _ in clip_rect.x.end..x_range.end {
+                        advance!(src_i, x_remaining);
+                    }
+
+                    // Go back to the beginning of the row.
+                    src_i -= usize::from(w);
+
+                    y_remaining -= 1;
+                    if y_remaining == 0 {
+                        y_remaining = multiplier;
+                        src_i += src_w;
+                    }
+                }
             }
 
             // The minimum z of the whole cell. If a given command's z is below this
@@ -552,7 +544,8 @@ pub fn render(
             for (
                 command_i,
                 &Command {
-                    kind,
+                    sprite_xy: (sprite_x, sprite_y),
+                    colour_override,
                     rect,
                 }
             ) in commands.iter().enumerate().skip(min_z.saturating_sub(1)) {
@@ -562,116 +555,112 @@ pub fn render(
 
                 let w = clip::W::from(rect.w);
 
-                match kind {
-                    Kind::Gfx((sprite_x, sprite_y), colour_override) => {
-                        let sprite_x = usize::from(sprite_x);
-                        let sprite_y = usize::from(sprite_y);
+                let sprite_x = usize::from(sprite_x);
+                let sprite_y = usize::from(sprite_y);
 
-                        let src_w = GFX_WIDTH as usize;
+                let src_w = GFX_WIDTH as usize;
 
-                        let mut src_i = sprite_y * src_w + sprite_x;
-                        let mut y_remaining = multiplier;
-                        for y in clip_rect.y {
-                            let mut x_remaining = multiplier;
-                            for x in clip_rect.x.clone() {
-                                if cell_clip_rect.contains(x, y)
+                let mut src_i = sprite_y * src_w + sprite_x;
+                let mut y_remaining = multiplier;
+                for y in clip_rect.y {
+                    let mut x_remaining = multiplier;
+                    for x in clip_rect.x.clone() {
+                        if cell_clip_rect.contains(x, y)
+                        {
+                            let d_i = usize::from(y)
+                            * usize::from(d_w)
+                            + usize::from(x);
+
+                            if d_i < frame_buffer.buffer.len()
+                            && z >= frame_buffer.z_buffer[d_i]
+                            {
+                                let mut gfx_colour: ARGB = GFX[src_i];
+                                let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                                if is_full_alpha
+                                // is not fully transparent
+                                && colour_override > 0x00FF_FFFF
                                 {
-                                    let d_i = usize::from(y)
-                                    * usize::from(d_w)
-                                    + usize::from(x);
-
-                                    if d_i < frame_buffer.buffer.len()
-                                    && z >= frame_buffer.z_buffer[d_i]
-                                    {
-                                        let mut gfx_colour: ARGB = GFX[src_i];
-                                        let is_full_alpha = gfx_colour >= 0xFF00_0000;
-                                        if is_full_alpha
-                                        // is not fully transparent
-                                        && colour_override > 0x00FF_FFFF
-                                        {
-                                            gfx_colour = colour_override;
-                                        }
-
-                                        fn f32_to_u8(x: f32) -> u8 {
-                                            // This saturates instead of being UB
-                                            // as of rust 1.45.0
-                                            x as u8
-                                        }
-                                        // Interprets 1.0 as full bright.
-                                        fn linear_to_gamma(x: f32) -> u8 {
-                                            f32_to_u8(255. * x.sqrt())
-                                        }
-
-                                        fn gamma_to_linear(x: u8) -> f32 {
-                                            let f = (x as f32)/255.;
-                                            f * f
-                                        }
-
-                                        let under = frame_buffer.buffer[d_i];
-
-                                        // `_g` for gfx.
-                                        let a_g = ((gfx_colour >> 24) & 255) as u8;
-                                        let r_g = ((gfx_colour >> 16) & 255) as u8;
-                                        let g_g = ((gfx_colour >>  8) & 255) as u8;
-                                        let b_g = ((gfx_colour      ) & 255) as u8;
-
-                                        // `_u` for under.
-                                        let a_u = ((under >> 24) & 255) as u8;
-                                        let r_u = ((under >> 16) & 255) as u8;
-                                        let g_u = ((under >>  8) & 255) as u8;
-                                        let b_u = ((under      ) & 255) as u8;
-
-                                        let a_g = gamma_to_linear(a_g);
-                                        let r_g = gamma_to_linear(r_g);
-                                        let g_g = gamma_to_linear(g_g);
-                                        let b_g = gamma_to_linear(b_g);
-
-                                        let a_u = gamma_to_linear(a_u);
-                                        let r_u = gamma_to_linear(r_u);
-                                        let g_u = gamma_to_linear(g_u);
-                                        let b_u = gamma_to_linear(b_u);
-
-                                        // `_o` for output.
-                                        let a_o = a_g + a_u * (1. - a_g);
-                                        let r_o = (r_g * a_g + r_u * (1. - a_g)) / a_o;
-                                        let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
-                                        let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
-
-                                        let a_o = linear_to_gamma(a_o);
-                                        let r_o = linear_to_gamma(r_o);
-                                        let g_o = linear_to_gamma(g_o);
-                                        let b_o = linear_to_gamma(b_o);
-
-                                        let output =
-                                              (ARGB::from(a_o) << 24)
-                                            | (ARGB::from(r_o) << 16)
-                                            | (ARGB::from(g_o) <<  8)
-                                            | (ARGB::from(b_o)      );
-
-                                        frame_buffer.buffer[d_i] = output;
-                                    }
+                                    gfx_colour = colour_override;
                                 }
 
-                                advance!(src_i, x_remaining);
-                            }
+                                fn f32_to_u8(x: f32) -> u8 {
+                                    // This saturates instead of being UB
+                                    // as of rust 1.45.0
+                                    x as u8
+                                }
+                                // Interprets 1.0 as full bright.
+                                fn linear_to_gamma(x: f32) -> u8 {
+                                    f32_to_u8(255. * x.sqrt())
+                                }
 
-                            // If we would have went off the edge, advance `src_i`
-                            // as if we actually drew past the edge.
-                            for _ in clip_rect.x.end..x_range.end {
-                                advance!(src_i, x_remaining);
-                            }
+                                fn gamma_to_linear(x: u8) -> f32 {
+                                    let f = (x as f32)/255.;
+                                    f * f
+                                }
 
-                            // Go back to the beginning of the row.
-                            src_i -= usize::from(w);
+                                let under = frame_buffer.buffer[d_i];
 
-                            y_remaining -= 1;
-                            if y_remaining == 0 {
-                                y_remaining = multiplier;
-                                src_i += src_w;
+                                // `_g` for gfx.
+                                let a_g = ((gfx_colour >> 24) & 255) as u8;
+                                let r_g = ((gfx_colour >> 16) & 255) as u8;
+                                let g_g = ((gfx_colour >>  8) & 255) as u8;
+                                let b_g = ((gfx_colour      ) & 255) as u8;
+
+                                // `_u` for under.
+                                let a_u = ((under >> 24) & 255) as u8;
+                                let r_u = ((under >> 16) & 255) as u8;
+                                let g_u = ((under >>  8) & 255) as u8;
+                                let b_u = ((under      ) & 255) as u8;
+
+                                let a_g = gamma_to_linear(a_g);
+                                let r_g = gamma_to_linear(r_g);
+                                let g_g = gamma_to_linear(g_g);
+                                let b_g = gamma_to_linear(b_g);
+
+                                let a_u = gamma_to_linear(a_u);
+                                let r_u = gamma_to_linear(r_u);
+                                let g_u = gamma_to_linear(g_u);
+                                let b_u = gamma_to_linear(b_u);
+
+                                // `_o` for output.
+                                let a_o = a_g + a_u * (1. - a_g);
+                                let r_o = (r_g * a_g + r_u * (1. - a_g)) / a_o;
+                                let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
+                                let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
+
+                                let a_o = linear_to_gamma(a_o);
+                                let r_o = linear_to_gamma(r_o);
+                                let g_o = linear_to_gamma(g_o);
+                                let b_o = linear_to_gamma(b_o);
+
+                                let output =
+                                      (ARGB::from(a_o) << 24)
+                                    | (ARGB::from(r_o) << 16)
+                                    | (ARGB::from(g_o) <<  8)
+                                    | (ARGB::from(b_o)      );
+
+                                frame_buffer.buffer[d_i] = output;
                             }
                         }
-                    },
-                };
+
+                        advance!(src_i, x_remaining);
+                    }
+
+                    // If we would have went off the edge, advance `src_i`
+                    // as if we actually drew past the edge.
+                    for _ in clip_rect.x.end..x_range.end {
+                        advance!(src_i, x_remaining);
+                    }
+
+                    // Go back to the beginning of the row.
+                    src_i -= usize::from(w);
+
+                    y_remaining -= 1;
+                    if y_remaining == 0 {
+                        y_remaining = multiplier;
+                        src_i += src_w;
+                    }
+                }
             }
         }
     }

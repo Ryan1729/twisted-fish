@@ -1,6 +1,6 @@
 use models::{Card, get_rank, get_suit, get_zinger, ranks, suits, zingers};
 
-use platform_types::{ARGB, Command, Kind, PaletteIndex, sprite, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
+use platform_types::{ARGB, Command, PaletteIndex, sprite, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
 
 #[derive(Default)]
 pub struct Commands {
@@ -23,8 +23,9 @@ impl Commands {
     ) {
         self.commands.push(
             Command {
-                kind: Kind::Gfx(sprite_xy, 0),
                 rect,
+                sprite_xy,
+                colour_override: 0,
             }
         );
     }
@@ -34,9 +35,9 @@ impl Commands {
         character: u8,
         x: unscaled::X,
         y: unscaled::Y,
-        colour: ARGB
+        colour_override: ARGB
     ) {
-        let char_xy = {
+        let sprite_xy = {
             const SPRITES_PER_ROW: u8 = FONT_WIDTH / CHAR_WIDTH;
             const FONT_OFFSET: sprite::H = unscaled::h_const_mul(card::IMAGE_H, models::RANK_COUNT as _);
 
@@ -52,16 +53,14 @@ impl Commands {
 
         self.commands.push(
             Command {
-                kind: Kind::Gfx(
-                    char_xy,
-                    colour
-                ),
                 rect: Rect {
                     x,
                     y,
                     w: CHAR_W,
                     h: CHAR_H,
                 },
+                sprite_xy,
+                colour_override,
             }
         );
     }
