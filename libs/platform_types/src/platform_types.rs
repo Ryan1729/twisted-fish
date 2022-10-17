@@ -19,6 +19,8 @@ pub mod unscaled {
     pub const WIDTH: Inner = 480;
     pub const HEIGHT: Inner = 320;
 
+    pub const LENGTH: usize = WIDTH as usize * HEIGHT as usize;
+
     macro_rules! def {
         ($($name: ident, $inner_name: ident)+) => {$(
             pub type $inner_name = Inner;

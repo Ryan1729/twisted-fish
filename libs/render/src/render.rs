@@ -126,8 +126,9 @@ enum CurrentCells {
 type Z = usize;
 
 pub struct FrameBuffer {
-    pub buffer: Vec<u32>,
-    pub z_buffer: Vec<Z>,
+    pub buffer: Vec<ARGB>,
+    pub unscaled_buffer: Box<[ARGB; unscaled::LENGTH]>,
+    pub unscaled_z_buffer: Box<[Z; unscaled::LENGTH]>,
     pub width: clip::W,
     pub height: clip::H,
     pub cells: HashCells,
@@ -139,9 +140,8 @@ impl FrameBuffer {
             buffer: Vec::with_capacity(
                 usize::from(width) * usize::from(height)
             ),
-            z_buffer: Vec::with_capacity(
-                usize::from(width) * usize::from(height)
-            ),
+            unscaled_buffer: Box::new([0; unscaled::LENGTH]),
+            unscaled_z_buffer: Box::new([0; unscaled::LENGTH]),
             width,
             height,
             cells: HashCells::default(),
@@ -312,8 +312,6 @@ pub fn render(
 
     let bottom_bar_height: clip::H = horizontal_bars_height / 2;
 
-    let d_w = frame_buffer.width;
-
     let outer_clip_rect = clip::Rect {
         x: left_bar_width..(
             frame_buffer.width - right_bar_width
@@ -356,23 +354,7 @@ pub fn render(
         for _ in 0..expected_length {
             frame_buffer.buffer.push(0);
         }
-
-        // As of this writing we could reuse a single cell sized z-buffer for each
-        // cell, instead of one largfe frame buffer sized one. But, then we'd have to
-        // calculate the indexes for that smaller z-buffer as well as the one for the
-        // frame. This way we can just use the same index. This also means we only
-        // need to clear the buffer once before the cells loop, instead of once each
-        // inner iteration. Admittedly, I have not measured the other option.
-
-        frame_buffer.z_buffer.clear();
-        // Hopefully this compiles to something not inefficent
-        frame_buffer.z_buffer.reserve(expected_length);
-        for _ in 0..expected_length {
-            frame_buffer.z_buffer.push(0);
-        }
     }
-
-    debug_assert_eq!(frame_buffer.buffer.len(), frame_buffer.z_buffer.len(), "Frame/Z buffer len mismatch");
 
     let (cells, cells_prev) = frame_buffer.cells.current_and_prev();
     for cell_i in 0..CELLS_LENGTH {
@@ -381,30 +363,37 @@ pub fn render(
         }
         output = NeedsRedraw::Yes;
     }
+    // TODO Move this below unscaled render loop, once we start checking the hash 
+    // there again.
+    frame_buffer.cells.swap();
 
     if let NeedsRedraw::No = output {
-        frame_buffer.cells.swap();
-
         return output;
     }
 
     // Hopefully this compiles to something not inefficent
-    for y in outer_clip_rect.y.clone() {
-        for x in outer_clip_rect.x.clone() {
-            let d_i = usize::from(y)
-            * usize::from(d_w)
-            + usize::from(x);
-            frame_buffer.buffer[d_i] = colours::BLACK;
-        }
-    }    
+    for i in 0..frame_buffer.unscaled_buffer.len() {
+        frame_buffer.unscaled_buffer[i] = colours::BLACK;
+    }
 
+    for i in 0..frame_buffer.unscaled_z_buffer.len() {
+        frame_buffer.unscaled_z_buffer[i] = 0;
+    }
+
+    let unscaled_cells_size = core::cmp::max(
+        unscaled::WIDTH / clip::W::from(CELLS_W),
+        unscaled::HEIGHT / clip::H::from(CELLS_H),
+    );
     for cell_y in 0..CELLS_H {
         for cell_x in 0..CELLS_W {
+            // TODO Re-enable checking each indiviual cell's hash here and skipping
+            // rendering unchanged cells
+
             let cell_x = clip::X::from(cell_x);
             let cell_y = clip::Y::from(cell_y);
             let cell_clip_rect = clip::Rect {
-                x: cell_x * cells_size + left_bar_width..(cell_x + 1) * cells_size + left_bar_width,
-                y: cell_y * cells_size + top_bar_height..(cell_y + 1) * cells_size + top_bar_height,
+                x: cell_x * unscaled_cells_size..(cell_x + 1) * unscaled_cells_size,
+                y: cell_y * unscaled_cells_size..(cell_y + 1) * unscaled_cells_size,
             };
 
             macro_rules! calc_clip_rect {
@@ -424,31 +413,15 @@ pub fn render(
                     let d_x_max = d_x + w;
                     let d_y_max = d_y + h;
 
-                    let x_range = (d_x * multiplier + left_bar_width)..(
-                        d_x_max * multiplier + left_bar_width
-                    );
-
                     let mut clip_rect = clip::Rect {
-                        x: x_range.clone(),
-                        y: (d_y * multiplier + top_bar_height)..(
-                            d_y_max * multiplier + top_bar_height
-                        ),
+                        x: d_x..d_x_max,
+                        y: d_y..d_y_max,
                     };
 
                     clip::to(&mut clip_rect, &outer_clip_rect);
 
-                    (clip_rect, x_range)
+                    clip_rect
                 })
-            }
-
-            macro_rules! advance {
-                ($src_i: ident, $x_remaining: ident) => {
-                    $x_remaining -= 1;
-                    if $x_remaining == 0 {
-                        $src_i += 1;
-                        $x_remaining = multiplier;
-                    }
-                }
             }
 
             for (
@@ -461,7 +434,7 @@ pub fn render(
             ) in commands.iter().enumerate() {
                 let z = command_i + 1;
 
-                let (clip_rect, x_range) = calc_clip_rect!(rect);
+                let clip_rect = calc_clip_rect!(rect);
 
                 let w = clip::W::from(rect.w);
 
@@ -470,17 +443,21 @@ pub fn render(
 
                 let src_w = GFX_WIDTH as usize;
 
-                let mut src_i = sprite_y * src_w + sprite_x;
-                let mut y_remaining = multiplier;
+                let mut y_iter_count = 0;
                 for y in clip_rect.y {
-                    let mut x_remaining = multiplier;
+                    let mut x_iter_count = 0;
                     for x in clip_rect.x.clone() {
                         if cell_clip_rect.contains(x, y)
                         {
                             let d_i = usize::from(y)
-                            * usize::from(d_w)
+                            * usize::from(unscaled::WIDTH)
                             + usize::from(x);
-                            if d_i < frame_buffer.z_buffer.len() {
+
+                            if d_i < frame_buffer.unscaled_z_buffer.len() {
+                                let src_i =
+                                    (sprite_y + y_iter_count) * src_w
+                                    + (sprite_x + x_iter_count);
+
                                 let mut gfx_colour: ARGB = GFX[src_i];
                                 let is_full_alpha = gfx_colour >= 0xFF00_0000;
                                 if is_full_alpha
@@ -497,28 +474,15 @@ pub fn render(
                                 // whatever is behind it. So we do not set
                                 // the z value.
                                 if is_full_alpha {
-                                    frame_buffer.z_buffer[d_i] = z;
+                                    frame_buffer.unscaled_z_buffer[d_i] = z;
                                 }
                             }
                         }
 
-                        advance!(src_i, x_remaining);
+                        x_iter_count += 1;
                     }
 
-                    // If we would have went off the edge, advance `src_i`
-                    // as if we actually drew past the edge.
-                    for _ in clip_rect.x.end..x_range.end {
-                        advance!(src_i, x_remaining);
-                    }
-
-                    // Go back to the beginning of the row.
-                    src_i -= usize::from(w);
-
-                    y_remaining -= 1;
-                    if y_remaining == 0 {
-                        y_remaining = multiplier;
-                        src_i += src_w;
-                    }
+                    y_iter_count += 1;
                 }
             }
 
@@ -529,13 +493,13 @@ pub fn render(
             for y in cell_clip_rect.y.clone() {
                 for x in cell_clip_rect.x.clone() {
                     let d_i = usize::from(y)
-                    * usize::from(d_w)
+                    * usize::from(unscaled::WIDTH)
                     + usize::from(x);
 
-                    if d_i < frame_buffer.buffer.len() {
+                    if d_i < frame_buffer.unscaled_z_buffer.len() {
                         min_z = core::cmp::min(
                             min_z,
-                            frame_buffer.z_buffer[d_i]
+                            frame_buffer.unscaled_z_buffer[d_i]
                         );
                     }
                 }
@@ -551,7 +515,7 @@ pub fn render(
             ) in commands.iter().enumerate().skip(min_z.saturating_sub(1)) {
                 let z = command_i + 1;
 
-                let (clip_rect, x_range) = calc_clip_rect!(rect);
+                let clip_rect = calc_clip_rect!(rect);
 
                 let w = clip::W::from(rect.w);
 
@@ -560,20 +524,23 @@ pub fn render(
 
                 let src_w = GFX_WIDTH as usize;
 
-                let mut src_i = sprite_y * src_w + sprite_x;
-                let mut y_remaining = multiplier;
+                let mut y_iter_count = 0;
                 for y in clip_rect.y {
-                    let mut x_remaining = multiplier;
+                    let mut x_iter_count = 0;
                     for x in clip_rect.x.clone() {
                         if cell_clip_rect.contains(x, y)
                         {
                             let d_i = usize::from(y)
-                            * usize::from(d_w)
+                            * usize::from(unscaled::WIDTH)
                             + usize::from(x);
 
-                            if d_i < frame_buffer.buffer.len()
-                            && z >= frame_buffer.z_buffer[d_i]
+                            if d_i < frame_buffer.unscaled_buffer.len()
+                            && z >= frame_buffer.unscaled_z_buffer[d_i]
                             {
+                                let src_i =
+                                    (sprite_y + y_iter_count) * src_w
+                                    + (sprite_x + x_iter_count);
+
                                 let mut gfx_colour: ARGB = GFX[src_i];
                                 let is_full_alpha = gfx_colour >= 0xFF00_0000;
                                 if is_full_alpha
@@ -598,7 +565,7 @@ pub fn render(
                                     f * f
                                 }
 
-                                let under = frame_buffer.buffer[d_i];
+                                let under = frame_buffer.unscaled_buffer[d_i];
 
                                 // `_g` for gfx.
                                 let a_g = ((gfx_colour >> 24) & 255) as u8;
@@ -639,33 +606,52 @@ pub fn render(
                                     | (ARGB::from(g_o) <<  8)
                                     | (ARGB::from(b_o)      );
 
-                                frame_buffer.buffer[d_i] = output;
+                                frame_buffer.unscaled_buffer[d_i] = output;
                             }
                         }
 
-                        advance!(src_i, x_remaining);
+                        x_iter_count += 1;
                     }
 
-                    // If we would have went off the edge, advance `src_i`
-                    // as if we actually drew past the edge.
-                    for _ in clip_rect.x.end..x_range.end {
-                        advance!(src_i, x_remaining);
-                    }
-
-                    // Go back to the beginning of the row.
-                    src_i -= usize::from(w);
-
-                    y_remaining -= 1;
-                    if y_remaining == 0 {
-                        y_remaining = multiplier;
-                        src_i += src_w;
-                    }
+                    y_iter_count += 1;
                 }
             }
         }
     }
 
-    frame_buffer.cells.swap();
+    let mut src_i = 0;
+    let mut y_remaining = multiplier;
+    for y in outer_clip_rect.y {
+        let mut x_remaining = multiplier;
+
+        let src_w = GFX_WIDTH as usize;
+
+        for x in outer_clip_rect.x.clone() {
+            let d_i = usize::from(y)
+            * usize::from(frame_buffer.width)
+            + usize::from(x);
+
+            if d_i < frame_buffer.unscaled_buffer.len() {
+                frame_buffer.buffer[d_i] =
+                    frame_buffer.unscaled_buffer[src_i];
+            }
+
+            x_remaining -= 1;
+            if x_remaining == 0 {
+                src_i += 1;
+                x_remaining = multiplier;
+            }
+        }
+
+        // Go back to the beginning of the row.
+        src_i -= usize::from(unscaled::WIDTH);
+
+        y_remaining -= 1;
+        if y_remaining == 0 {
+            y_remaining = multiplier;
+            src_i += src_w;
+        }
+    }
 
     output
 }
