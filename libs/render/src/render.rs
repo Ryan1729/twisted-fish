@@ -376,262 +376,274 @@ pub fn render(
         frame_buffer.unscaled_buffer[i] = colours::BLACK;
     }
 
-    for i in 0..frame_buffer.unscaled_z_buffer.len() {
-        frame_buffer.unscaled_z_buffer[i] = 0;
-    }
+    //for i in 0..frame_buffer.unscaled_z_buffer.len() {
+        //frame_buffer.unscaled_z_buffer[i] = 0;
+    //}
+//
+    //let unscaled_cells_size = core::cmp::max(
+        //unscaled::WIDTH / clip::W::from(CELLS_W),
+        //unscaled::HEIGHT / clip::H::from(CELLS_H),
+    //);
+    //for cell_y in 0..CELLS_H {
+        //for cell_x in 0..CELLS_W {
+            //// TODO Re-enable checking each indiviual cell's hash here and skipping
+            //// rendering unchanged cells
+//
+            //let cell_x = clip::X::from(cell_x);
+            //let cell_y = clip::Y::from(cell_y);
+            //let cell_clip_rect = clip::Rect {
+                //x: cell_x * unscaled_cells_size..(cell_x + 1) * unscaled_cells_size,
+                //y: cell_y * unscaled_cells_size..(cell_y + 1) * unscaled_cells_size,
+            //};
+//
+            //macro_rules! calc_clip_rect {
+                //($rect: ident) => ({
+                    //let Rect {
+                        //x: d_x,
+                        //y: d_y,
+                        //w,
+                        //h,
+                    //} = $rect;
+//
+                    //let d_x = clip::X::from(d_x);
+                    //let d_y = clip::Y::from(d_y);
+                    //let w = clip::W::from(w);
+                    //let h = clip::H::from(h);
+//
+                    //let d_x_max = d_x + w;
+                    //let d_y_max = d_y + h;
+//
+                    //let mut clip_rect = clip::Rect {
+                        //x: d_x..d_x_max,
+                        //y: d_y..d_y_max,
+                    //};
+//
+                    //clip::to(&mut clip_rect, &outer_clip_rect);
+//
+                    //clip_rect
+                //})
+            //}
+//
+            //for (
+                //command_i,
+                //&Command {
+                    //sprite_xy: (sprite_x, sprite_y),
+                    //colour_override,
+                    //rect,
+                //}
+            //) in commands.iter().enumerate() {
+                //let z = command_i + 1;
+//
+                //let clip_rect = calc_clip_rect!(rect);
+//
+                //let w = clip::W::from(rect.w);
+//
+                //let sprite_x = usize::from(sprite_x);
+                //let sprite_y = usize::from(sprite_y);
+//
+                //let src_w = GFX_WIDTH as usize;
+//
+                //let mut y_iter_count = 0;
+                //for y in clip_rect.y {
+                    //let mut x_iter_count = 0;
+                    //for x in clip_rect.x.clone() {
+                        //if cell_clip_rect.contains(x, y)
+                        //{
+                            //let d_i = usize::from(y)
+                            //* usize::from(unscaled::WIDTH)
+                            //+ usize::from(x);
+//
+                            //if d_i < frame_buffer.unscaled_z_buffer.len() {
+                                //let src_i =
+                                    //(sprite_y + y_iter_count) * src_w
+                                    //+ (sprite_x + x_iter_count);
+//
+                                //let mut gfx_colour: ARGB = GFX[src_i];
+                                //let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                                //if is_full_alpha
+                                //// is not fully transparent
+                                //&& colour_override > 0x00FF_FFFF
+                                //{
+                                    //gfx_colour = colour_override;
+                                //}
+//
+                                //// If a pixel is fully opaque, then we
+                                //// can ignore all the pixels beneath it, so
+                                //// we set the z value. If it is at all
+                                //// transparent then we need to render
+                                //// whatever is behind it. So we do not set
+                                //// the z value.
+                                //if is_full_alpha {
+                                    //frame_buffer.unscaled_z_buffer[d_i] = z;
+                                //}
+                            //}
+                        //}
+//
+                        //x_iter_count += 1;
+                    //}
+//
+                    //y_iter_count += 1;
+                //}
+            //}
+//
+            //// The minimum z of the whole cell. If a given command's z is below this
+            //// value, then we can skip that entire command, for this cell.
+            //let mut min_z = Z::MAX;
+//
+            //for y in cell_clip_rect.y.clone() {
+                //for x in cell_clip_rect.x.clone() {
+                    //let d_i = usize::from(y)
+                    //* usize::from(unscaled::WIDTH)
+                    //+ usize::from(x);
+//
+                    //if d_i < frame_buffer.unscaled_z_buffer.len() {
+                        //min_z = core::cmp::min(
+                            //min_z,
+                            //frame_buffer.unscaled_z_buffer[d_i]
+                        //);
+                    //}
+                //}
+            //}
+//
+            //for (
+                //command_i,
+                //&Command {
+                    //sprite_xy: (sprite_x, sprite_y),
+                    //colour_override,
+                    //rect,
+                //}
+            //) in commands.iter().enumerate().skip(min_z.saturating_sub(1)) {
+                //let z = command_i + 1;
+//
+                //let clip_rect = calc_clip_rect!(rect);
+//
+                //let w = clip::W::from(rect.w);
+//
+                //let sprite_x = usize::from(sprite_x);
+                //let sprite_y = usize::from(sprite_y);
+//
+                //let src_w = GFX_WIDTH as usize;
+//
+                //let mut y_iter_count = 0;
+                //for y in clip_rect.y {
+                    //let mut x_iter_count = 0;
+                    //for x in clip_rect.x.clone() {
+                        //if cell_clip_rect.contains(x, y)
+                        //{
+                            //let d_i = usize::from(y)
+                            //* usize::from(unscaled::WIDTH)
+                            //+ usize::from(x);
+//
+                            //if d_i < frame_buffer.unscaled_buffer.len()
+                            //&& z >= frame_buffer.unscaled_z_buffer[d_i]
+                            //{
+                                //let src_i =
+                                    //(sprite_y + y_iter_count) * src_w
+                                    //+ (sprite_x + x_iter_count);
+//
+                                //let mut gfx_colour: ARGB = GFX[src_i];
+                                //let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                                //if is_full_alpha
+                                //// is not fully transparent
+                                //&& colour_override > 0x00FF_FFFF
+                                //{
+                                    //gfx_colour = colour_override;
+                                //}
+//
+                                //fn f32_to_u8(x: f32) -> u8 {
+                                    //// This saturates instead of being UB
+                                    //// as of rust 1.45.0
+                                    //x as u8
+                                //}
+                                //// Interprets 1.0 as full bright.
+                                //fn linear_to_gamma(x: f32) -> u8 {
+                                    //f32_to_u8(255. * x.sqrt())
+                                //}
+//
+                                //fn gamma_to_linear(x: u8) -> f32 {
+                                    //let f = (x as f32)/255.;
+                                    //f * f
+                                //}
+//
+                                //let under = frame_buffer.unscaled_buffer[d_i];
+//
+                                //// `_g` for gfx.
+                                //let a_g = ((gfx_colour >> 24) & 255) as u8;
+                                //let r_g = ((gfx_colour >> 16) & 255) as u8;
+                                //let g_g = ((gfx_colour >>  8) & 255) as u8;
+                                //let b_g = ((gfx_colour      ) & 255) as u8;
+//
+                                //// `_u` for under.
+                                //let a_u = ((under >> 24) & 255) as u8;
+                                //let r_u = ((under >> 16) & 255) as u8;
+                                //let g_u = ((under >>  8) & 255) as u8;
+                                //let b_u = ((under      ) & 255) as u8;
+//
+                                //let a_g = gamma_to_linear(a_g);
+                                //let r_g = gamma_to_linear(r_g);
+                                //let g_g = gamma_to_linear(g_g);
+                                //let b_g = gamma_to_linear(b_g);
+//
+                                //let a_u = gamma_to_linear(a_u);
+                                //let r_u = gamma_to_linear(r_u);
+                                //let g_u = gamma_to_linear(g_u);
+                                //let b_u = gamma_to_linear(b_u);
+//
+                                //// `_o` for output.
+                                //let a_o = a_g + a_u * (1. - a_g);
+                                //let r_o = (r_g * a_g + r_u * (1. - a_g)) / a_o;
+                                //let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
+                                //let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
+//
+                                //let a_o = linear_to_gamma(a_o);
+                                //let r_o = linear_to_gamma(r_o);
+                                //let g_o = linear_to_gamma(g_o);
+                                //let b_o = linear_to_gamma(b_o);
+//
+                                //let output =
+                                      //(ARGB::from(a_o) << 24)
+                                    //| (ARGB::from(r_o) << 16)
+                                    //| (ARGB::from(g_o) <<  8)
+                                    //| (ARGB::from(b_o)      );
+//
+                                //frame_buffer.unscaled_buffer[d_i] = output;
+                            //}
+                        //}
+//
+                        //x_iter_count += 1;
+                    //}
+//
+                    //y_iter_count += 1;
+                //}
+            //}
+        //}
+    //}
+//
+    let mut b = false;
+    for i in 0..frame_buffer.unscaled_buffer.len() {
+        if b {
+            frame_buffer.unscaled_buffer[i] = colours::GREEN;
+        }
 
-    let unscaled_cells_size = core::cmp::max(
-        unscaled::WIDTH / clip::W::from(CELLS_W),
-        unscaled::HEIGHT / clip::H::from(CELLS_H),
-    );
-    for cell_y in 0..CELLS_H {
-        for cell_x in 0..CELLS_W {
-            // TODO Re-enable checking each indiviual cell's hash here and skipping
-            // rendering unchanged cells
-
-            let cell_x = clip::X::from(cell_x);
-            let cell_y = clip::Y::from(cell_y);
-            let cell_clip_rect = clip::Rect {
-                x: cell_x * unscaled_cells_size..(cell_x + 1) * unscaled_cells_size,
-                y: cell_y * unscaled_cells_size..(cell_y + 1) * unscaled_cells_size,
-            };
-
-            macro_rules! calc_clip_rect {
-                ($rect: ident) => ({
-                    let Rect {
-                        x: d_x,
-                        y: d_y,
-                        w,
-                        h,
-                    } = $rect;
-
-                    let d_x = clip::X::from(d_x);
-                    let d_y = clip::Y::from(d_y);
-                    let w = clip::W::from(w);
-                    let h = clip::H::from(h);
-
-                    let d_x_max = d_x + w;
-                    let d_y_max = d_y + h;
-
-                    let mut clip_rect = clip::Rect {
-                        x: d_x..d_x_max,
-                        y: d_y..d_y_max,
-                    };
-
-                    clip::to(&mut clip_rect, &outer_clip_rect);
-
-                    clip_rect
-                })
-            }
-
-            for (
-                command_i,
-                &Command {
-                    sprite_xy: (sprite_x, sprite_y),
-                    colour_override,
-                    rect,
-                }
-            ) in commands.iter().enumerate() {
-                let z = command_i + 1;
-
-                let clip_rect = calc_clip_rect!(rect);
-
-                let w = clip::W::from(rect.w);
-
-                let sprite_x = usize::from(sprite_x);
-                let sprite_y = usize::from(sprite_y);
-
-                let src_w = GFX_WIDTH as usize;
-
-                let mut y_iter_count = 0;
-                for y in clip_rect.y {
-                    let mut x_iter_count = 0;
-                    for x in clip_rect.x.clone() {
-                        if cell_clip_rect.contains(x, y)
-                        {
-                            let d_i = usize::from(y)
-                            * usize::from(unscaled::WIDTH)
-                            + usize::from(x);
-
-                            if d_i < frame_buffer.unscaled_z_buffer.len() {
-                                let src_i =
-                                    (sprite_y + y_iter_count) * src_w
-                                    + (sprite_x + x_iter_count);
-
-                                let mut gfx_colour: ARGB = GFX[src_i];
-                                let is_full_alpha = gfx_colour >= 0xFF00_0000;
-                                if is_full_alpha
-                                // is not fully transparent
-                                && colour_override > 0x00FF_FFFF
-                                {
-                                    gfx_colour = colour_override;
-                                }
-
-                                // If a pixel is fully opaque, then we
-                                // can ignore all the pixels beneath it, so
-                                // we set the z value. If it is at all
-                                // transparent then we need to render
-                                // whatever is behind it. So we do not set
-                                // the z value.
-                                if is_full_alpha {
-                                    frame_buffer.unscaled_z_buffer[d_i] = z;
-                                }
-                            }
-                        }
-
-                        x_iter_count += 1;
-                    }
-
-                    y_iter_count += 1;
-                }
-            }
-
-            // The minimum z of the whole cell. If a given command's z is below this
-            // value, then we can skip that entire command, for this cell.
-            let mut min_z = Z::MAX;
-
-            for y in cell_clip_rect.y.clone() {
-                for x in cell_clip_rect.x.clone() {
-                    let d_i = usize::from(y)
-                    * usize::from(unscaled::WIDTH)
-                    + usize::from(x);
-
-                    if d_i < frame_buffer.unscaled_z_buffer.len() {
-                        min_z = core::cmp::min(
-                            min_z,
-                            frame_buffer.unscaled_z_buffer[d_i]
-                        );
-                    }
-                }
-            }
-
-            for (
-                command_i,
-                &Command {
-                    sprite_xy: (sprite_x, sprite_y),
-                    colour_override,
-                    rect,
-                }
-            ) in commands.iter().enumerate().skip(min_z.saturating_sub(1)) {
-                let z = command_i + 1;
-
-                let clip_rect = calc_clip_rect!(rect);
-
-                let w = clip::W::from(rect.w);
-
-                let sprite_x = usize::from(sprite_x);
-                let sprite_y = usize::from(sprite_y);
-
-                let src_w = GFX_WIDTH as usize;
-
-                let mut y_iter_count = 0;
-                for y in clip_rect.y {
-                    let mut x_iter_count = 0;
-                    for x in clip_rect.x.clone() {
-                        if cell_clip_rect.contains(x, y)
-                        {
-                            let d_i = usize::from(y)
-                            * usize::from(unscaled::WIDTH)
-                            + usize::from(x);
-
-                            if d_i < frame_buffer.unscaled_buffer.len()
-                            && z >= frame_buffer.unscaled_z_buffer[d_i]
-                            {
-                                let src_i =
-                                    (sprite_y + y_iter_count) * src_w
-                                    + (sprite_x + x_iter_count);
-
-                                let mut gfx_colour: ARGB = GFX[src_i];
-                                let is_full_alpha = gfx_colour >= 0xFF00_0000;
-                                if is_full_alpha
-                                // is not fully transparent
-                                && colour_override > 0x00FF_FFFF
-                                {
-                                    gfx_colour = colour_override;
-                                }
-
-                                fn f32_to_u8(x: f32) -> u8 {
-                                    // This saturates instead of being UB
-                                    // as of rust 1.45.0
-                                    x as u8
-                                }
-                                // Interprets 1.0 as full bright.
-                                fn linear_to_gamma(x: f32) -> u8 {
-                                    f32_to_u8(255. * x.sqrt())
-                                }
-
-                                fn gamma_to_linear(x: u8) -> f32 {
-                                    let f = (x as f32)/255.;
-                                    f * f
-                                }
-
-                                let under = frame_buffer.unscaled_buffer[d_i];
-
-                                // `_g` for gfx.
-                                let a_g = ((gfx_colour >> 24) & 255) as u8;
-                                let r_g = ((gfx_colour >> 16) & 255) as u8;
-                                let g_g = ((gfx_colour >>  8) & 255) as u8;
-                                let b_g = ((gfx_colour      ) & 255) as u8;
-
-                                // `_u` for under.
-                                let a_u = ((under >> 24) & 255) as u8;
-                                let r_u = ((under >> 16) & 255) as u8;
-                                let g_u = ((under >>  8) & 255) as u8;
-                                let b_u = ((under      ) & 255) as u8;
-
-                                let a_g = gamma_to_linear(a_g);
-                                let r_g = gamma_to_linear(r_g);
-                                let g_g = gamma_to_linear(g_g);
-                                let b_g = gamma_to_linear(b_g);
-
-                                let a_u = gamma_to_linear(a_u);
-                                let r_u = gamma_to_linear(r_u);
-                                let g_u = gamma_to_linear(g_u);
-                                let b_u = gamma_to_linear(b_u);
-
-                                // `_o` for output.
-                                let a_o = a_g + a_u * (1. - a_g);
-                                let r_o = (r_g * a_g + r_u * (1. - a_g)) / a_o;
-                                let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
-                                let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
-
-                                let a_o = linear_to_gamma(a_o);
-                                let r_o = linear_to_gamma(r_o);
-                                let g_o = linear_to_gamma(g_o);
-                                let b_o = linear_to_gamma(b_o);
-
-                                let output =
-                                      (ARGB::from(a_o) << 24)
-                                    | (ARGB::from(r_o) << 16)
-                                    | (ARGB::from(g_o) <<  8)
-                                    | (ARGB::from(b_o)      );
-
-                                frame_buffer.unscaled_buffer[d_i] = output;
-                            }
-                        }
-
-                        x_iter_count += 1;
-                    }
-
-                    y_iter_count += 1;
-                }
-            }
+        if i % 480 != 0 {
+            b = !b;
         }
     }
 
     let mut src_i = 0;
+    let mut src_i_row_start = src_i;
     let mut y_remaining = multiplier;
     for y in outer_clip_rect.y {
         let mut x_remaining = multiplier;
 
-        let src_w = GFX_WIDTH as usize;
+        src_i_row_start = src_i;
 
         for x in outer_clip_rect.x.clone() {
             let d_i = usize::from(y)
             * usize::from(frame_buffer.width)
             + usize::from(x);
 
-            if d_i < frame_buffer.unscaled_buffer.len() {
+            if d_i < frame_buffer.buffer.len() {
                 frame_buffer.buffer[d_i] =
                     frame_buffer.unscaled_buffer[src_i];
             }
@@ -643,12 +655,12 @@ pub fn render(
             }
         }
 
-        // Go back to the beginning of the row.
-        src_i -= usize::from(unscaled::WIDTH);
+        src_i = src_i_row_start;
 
         y_remaining -= 1;
         if y_remaining == 0 {
             y_remaining = multiplier;
+            let src_w = usize::from(unscaled::WIDTH);
             src_i += src_w;
         }
     }
