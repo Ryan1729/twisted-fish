@@ -361,11 +361,6 @@ pub fn render(
         return output;
     }
 
-    // Hopefully this compiles to something not inefficent
-    for i in 0..frame_buffer.unscaled_z_buffer.len() {
-        frame_buffer.unscaled_z_buffer[i] = 0;
-    }
-
     for cell_y in 0..CELLS_H {
         for cell_x in 0..CELLS_W {
             let cell_i = usize::from(cell_y)
@@ -391,6 +386,7 @@ pub fn render(
                         + usize::from(x);
                     if d_i < frame_buffer.unscaled_buffer.len() {
                         frame_buffer.unscaled_buffer[d_i] = colours::BLACK;
+                        frame_buffer.unscaled_z_buffer[d_i] = 0;
                     }
                 }
             }
