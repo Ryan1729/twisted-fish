@@ -173,7 +173,6 @@ impl HashCells {
         commands: &[Command],
         (w, h): (u16, u16),
         cells_size: u16,
-        multiplier: u16,
     ) {
         let cells = self.current_mut();
         *cells = [<_>::default(); CELLS_LENGTH];
@@ -190,16 +189,15 @@ impl HashCells {
 
         for command in commands {
             let mut hash = <_>::default();
-            hash::u16(&mut hash, multiplier);
             hash::u16(&mut hash, cells_size);
             hash::command(&mut hash, command);
 
             // update hash of overlapping cells
             let r = &command.rect;
-            let r_x = clip::X::from(r.x) * multiplier;
-            let r_y = clip::Y::from(r.y) * multiplier;
-            let r_w = clip::W::from(r.w) * multiplier;
-            let r_h = clip::H::from(r.h) * multiplier;
+            let r_x = clip::X::from(r.x);
+            let r_y = clip::Y::from(r.y);
+            let r_w = clip::W::from(r.w);
+            let r_h = clip::H::from(r.h);
 
             for y in r_y / cells_size..=(r_y + r_h) / cells_size {
                 for x in r_x / cells_size..=(r_x + r_w) / cells_size {
@@ -227,9 +225,9 @@ mod reset_then_hash_commands_around_a_swap_produces_identical_current_and_prev_c
     fn on_the_empty_slice() {
         let mut h_c = HashCells::default();
 
-        h_c.reset_then_hash_commands(&[], (CELLS_W.into(), CELLS_H.into()), 1, 1);
+        h_c.reset_then_hash_commands(&[], (CELLS_W.into(), CELLS_H.into()), 1);
         h_c.swap();
-        h_c.reset_then_hash_commands(&[], (CELLS_W.into(), CELLS_H.into()), 1, 1);
+        h_c.reset_then_hash_commands(&[], (CELLS_W.into(), CELLS_H.into()), 1);
 
         let (current, prev) = h_c.current_and_prev();
 
@@ -250,9 +248,9 @@ mod reset_then_hash_commands_around_a_swap_produces_identical_current_and_prev_c
             kind: Kind::Colour(0),
         }];
 
-        h_c.reset_then_hash_commands(commands, (CELLS_W.into(), CELLS_H.into()), 1, 1);
+        h_c.reset_then_hash_commands(commands, (CELLS_W.into(), CELLS_H.into()), 1);
         h_c.swap();
-        h_c.reset_then_hash_commands(commands, (CELLS_W.into(), CELLS_H.into()), 1, 1);
+        h_c.reset_then_hash_commands(commands, (CELLS_W.into(), CELLS_H.into()), 1);
 
         let (current, prev) = h_c.current_and_prev();
 
@@ -327,11 +325,15 @@ pub fn render(
     //   Render once with expanded cell_clip_rect
     //   Mark the rendered cells as false, keep scanning.
 
+    let unscaled_cells_size = core::cmp::max(
+        unscaled::WIDTH / clip::W::from(CELLS_W),
+        unscaled::HEIGHT / clip::H::from(CELLS_H),
+    );
+
     frame_buffer.cells.reset_then_hash_commands(
         commands,
         (frame_buffer.width, frame_buffer.height),
-        cells_size,
-        multiplier
+        unscaled_cells_size
     );
 
     let expected_length = usize::from(frame_buffer.width)
@@ -353,31 +355,26 @@ pub fn render(
         }
         output = NeedsRedraw::Yes;
     }
-    // TODO Move this below unscaled render loop, once we start checking the hash 
-    // there again.
-    frame_buffer.cells.swap();
 
     if let NeedsRedraw::No = output {
+        frame_buffer.cells.swap();
         return output;
     }
 
     // Hopefully this compiles to something not inefficent
-    for i in 0..frame_buffer.unscaled_buffer.len() {
-        frame_buffer.unscaled_buffer[i] = colours::BLACK;
-    }
-
     for i in 0..frame_buffer.unscaled_z_buffer.len() {
         frame_buffer.unscaled_z_buffer[i] = 0;
     }
 
-    let unscaled_cells_size = core::cmp::max(
-        unscaled::WIDTH / clip::W::from(CELLS_W),
-        unscaled::HEIGHT / clip::H::from(CELLS_H),
-    );
     for cell_y in 0..CELLS_H {
         for cell_x in 0..CELLS_W {
-            // TODO Re-enable checking each indiviual cell's hash here and skipping
-            // rendering unchanged cells
+            let cell_i = usize::from(cell_y)
+            * usize::from(CELLS_W)
+            + usize::from(cell_x);
+
+            if cells[cell_i] == cells_prev[cell_i] {
+                continue
+            }
 
             let cell_x = clip::X::from(cell_x);
             let cell_y = clip::Y::from(cell_y);
@@ -385,6 +382,18 @@ pub fn render(
                 x: cell_x * unscaled_cells_size..(cell_x + 1) * unscaled_cells_size,
                 y: cell_y * unscaled_cells_size..(cell_y + 1) * unscaled_cells_size,
             };
+
+            // Hopefully this compiles to something not inefficent
+            for y in cell_clip_rect.y.clone() {
+                for x in cell_clip_rect.x.clone() {
+                    let d_i = usize::from(y)
+                        * usize::from(unscaled::WIDTH)
+                        + usize::from(x);
+                    if d_i < frame_buffer.unscaled_buffer.len() {
+                        frame_buffer.unscaled_buffer[d_i] = colours::BLACK;
+                    }
+                }
+            }
 
             macro_rules! calc_clip_rect {
                 ($rect: ident) => ({
@@ -642,6 +651,8 @@ pub fn render(
             src_i += src_w;
         }
     }
+
+    frame_buffer.cells.swap();
 
     output
 }
