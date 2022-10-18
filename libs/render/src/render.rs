@@ -37,16 +37,6 @@ pub mod clip {
             && y < self.y.end
         }
     }
-
-    pub fn to(clipped: &mut Rect, clipper: &Rect) {
-        use core::cmp::{max, min};
-
-        clipped.x = max(clipped.x.start, clipper.x.start)
-            ..min(clipped.x.end, clipper.x.end);
-
-        clipped.y = max(clipped.y.start, clipper.y.start)
-            ..min(clipped.y.end, clipper.y.end);
-    }
 }
 
 const CELLS_W: u8 = 4;
@@ -399,26 +389,24 @@ pub fn render(
             macro_rules! calc_clip_rect {
                 ($rect: ident) => ({
                     let Rect {
-                        x: d_x,
-                        y: d_y,
+                        x,
+                        y,
                         w,
                         h,
                     } = $rect;
 
-                    let d_x = clip::X::from(d_x);
-                    let d_y = clip::Y::from(d_y);
+                    let x = clip::X::from(x);
+                    let y = clip::Y::from(y);
                     let w = clip::W::from(w);
                     let h = clip::H::from(h);
 
-                    let d_x_max = d_x + w;
-                    let d_y_max = d_y + h;
+                    let x_max = x + w;
+                    let y_max = y + h;
 
                     let mut clip_rect = clip::Rect {
-                        x: d_x..d_x_max,
-                        y: d_y..d_y_max,
+                        x: x..x_max,
+                        y: y..y_max,
                     };
-
-                    clip::to(&mut clip_rect, &outer_clip_rect);
 
                     clip_rect
                 })
