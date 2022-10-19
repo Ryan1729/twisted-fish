@@ -43,6 +43,9 @@ pub fn run<S: State + 'static>(mut state: S) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut loop_helper = spin_sleep::LoopHelper::builder()
             .build_with_target_rate(60.0);
+    let mut dropped_frames: u64 = 0;
+    // Permit the first frame to be slow.
+    let mut used_freebie = false;
 
     let mut just_gained_focus = true;
 
@@ -125,8 +128,22 @@ pub fn run<S: State + 'static>(mut state: S) {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     if let Some(fps) = loop_helper.report_rate() {
-                        let window = graphics_context.window();
-                        window.set_title(&format!("{fps:.0} FPS"))
+                        // Common consumer OSs themselves don't guarentee 60 FPS
+                        // exactly, and this seems to be as accurate as spin_sleep
+                        // gets us, even without rendering anything.
+                        if fps < 59.9 {
+                            if used_freebie {
+                                dropped_frames += 1;
+                                dbg!(fps);
+                            } else {
+                                used_freebie = true;
+                            }
+                        }
+
+                        if dropped_frames > 0 {
+                            let window = graphics_context.window();
+                            window.set_title(&format!("{fps:.0} FPS. dropped {dropped_frames}"));
+                        }
                     }
                     loop_helper.loop_sleep();
                     loop_helper.loop_start();
