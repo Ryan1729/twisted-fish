@@ -268,9 +268,6 @@ pub fn render(
     frame_buffer: &mut FrameBuffer,
     commands: &[Command],
 ) -> NeedsRedraw {
-    use std::time::Instant;
-    let start = Instant::now();
-
     let mut output = NeedsRedraw::No;
 
     // The dimensions the commands are written in terms of.
@@ -351,7 +348,6 @@ pub fn render(
         }
     }
 
-    let after_setup = Instant::now();
     let (cells, cells_prev) = frame_buffer.cells.current_and_prev();
     for cell_i in 0..CELLS_LENGTH {
         if cells[cell_i] == cells_prev[cell_i] {
@@ -364,8 +360,6 @@ pub fn render(
         frame_buffer.cells.swap();
         return output;
     }
-
-    let after_hashing = Instant::now();
 
     for cell_y in 0..CELLS_H {
         for cell_x in 0..CELLS_W {
@@ -618,7 +612,6 @@ pub fn render(
         }
     }
 
-    let after_unscaled_render = Instant::now();
 
     let mut src_i = 0;
     let mut src_i_row_start = src_i;
@@ -656,25 +649,6 @@ pub fn render(
     }
 
     frame_buffer.cells.swap();
-
-    let after_upscaling = Instant::now();
-
-    let setup_ms = after_setup.duration_since(start).as_millis();
-    let hashing_ms = after_hashing.duration_since(after_setup).as_millis();
-    let unscaled_render_ms = after_unscaled_render.duration_since(after_hashing).as_millis();
-    let upscaling_ms = after_upscaling.duration_since(after_unscaled_render).as_millis();
-    if setup_ms != 0 
-    || hashing_ms != 0 
-    || unscaled_render_ms != 0 
-    || upscaling_ms != 0 {
-        println!(
-            "setup {} ms\nhashing {} ms\nunscaled_render {}ms\nupscaling {} ms",
-            setup_ms,
-            hashing_ms,
-            unscaled_render_ms,
-            upscaling_ms,
-        );
-    }
 
     output
 }
