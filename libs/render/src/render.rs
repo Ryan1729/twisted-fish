@@ -449,10 +449,9 @@ pub fn render(
                     while x < clip_rect.x.end {
                         let mut should_write = [false; wide::WIDTH as usize];
                         for i in 0..wide::WIDTH {
-                            if cell_clip_rect.contains(x + i, y)
-                            && x + i < clip_rect.x.end {
-                                should_write[i as usize] = true;
-                            }
+                            should_write[i as usize] =
+                                cell_clip_rect.contains(x + i, y)
+                                && x + i < clip_rect.x.end;
                         }
 
                         for i in 0usize..wide::WIDTH as usize {
@@ -542,10 +541,9 @@ pub fn render(
                     while x < clip_rect.x.end {
                         let mut should_write = [false; wide::WIDTH as usize];
                         for i in 0..wide::WIDTH {
-                            if cell_clip_rect.contains(x + i, y)
-                            && x + i < clip_rect.x.end {
-                                should_write[i as usize] = true;
-                            }
+                            should_write[i as usize] =
+                                cell_clip_rect.contains(x + i, y)
+                                && x + i < clip_rect.x.end;
                         }
 
                         for i in 0usize..wide::WIDTH as usize {
