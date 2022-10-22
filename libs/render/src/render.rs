@@ -459,12 +459,12 @@ pub fn render(
                             {
                                 let d_i = usize::from(y)
                                 * usize::from(unscaled::WIDTH)
-                                + usize::from(x);
+                                + usize::from(x) + i;
 
                                 if d_i < frame_buffer.unscaled_z_buffer.len() {
                                     let src_i =
                                         (sprite_y + y_iter_count) * src_w
-                                        + (sprite_x + x_iter_count);
+                                        + (sprite_x + x_iter_count + i);
 
                                     let mut gfx_colour: ARGB = GFX[src_i];
                                     let is_full_alpha = gfx_colour >= 0xFF00_0000;
@@ -486,9 +486,9 @@ pub fn render(
                                     }
                                 }
                             }
-                            x_iter_count += 1;
-                            x += 1;
                         }
+                        x_iter_count += wide::WIDTH as usize;
+                        x += wide::WIDTH;
                     }
 
                     y_iter_count += 1;
@@ -551,14 +551,14 @@ pub fn render(
                             {
                                 let d_i = usize::from(y)
                                 * usize::from(unscaled::WIDTH)
-                                + usize::from(x);
+                                + usize::from(x) + i;
 
                                 if d_i < frame_buffer.unscaled_buffer.len()
                                 && z >= frame_buffer.unscaled_z_buffer[d_i]
                                 {
                                     let src_i =
                                         (sprite_y + y_iter_count) * src_w
-                                        + (sprite_x + x_iter_count);
+                                        + (sprite_x + x_iter_count + i);
 
                                     let mut gfx_colour: ARGB = GFX[src_i];
                                     let is_full_alpha = gfx_colour >= 0xFF00_0000;
@@ -628,9 +628,9 @@ pub fn render(
                                     frame_buffer.unscaled_buffer[d_i] = output;
                                 }
                             }
-                            x_iter_count += 1;
-                            x += 1;
                         }
+                        x_iter_count += wide::WIDTH as usize;
+                        x += wide::WIDTH;
                     }
 
                     y_iter_count += 1;
