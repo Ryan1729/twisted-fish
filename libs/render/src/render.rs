@@ -448,42 +448,45 @@ pub fn render(
 
                     while x < clip_rect.x.end {
                         let mut should_write = [false; wide::WIDTH as usize];
+                        let mut dest_indices = [0; wide::WIDTH as usize];
                         for i in 0..wide::WIDTH {
+                            let i_usize = i as usize;
+                            dest_indices[i_usize] = usize::from(y)
+                                * usize::from(unscaled::WIDTH)
+                                + usize::from(x) + i_usize;
+
                             should_write[i as usize] =
                                 cell_clip_rect.contains(x + i, y)
-                                && x + i < clip_rect.x.end;
+                                && x + i < clip_rect.x.end
+                                && dest_indices[i_usize] < frame_buffer.unscaled_z_buffer.len();
                         }
 
                         for i in 0usize..wide::WIDTH as usize {
                             if should_write[i]
                             {
-                                let d_i = usize::from(y)
-                                * usize::from(unscaled::WIDTH)
-                                + usize::from(x) + i;
+                                let src_i =
+                                    (sprite_y + y_iter_count) * src_w
+                                    + (sprite_x + x_iter_count + i);
 
-                                if d_i < frame_buffer.unscaled_z_buffer.len() {
-                                    let src_i =
-                                        (sprite_y + y_iter_count) * src_w
-                                        + (sprite_x + x_iter_count + i);
+                                let mut gfx_colour: ARGB = GFX[src_i];
+                                let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                                if is_full_alpha
+                                // is not fully transparent
+                                && colour_override > 0x00FF_FFFF
+                                {
+                                    gfx_colour = colour_override;
+                                }
 
-                                    let mut gfx_colour: ARGB = GFX[src_i];
-                                    let is_full_alpha = gfx_colour >= 0xFF00_0000;
-                                    if is_full_alpha
-                                    // is not fully transparent
-                                    && colour_override > 0x00FF_FFFF
-                                    {
-                                        gfx_colour = colour_override;
-                                    }
-
-                                    // If a pixel is fully opaque, then we
-                                    // can ignore all the pixels beneath it, so
-                                    // we set the z value. If it is at all
-                                    // transparent then we need to render
-                                    // whatever is behind it. So we do not set
-                                    // the z value.
-                                    if is_full_alpha {
-                                        frame_buffer.unscaled_z_buffer[d_i] = z;
-                                    }
+                                // If a pixel is fully opaque, then we
+                                // can ignore all the pixels beneath it, so
+                                // we set the z value. If it is at all
+                                // transparent then we need to render
+                                // whatever is behind it. So we do not set
+                                // the z value.
+                                if is_full_alpha {
+                                    frame_buffer.unscaled_z_buffer[
+                                        dest_indices[i]
+                                    ] = z;
                                 }
                             }
                         }
@@ -540,93 +543,96 @@ pub fn render(
 
                     while x < clip_rect.x.end {
                         let mut should_write = [false; wide::WIDTH as usize];
+                        let mut dest_indices = [0; wide::WIDTH as usize];
                         for i in 0..wide::WIDTH {
-                            should_write[i as usize] =
+                            let i_usize = i as usize;
+                            dest_indices[i_usize] = usize::from(y)
+                                * usize::from(unscaled::WIDTH)
+                                + usize::from(x) + i_usize;
+
+                            should_write[i_usize] =
                                 cell_clip_rect.contains(x + i, y)
-                                && x + i < clip_rect.x.end;
+                                && x + i < clip_rect.x.end
+                                && dest_indices[i_usize] < frame_buffer.unscaled_buffer.len()
+                                && z >= frame_buffer.unscaled_z_buffer[dest_indices[i_usize]];
                         }
 
                         for i in 0usize..wide::WIDTH as usize {
                             if should_write[i]
                             {
-                                let d_i = usize::from(y)
-                                * usize::from(unscaled::WIDTH)
-                                + usize::from(x) + i;
+                                let src_i =
+                                    (sprite_y + y_iter_count) * src_w
+                                    + (sprite_x + x_iter_count + i);
 
-                                if d_i < frame_buffer.unscaled_buffer.len()
-                                && z >= frame_buffer.unscaled_z_buffer[d_i]
+                                let mut gfx_colour: ARGB = GFX[src_i];
+                                let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                                if is_full_alpha
+                                // is not fully transparent
+                                && colour_override > 0x00FF_FFFF
                                 {
-                                    let src_i =
-                                        (sprite_y + y_iter_count) * src_w
-                                        + (sprite_x + x_iter_count + i);
-
-                                    let mut gfx_colour: ARGB = GFX[src_i];
-                                    let is_full_alpha = gfx_colour >= 0xFF00_0000;
-                                    if is_full_alpha
-                                    // is not fully transparent
-                                    && colour_override > 0x00FF_FFFF
-                                    {
-                                        gfx_colour = colour_override;
-                                    }
-
-                                    fn f32_to_u8(x: f32) -> u8 {
-                                        // This saturates instead of being UB
-                                        // as of rust 1.45.0
-                                        x as u8
-                                    }
-                                    // Interprets 1.0 as full bright.
-                                    fn linear_to_gamma(x: f32) -> u8 {
-                                        f32_to_u8(255. * x.sqrt())
-                                    }
-
-                                    fn gamma_to_linear(x: u8) -> f32 {
-                                        let f = (x as f32)/255.;
-                                        f * f
-                                    }
-
-                                    let under = frame_buffer.unscaled_buffer[d_i];
-
-                                    // `_g` for gfx.
-                                    let a_g = ((gfx_colour >> 24) & 255) as u8;
-                                    let r_g = ((gfx_colour >> 16) & 255) as u8;
-                                    let g_g = ((gfx_colour >>  8) & 255) as u8;
-                                    let b_g = ((gfx_colour      ) & 255) as u8;
-
-                                    // `_u` for under.
-                                    let a_u = ((under >> 24) & 255) as u8;
-                                    let r_u = ((under >> 16) & 255) as u8;
-                                    let g_u = ((under >>  8) & 255) as u8;
-                                    let b_u = ((under      ) & 255) as u8;
-
-                                    let a_g = gamma_to_linear(a_g);
-                                    let r_g = gamma_to_linear(r_g);
-                                    let g_g = gamma_to_linear(g_g);
-                                    let b_g = gamma_to_linear(b_g);
-
-                                    let a_u = gamma_to_linear(a_u);
-                                    let r_u = gamma_to_linear(r_u);
-                                    let g_u = gamma_to_linear(g_u);
-                                    let b_u = gamma_to_linear(b_u);
-
-                                    // `_o` for output.
-                                    let a_o = a_g + a_u * (1. - a_g);
-                                    let r_o = (r_g * a_g + r_u * (1. - a_g)) / a_o;
-                                    let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
-                                    let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
-
-                                    let a_o = linear_to_gamma(a_o);
-                                    let r_o = linear_to_gamma(r_o);
-                                    let g_o = linear_to_gamma(g_o);
-                                    let b_o = linear_to_gamma(b_o);
-
-                                    let output =
-                                          (ARGB::from(a_o) << 24)
-                                        | (ARGB::from(r_o) << 16)
-                                        | (ARGB::from(g_o) <<  8)
-                                        | (ARGB::from(b_o)      );
-
-                                    frame_buffer.unscaled_buffer[d_i] = output;
+                                    gfx_colour = colour_override;
                                 }
+
+                                fn f32_to_u8(x: f32) -> u8 {
+                                    // This saturates instead of being UB
+                                    // as of rust 1.45.0
+                                    x as u8
+                                }
+                                // Interprets 1.0 as full bright.
+                                fn linear_to_gamma(x: f32) -> u8 {
+                                    f32_to_u8(255. * x.sqrt())
+                                }
+
+                                fn gamma_to_linear(x: u8) -> f32 {
+                                    let f = (x as f32)/255.;
+                                    f * f
+                                }
+
+                                let under = frame_buffer.unscaled_buffer[
+                                    dest_indices[i]
+                                ];
+
+                                // `_g` for gfx.
+                                let a_g = ((gfx_colour >> 24) & 255) as u8;
+                                let r_g = ((gfx_colour >> 16) & 255) as u8;
+                                let g_g = ((gfx_colour >>  8) & 255) as u8;
+                                let b_g = ((gfx_colour      ) & 255) as u8;
+
+                                // `_u` for under.
+                                let a_u = ((under >> 24) & 255) as u8;
+                                let r_u = ((under >> 16) & 255) as u8;
+                                let g_u = ((under >>  8) & 255) as u8;
+                                let b_u = ((under      ) & 255) as u8;
+
+                                let a_g = gamma_to_linear(a_g);
+                                let r_g = gamma_to_linear(r_g);
+                                let g_g = gamma_to_linear(g_g);
+                                let b_g = gamma_to_linear(b_g);
+
+                                let a_u = gamma_to_linear(a_u);
+                                let r_u = gamma_to_linear(r_u);
+                                let g_u = gamma_to_linear(g_u);
+                                let b_u = gamma_to_linear(b_u);
+
+                                // `_o` for output.
+                                let a_o = a_g + a_u * (1. - a_g);
+                                let r_o = (r_g * a_g + r_u * (1. - a_g)) / a_o;
+                                let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
+                                let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
+
+                                let a_o = linear_to_gamma(a_o);
+                                let r_o = linear_to_gamma(r_o);
+                                let g_o = linear_to_gamma(g_o);
+                                let b_o = linear_to_gamma(b_o);
+
+                                let output =
+                                      (ARGB::from(a_o) << 24)
+                                    | (ARGB::from(r_o) << 16)
+                                    | (ARGB::from(g_o) <<  8)
+                                    | (ARGB::from(b_o)      );
+
+                                frame_buffer.unscaled_buffer[dest_indices[i]]
+                                    = output;
                             }
                         }
                         x_iter_count += wide::WIDTH as usize;
