@@ -349,7 +349,7 @@ pub mod command {
     pub struct Y(unscaled::Y);
 
     impl Y {
-        pub const MAX: Y = Y(unscaled::Y(WIDTH - 1));
+        pub const MAX: Y = Y(unscaled::Y(HEIGHT - 1));
 
         pub const fn get(self) -> unscaled::Y {
             self.0
