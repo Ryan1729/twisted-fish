@@ -212,8 +212,8 @@ Ryan Wiedemann (Ryan1729 on github)
                     line,
                     unscaled::X(CHAR_SPACING as _),
                     unscaled::Y(0)
-                    + y * CHAR_ADVANCE_H
-                    + CHAR_SPACING_H,
+                    + y * CHAR_ADVANCE_H.get()
+                    + CHAR_SPACING_H.get(),
                     0 // No override
                 );
             }

@@ -6,20 +6,11 @@ pub type ARGB = u32;
 pub mod unscaled {
     ///! Values are in pixels.
 
-    use xs::Xs;
-
     pub type Inner = u16;
 
     pub const fn inner_from_u8(byte: u8) -> Inner {
         byte as Inner
     }
-
-    // Small enough to fit on pretty much any reasonable device, at an aspect ratio
-    // of 3:2 (1.5), which is a compromise between 4:3 (1.33...) and 16:9 (1.788...).
-    pub const WIDTH: Inner = 480;
-    pub const HEIGHT: Inner = 320;
-
-    pub const LENGTH: usize = WIDTH as usize * HEIGHT as usize;
 
     macro_rules! def {
         ($($name: ident, $inner_name: ident)+) => {$(
@@ -46,21 +37,6 @@ pub mod unscaled {
         Y, YInner
         W, WInner
         H, HInner
-    }
-
-    pub const WIDTH_W: W = W(WIDTH);
-    pub const HEIGHT_H: H = H(HEIGHT);
-
-    impl X {
-        pub fn gen(rng: &mut Xs) -> X {
-            X(xs::range(rng, 0..WIDTH as _) as XInner)
-        }
-    }
-
-    impl Y {
-        pub fn gen(rng: &mut Xs) -> Y {
-            Y(xs::range(rng, 0..HEIGHT as _) as YInner)
-        }
     }
 
     pub const fn w_to_usize(w: W) -> usize {
@@ -251,13 +227,13 @@ pub const GFX_HEIGHT: u16 = 1024;
 pub const GFX_LENGTH: usize = GFX_WIDTH as usize * GFX_HEIGHT as usize;
 
 pub const CHAR_WIDTH: u8 = 5;
-pub const CHAR_W: unscaled::W = unscaled::W(CHAR_WIDTH as _);
+pub const CHAR_W: command::W = command::W::clipped(unscaled::W(CHAR_WIDTH as _));
 
 const CHAR_ASC: u8 = 2;
 const CHAR_LOWERCASE_H: u8 = 5;
 const CHAR_DESC: u8 = 2;
 pub const CHAR_HEIGHT: u8 = CHAR_ASC + CHAR_LOWERCASE_H + CHAR_DESC;
-pub const CHAR_H: unscaled::H = unscaled::H(CHAR_HEIGHT as _);
+pub const CHAR_H: command::H = command::H::clipped(unscaled::H(CHAR_HEIGHT as _));
 
 const FONT_WIDTH_IN_CHARS: u8 = 16;
 const FONT_HEIGHT_IN_CHARS: u8 = 16;
@@ -326,12 +302,292 @@ pub mod sprite {
     pub type XY = (X, Y);
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Command {
-    pub rect: unscaled::Rect,
-    pub sprite_xy: sprite::XY,
-    pub colour_override: ARGB,
+pub mod command {
+    use xs::Xs;
+    use super::{ARGB, sprite, unscaled};
+
+    pub type Inner = unscaled::Inner;
+
+    // Small enough to fit on pretty much any reasonable device, at an aspect ratio
+    // of 3:2 (1.5), which is a compromise between 4:3 (1.33...) and 16:9 (1.788...).
+    pub const WIDTH: Inner = 480;
+    pub const HEIGHT: Inner = 320;
+
+    pub const LENGTH: usize = WIDTH as usize * HEIGHT as usize;
+
+    pub const WIDTH_W: unscaled::W = unscaled::W(WIDTH);
+    pub const HEIGHT_H: unscaled::H = unscaled::H(HEIGHT);
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct X(unscaled::X);
+
+    impl X {
+        pub const MAX: X = X(unscaled::X(WIDTH - 1));
+
+        pub const fn get(self) -> unscaled::X {
+            self.0
+        }
+
+        pub const fn clipped(x: unscaled::X) -> X {
+            if x.0 < X::MAX.0.0 {
+                X(x)
+            } else {
+                X::MAX
+            }
+        }
+
+        pub const fn clipped_inner(x: Inner) -> X {
+            X::clipped(unscaled::X(x))
+        }
+
+        pub fn gen(rng: &mut Xs) -> X {
+            X::clipped(unscaled::X(xs::range(rng, 0..WIDTH as _) as Inner))
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Y(unscaled::Y);
+
+    impl Y {
+        pub const MAX: Y = Y(unscaled::Y(WIDTH - 1));
+
+        pub const fn get(self) -> unscaled::Y {
+            self.0
+        }
+
+        pub const fn clipped(y: unscaled::Y) -> Y {
+            if y.0 < Y::MAX.0.0 {
+                Y(y)
+            } else {
+                Y::MAX
+            }
+        }
+
+        pub const fn clipped_inner(y: Inner) -> Y {
+            Y::clipped(unscaled::Y(y))
+        }
+
+        pub fn gen(rng: &mut Xs) -> Y {
+            Y::clipped(unscaled::Y(xs::range(rng, 0..WIDTH as _) as Inner))
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct W(unscaled::W);
+
+    impl W {
+        pub const MAX: W = W(unscaled::W(WIDTH - 1));
+
+        pub const fn get(self) -> unscaled::W {
+            self.0
+        }
+
+        pub const fn clipped(w: unscaled::W) -> W {
+            if w.0 < W::MAX.0.0 {
+                W(w)
+            } else {
+                W::MAX
+            }
+        }
+
+        pub const fn clipped_inner(w: Inner) -> W {
+            W::clipped(unscaled::W(w))
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct H(unscaled::H);
+
+    impl H {
+        pub const MAX: H = H(unscaled::H(WIDTH - 1));
+
+        pub const fn get(self) -> unscaled::H {
+            self.0
+        }
+
+        pub const fn clipped(h: unscaled::H) -> H {
+            if h.0 < H::MAX.0.0 {
+                H(h)
+            } else {
+                H::MAX
+            }
+        }
+
+        pub const fn clipped_inner(h: Inner) -> H {
+            H::clipped(unscaled::H(h))
+        }
+    }
+
+    pub const fn w_to_usize(w: W) -> usize {
+        w.0.0 as usize
+    }
+
+    pub const fn h_to_usize(h: H) -> usize {
+        h.0.0 as usize
+    }
+
+    pub const fn w_const_add(a: W, b: W) -> W {
+        W::clipped_inner(a.0.0 + b.0.0)
+    }
+
+    pub const fn w_const_sub(a: W, b: W) -> W {
+        W::clipped_inner(a.0.0 - b.0.0)
+    }
+
+    pub const fn w_const_mul(a: W, b: Inner) -> W {
+        W::clipped_inner(a.0.0 * b)
+    }
+
+    pub const fn w_const_div(a: W, b: Inner) -> W {
+        W::clipped_inner(a.0.0 / b)
+    }
+
+    pub const fn h_const_add(a: H, b: H) -> H {
+        H::clipped_inner(a.0.0 + b.0.0)
+    }
+
+    pub const fn h_const_sub(a: H, b: H) -> H {
+        H::clipped_inner(a.0.0 - b.0.0)
+    }
+
+    pub const fn h_const_mul(a: H, b: Inner) -> H {
+        H::clipped_inner(a.0.0 * b)
+    }
+
+    pub const fn h_const_div(a: H, b: Inner) -> H {
+        H::clipped_inner(a.0.0 / b)
+    }
+
+    impl From<X> for usize {
+        fn from(x: X) -> Self {
+            x.0.0.into()
+        }
+    }
+
+    impl From<Y> for usize {
+        fn from(y: Y) -> Self {
+            y.0.0.into()
+        }
+    }
+
+    impl From<X> for Inner {
+        fn from(to_convert: X) -> Inner {
+            to_convert.0.0
+        }
+    }
+
+    impl From<Y> for Inner {
+        fn from(to_convert: Y) -> Inner {
+            to_convert.0.0
+        }
+    }
+
+    impl From<W> for Inner {
+        fn from(to_convert: W) -> Inner {
+            to_convert.0.0
+        }
+    }
+
+    impl From<H> for Inner {
+        fn from(to_convert: H) -> Inner {
+            to_convert.0.0
+        }
+    }
+
+    impl core::ops::AddAssign<W> for X {
+        fn add_assign(&mut self, other: W) {
+            *self = Self::clipped(self.0 + other.0);
+        }
+    }
+
+    impl core::ops::Add<W> for X {
+        type Output = Self;
+
+        fn add(mut self, other: W) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::AddAssign<H> for Y {
+        fn add_assign(&mut self, other: H) {
+            *self = Self::clipped(self.0 + other.0);
+        }
+    }
+
+    impl core::ops::Add<H> for Y {
+        type Output = Self;
+
+        fn add(mut self, other: H) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::MulAssign<Inner> for W {
+        fn mul_assign(&mut self, inner: Inner) {
+            *self = Self::clipped(self.0 * inner);
+        }
+    }
+
+    impl core::ops::Mul<Inner> for W {
+        type Output = Self;
+
+        fn mul(mut self, inner: Inner) -> Self::Output {
+            self *= inner;
+            self
+        }
+    }
+
+    impl core::ops::Mul<W> for Inner {
+        type Output = W;
+
+        fn mul(self, mut w: W) -> Self::Output {
+            w *= self;
+            w
+        }
+    }
+
+    impl core::ops::MulAssign<Inner> for H {
+        fn mul_assign(&mut self, inner: Inner) {
+            *self = Self::clipped(self.0 * inner);
+        }
+    }
+
+    impl core::ops::Mul<Inner> for H {
+        type Output = Self;
+
+        fn mul(mut self, inner: Inner) -> Self::Output {
+            self *= inner;
+            self
+        }
+    }
+
+    impl core::ops::Mul<H> for Inner {
+        type Output = H;
+
+        fn mul(self, mut h: H) -> Self::Output {
+            h *= self;
+            h
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Rect {
+        pub x: X,
+        pub y: Y,
+        pub w: W,
+        pub h: H,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Command {
+        pub rect: Rect,
+        pub sprite_xy: sprite::XY,
+        pub colour_override: ARGB,
+    }    
 }
+pub use command::Command;
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Input {

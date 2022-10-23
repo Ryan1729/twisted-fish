@@ -1,6 +1,6 @@
 use models::{Card, get_rank, get_suit, get_zinger, ranks, suits, zingers};
 
-use platform_types::{ARGB, Command, PaletteIndex, sprite, unscaled::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
+use platform_types::{ARGB, Command, PaletteIndex, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
 
 #[derive(Default)]
 pub struct Commands {
@@ -19,7 +19,7 @@ impl Commands {
     pub fn sspr(
         &mut self,
         sprite_xy: sprite::XY,
-        rect: unscaled::Rect,
+        rect: command::Rect,
     ) {
         self.commands.push(
             Command {
@@ -39,7 +39,10 @@ impl Commands {
     ) {
         let sprite_xy = {
             const SPRITES_PER_ROW: u8 = FONT_WIDTH / CHAR_WIDTH;
-            const FONT_OFFSET: sprite::H = unscaled::h_const_mul(card::IMAGE_H, models::RANK_COUNT as _);
+            const FONT_OFFSET: sprite::H = unscaled::h_const_mul(
+                card::IMAGE_H.get(),
+                models::RANK_COUNT as _
+            );
 
             (
                 sprite::X(Into::into(
@@ -54,8 +57,8 @@ impl Commands {
         self.commands.push(
             Command {
                 rect: Rect {
-                    x,
-                    y,
+                    x: command::X::clipped(x),
+                    y: command::Y::clipped(y),
                     w: CHAR_W,
                     h: CHAR_H,
                 },
@@ -74,7 +77,7 @@ impl Commands {
     ) {
         for &c in bytes.iter() {
             self.print_char(c, x, y, colour);
-            x += CHAR_ADVANCE_W;
+            x += CHAR_ADVANCE_W.get();
         }
     }
 
@@ -92,12 +95,12 @@ impl Commands {
             (
                 card::BACKING_SPRITE_X,
                 card::BACKING_SPRITE_BASE_Y
-                + card::HEIGHT
+                + card::HEIGHT.get()
                 * sprite::Inner::from(card / models::RANK_COUNT)
             ),
             Rect {
-                x,
-                y,
+                x: command::X::clipped(x),
+                y: command::Y::clipped(y),
                 w: card::WIDTH,
                 h: card::HEIGHT,
             }
@@ -106,18 +109,18 @@ impl Commands {
         let image_x = match suit_opt {
             Some(suit) => card::IMAGE_BASE_X
                 + unscaled::Inner::from(suit)
-                * card::IMAGE_W,
+                * card::IMAGE_W.get(),
             None => card::ZINGER_IMAGE_X,
         };
 
         let image_y = match rank_opt {
             Some(rank) => card::IMAGE_BASE_Y
                 + unscaled::Inner::from(rank)
-                * card::IMAGE_H,
+                * card::IMAGE_H.get(),
             None => match zinger_opt {
                 Some(zinger) => card::IMAGE_BASE_Y
                 + unscaled::Inner::from(zinger)
-                * card::IMAGE_H,
+                * card::IMAGE_H.get(),
                 None => {
                     debug_assert!(false, "No suit or zinger for card: {card}");
                     card::IMAGE_BASE_Y
@@ -128,8 +131,8 @@ impl Commands {
         self.sspr(
             (image_x, image_y),
             Rect {
-                x: x + card::IMAGE_W_OFFSET,
-                y: y + card::IMAGE_H_OFFSET,
+                x: command::X::clipped(x) + card::IMAGE_W_OFFSET,
+                y: command::Y::clipped(y) + card::IMAGE_H_OFFSET,
                 w: card::IMAGE_W,
                 h: card::IMAGE_H,
             }
@@ -440,14 +443,14 @@ impl Commands {
 
         self.print_line(
             line1,
-            x + card::LINE_W_OFFSET,
-            y + card::LINE_H_1_OFFSET,
+            x + card::LINE_W_OFFSET.get(),
+            y + card::LINE_H_1_OFFSET.get(),
             card::TEXT_COLOUR,
         );
         self.print_line(
             line2,
-            x + card::LINE_W_OFFSET,
-            y + card::LINE_H_2_OFFSET,
+            x + card::LINE_W_OFFSET.get(),
+            y + card::LINE_H_2_OFFSET.get(),
             card::TEXT_COLOUR,
         );
     }
@@ -456,14 +459,14 @@ impl Commands {
 pub mod card {
     use super::*;
 
-    use unscaled::{W, H, Inner, w_const_mul, h_const_add};
+    use command::{W, H, Inner, w_const_mul, h_const_add};
     use sprite::{x_const_add_w};
 
-    pub const WIDTH: W = W(74);
-    pub const HEIGHT: H = H(105);
+    pub const WIDTH: W = W::clipped_inner(74);
+    pub const HEIGHT: H = H::clipped_inner(105);
 
-    pub const IMAGE_W: W = W(72);
-    pub const IMAGE_H: H = H(72);
+    pub const IMAGE_W: W = W::clipped_inner(72);
+    pub const IMAGE_H: H = H::clipped_inner(72);
 
     pub const IMAGE_BASE_X: sprite::X = sprite::X(0);
     pub const IMAGE_BASE_Y: sprite::Y = sprite::Y(0);
@@ -471,21 +474,21 @@ pub mod card {
     pub const ZINGER_IMAGE_X: sprite::X =
         x_const_add_w(
             IMAGE_BASE_X,
-            w_const_mul(IMAGE_W, models::SUIT_COUNT as Inner)
+            w_const_mul(IMAGE_W, models::SUIT_COUNT as Inner).get()
         );
 
     pub const BACKING_SPRITE_X: sprite::X =
         x_const_add_w(
             ZINGER_IMAGE_X,
-            IMAGE_W
+            IMAGE_W.get()
         );
     pub const BACKING_SPRITE_BASE_Y: sprite::Y = sprite::Y(0);
 
     // TODO: refer to palette instead of hardcoding this.
     pub const TEXT_COLOUR: platform_types::ARGB = 0xFF222222;
 
-    pub const IMAGE_W_OFFSET: W = W(1);
-    pub const IMAGE_H_OFFSET: H = H(4);
+    pub const IMAGE_W_OFFSET: W = W::clipped_inner(1);
+    pub const IMAGE_H_OFFSET: H = H::clipped_inner(4);
 
     pub const LINE_W_OFFSET: W = CHAR_SPACING_W;
     pub const LINE_H_1_OFFSET: H = h_const_add(IMAGE_H_OFFSET, IMAGE_H);
@@ -500,22 +503,22 @@ pub const HEART_CHAR: u8 = 30;
 pub const SPADE_CHAR: u8 = 28;
 
 pub const CHAR_SPACING: u8 = 2;
-pub const CHAR_SPACING_W: unscaled::W = unscaled::W(CHAR_SPACING as _);
-pub const CHAR_SPACING_H: unscaled::H = unscaled::H(CHAR_SPACING as _);
+pub const CHAR_SPACING_W: command::W = command::W::clipped_inner(CHAR_SPACING as _);
+pub const CHAR_SPACING_H: command::H = command::H::clipped_inner(CHAR_SPACING as _);
 
 const CHAR_ADVANCE_WIDTH: unscaled::Inner =
     CHAR_WIDTH as unscaled::Inner
     + CHAR_SPACING as unscaled::Inner;
 
-pub const CHAR_ADVANCE_W: unscaled::W = unscaled::W(CHAR_ADVANCE_WIDTH);
+pub const CHAR_ADVANCE_W: command::W = command::W::clipped_inner(CHAR_ADVANCE_WIDTH);
 
-const CHAR_ADVANCE_HEIGHT: unscaled::Inner =
-    CHAR_HEIGHT as unscaled::Inner
-    + CHAR_SPACING as unscaled::Inner;
+const CHAR_ADVANCE_HEIGHT: command::Inner =
+    CHAR_HEIGHT as command::Inner
+    + CHAR_SPACING as command::Inner;
 
-pub const CHAR_ADVANCE_H: unscaled::H = unscaled::H(CHAR_ADVANCE_HEIGHT);
+pub const CHAR_ADVANCE_H: command::H = command::H::clipped_inner(CHAR_ADVANCE_HEIGHT);
 
 // TODO `CharCount` type?
-pub const WIDTH_IN_CHARS: unscaled::Inner =
-    unscaled::WIDTH
+pub const WIDTH_IN_CHARS: command::Inner =
+    command::WIDTH
     / CHAR_ADVANCE_WIDTH;

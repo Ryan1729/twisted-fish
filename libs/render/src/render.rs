@@ -3,7 +3,8 @@ use platform_types::{
     GFX_WIDTH,
     FONT_WIDTH,
     ARGB,
-    unscaled::{self, Rect},
+    unscaled,
+    command::{self, Rect},
 };
 
 use assets::{GFX, FONT, FONT_TRANSPARENT};
@@ -86,10 +87,10 @@ mod hash {
             colour_override,
         } = command;
 
-        u16(hash, x.get());
-        u16(hash, y.get());
-        u16(hash, w.get());
-        u16(hash, h.get());
+        u16(hash, x.get().get());
+        u16(hash, y.get().get());
+        u16(hash, w.get().get());
+        u16(hash, h.get().get());
 
         u16(hash, sprite_xy.0.0);
         u16(hash, sprite_xy.1.0);
@@ -117,8 +118,8 @@ type Z = usize;
 
 pub struct FrameBuffer {
     pub buffer: Vec<ARGB>,
-    pub unscaled_buffer: Box<[ARGB; unscaled::LENGTH]>,
-    pub unscaled_z_buffer: Box<[Z; unscaled::LENGTH]>,
+    pub unscaled_buffer: Box<[ARGB; command::LENGTH]>,
+    pub unscaled_z_buffer: Box<[Z; command::LENGTH]>,
     pub width: clip::W,
     pub height: clip::H,
     pub cells: HashCells,
@@ -130,8 +131,8 @@ impl FrameBuffer {
             buffer: Vec::with_capacity(
                 usize::from(width) * usize::from(height)
             ),
-            unscaled_buffer: Box::new([0; unscaled::LENGTH]),
-            unscaled_z_buffer: Box::new([0; unscaled::LENGTH]),
+            unscaled_buffer: Box::new([0; command::LENGTH]),
+            unscaled_z_buffer: Box::new([0; command::LENGTH]),
             width,
             height,
             cells: HashCells::default(),
@@ -358,8 +359,8 @@ pub fn render(
     let mut output = NeedsRedraw::No;
 
     // The dimensions the commands are written in terms of.
-    let src_w = unscaled::WIDTH;
-    let src_h = unscaled::HEIGHT;
+    let src_w = command::WIDTH;
+    let src_h = command::HEIGHT;
 
     if frame_buffer.width < src_w
     || frame_buffer.height < src_h {
@@ -413,8 +414,8 @@ pub fn render(
     //   Mark the rendered cells as false, keep scanning.
 
     let unscaled_cells_size = core::cmp::max(
-        unscaled::WIDTH / clip::W::from(CELLS_W),
-        unscaled::HEIGHT / clip::H::from(CELLS_H),
+        command::WIDTH / clip::W::from(CELLS_W),
+        command::HEIGHT / clip::H::from(CELLS_H),
     );
 
     frame_buffer.cells.reset_then_hash_commands(
@@ -469,7 +470,7 @@ pub fn render(
             for y in cell_clip_rect.y.clone() {
                 for x in cell_clip_rect.x.clone() {
                     let d_i = usize::from(y)
-                        * usize::from(unscaled::WIDTH)
+                        * usize::from(command::WIDTH)
                         + usize::from(x);
                     if d_i < frame_buffer.unscaled_buffer.len() {
                         frame_buffer.unscaled_buffer[d_i] = colours::BLACK;
@@ -534,7 +535,7 @@ pub fn render(
                         for i in 0..wide::WIDTH {
                             let i_usize = i as usize;
                             dest_indices[i_usize] = usize::from(y)
-                                * usize::from(unscaled::WIDTH)
+                                * usize::from(command::WIDTH)
                                 + usize::from(x) + i_usize;
 
                             should_write[i as usize] =
@@ -587,7 +588,7 @@ pub fn render(
             for y in cell_clip_rect.y.clone() {
                 for x in cell_clip_rect.x.clone() {
                     let d_i = usize::from(y)
-                    * usize::from(unscaled::WIDTH)
+                    * usize::from(command::WIDTH)
                     + usize::from(x);
 
                     if d_i < frame_buffer.unscaled_z_buffer.len() {
@@ -629,7 +630,7 @@ pub fn render(
                         for i in 0..wide::WIDTH {
                             let i_usize = i as usize;
                             dest_indices[i_usize] = usize::from(y)
-                                * usize::from(unscaled::WIDTH)
+                                * usize::from(command::WIDTH)
                                 + usize::from(x) + i_usize;
 
                             should_write[i_usize] =
@@ -802,7 +803,7 @@ pub fn render(
         y_remaining -= 1;
         if y_remaining == 0 {
             y_remaining = multiplier;
-            let src_w = usize::from(unscaled::WIDTH);
+            let src_w = usize::from(command::WIDTH);
             src_i += src_w;
         }
     }
