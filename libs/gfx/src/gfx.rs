@@ -56,12 +56,14 @@ impl Commands {
 
         self.commands.push(
             Command {
-                rect: Rect {
-                    x: command::X::clipped(x),
-                    y: command::Y::clipped(y),
-                    w: CHAR_W,
-                    h: CHAR_H,
-                },
+                rect: Rect::from_unscaled(
+                    unscaled::Rect {
+                        x,
+                        y,
+                        w: CHAR_W.get(),
+                        h: CHAR_H.get(),
+                    }
+                ),
                 sprite_xy,
                 colour_override,
             }
@@ -98,12 +100,12 @@ impl Commands {
                 + card::HEIGHT.get()
                 * sprite::Inner::from(card / models::RANK_COUNT)
             ),
-            Rect {
-                x: command::X::clipped(x),
-                y: command::Y::clipped(y),
-                w: card::WIDTH,
-                h: card::HEIGHT,
-            }
+            Rect::from_unscaled(unscaled::Rect {
+                x,
+                y,
+                w: card::WIDTH.get(),
+                h: card::HEIGHT.get(),
+            })
         );
 
         let image_x = match suit_opt {
@@ -130,12 +132,12 @@ impl Commands {
 
         self.sspr(
             (image_x, image_y),
-            Rect {
-                x: command::X::clipped(x) + card::IMAGE_W_OFFSET,
-                y: command::Y::clipped(y) + card::IMAGE_H_OFFSET,
-                w: card::IMAGE_W,
-                h: card::IMAGE_H,
-            }
+            Rect::from_unscaled(unscaled::Rect {
+                x: x + card::IMAGE_W_OFFSET.get(),
+                y: y + card::IMAGE_H_OFFSET.get(),
+                w: card::IMAGE_W.get(),
+                h: card::IMAGE_H.get(),
+            })
         );
 
         let (line1, line2) = match (suit_opt, rank_opt, zinger_opt) {

@@ -78,19 +78,19 @@ mod hash {
         // Pattern match so we get a compile error if the fields change.
         let &Command {
             rect: Rect {
-                x,
-                y,
-                w,
-                h,
+                x_min,
+                y_min,
+                x_max,
+                y_max,
             },
             sprite_xy,
             colour_override,
         } = command;
 
-        u16(hash, x.get().get());
-        u16(hash, y.get().get());
-        u16(hash, w.get().get());
-        u16(hash, h.get().get());
+        u16(hash, x_min.get().get());
+        u16(hash, y_min.get().get());
+        u16(hash, x_max.get().get());
+        u16(hash, y_max.get().get());
 
         u16(hash, sprite_xy.0.0);
         u16(hash, sprite_xy.1.0);
@@ -195,13 +195,13 @@ impl HashCells {
 
             // update hash of overlapping cells
             let r = &command.rect;
-            let r_x = clip::X::from(r.x);
-            let r_y = clip::Y::from(r.y);
-            let r_w = clip::W::from(r.w);
-            let r_h = clip::H::from(r.h);
+            let r_x_min = clip::X::from(r.x_min);
+            let r_y_min = clip::Y::from(r.y_min);
+            let r_x_max = clip::W::from(r.x_max);
+            let r_y_max = clip::H::from(r.y_max);
 
-            for y in r_y / cells_size..=(r_y + r_h) / cells_size {
-                for x in r_x / cells_size..=(r_x + r_w) / cells_size {
+            for y in r_y_min / cells_size..=(r_y_max + 1) / cells_size {
+                for x in r_x_min / cells_size..=(r_x_max + 1) / cells_size {
                     let i = usize::from(y)
                             * usize::from(CELLS_W)
                             + usize::from(x);
@@ -482,23 +482,20 @@ pub fn render(
             macro_rules! calc_clip_rect {
                 ($rect: ident) => ({
                     let Rect {
-                        x,
-                        y,
-                        w,
-                        h,
+                        x_min,
+                        y_min,
+                        x_max,
+                        y_max,
                     } = $rect;
 
-                    let x = clip::X::from(x);
-                    let y = clip::Y::from(y);
-                    let w = clip::W::from(w);
-                    let h = clip::H::from(h);
-
-                    let x_max = x + w;
-                    let y_max = y + h;
+                    let x_min = clip::X::from(x_min);
+                    let y_min = clip::Y::from(y_min);
+                    let x_max = clip::W::from(x_max);
+                    let y_max = clip::H::from(y_max);
 
                     let mut clip_rect = clip::Rect {
-                        x: x..x_max,
-                        y: y..y_max,
+                        x: x_min..(x_max + 1),
+                        y: y_min..(y_max + 1),
                     };
 
                     clip_rect
@@ -516,8 +513,6 @@ pub fn render(
                 let z = command_i + 1;
 
                 let clip_rect = calc_clip_rect!(rect);
-
-                let w = clip::W::from(rect.w);
 
                 let sprite_x = usize::from(sprite_x);
                 let sprite_y = usize::from(sprite_y);
@@ -611,8 +606,6 @@ pub fn render(
                 let z = command_i + 1;
 
                 let clip_rect = calc_clip_rect!(rect);
-
-                let w = clip::W::from(rect.w);
 
                 let sprite_x = usize::from(sprite_x);
                 let sprite_y = usize::from(sprite_y);

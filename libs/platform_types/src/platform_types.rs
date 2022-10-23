@@ -574,10 +574,28 @@ pub mod command {
 
     #[derive(Clone, Copy, Debug)]
     pub struct Rect {
-        pub x: X,
-        pub y: Y,
-        pub w: W,
-        pub h: H,
+        pub x_min: X,
+        pub y_min: Y,
+        pub x_max: X,
+        pub y_max: Y,
+    }
+
+    impl Rect {
+        pub fn from_unscaled(
+            unscaled::Rect {
+                x,
+                y,
+                w,
+                h,
+            }: unscaled::Rect
+        ) -> Rect {
+            Rect {
+                x_min: X::clipped(x),
+                y_min: Y::clipped(y),
+                x_max: X::clipped_inner((x + w).get() - 1),
+                y_max: Y::clipped_inner((y + h).get() - 1),
+            }
+        }
     }
 
     #[derive(Clone, Copy, Debug)]
