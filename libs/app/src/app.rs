@@ -199,7 +199,7 @@ https://datagoblin.itch.io/monogram
 Everything Else
 ----------------
 Ryan Wiedemann (Ryan1729 on github)
-";
+"; //TODO decide what to do about the accented characters above.
 
             for (y, line) in text::lines(HELP)
                 //.skip(self.top_index)

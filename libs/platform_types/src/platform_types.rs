@@ -15,7 +15,7 @@ pub mod unscaled {
     macro_rules! def {
         ($($name: ident, $inner_name: ident)+) => {$(
             pub type $inner_name = Inner;
-            #[derive(Copy, Clone, Default, Debug)]
+            #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
             pub struct $name(pub $inner_name);
 
             impl $name {
@@ -213,7 +213,7 @@ pub mod unscaled {
         }
     }
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct Rect {
         pub x: X,
         pub y: Y,
@@ -248,9 +248,9 @@ pub mod sprite {
     pub use super::unscaled::{W, H};
 
     pub type Inner = u16;
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct X(pub Inner);
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct Y(pub Inner);
 
     impl From<X> for usize {
@@ -318,7 +318,7 @@ pub mod command {
     pub const WIDTH_W: unscaled::W = unscaled::W(WIDTH);
     pub const HEIGHT_H: unscaled::H = unscaled::H(HEIGHT);
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct X(unscaled::X);
 
     impl X {
@@ -345,7 +345,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct Y(unscaled::Y);
 
     impl Y {
@@ -372,7 +372,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct W(unscaled::W);
 
     impl W {
@@ -395,7 +395,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct H(unscaled::H);
 
     impl H {

@@ -21,7 +21,7 @@ impl Commands {
         sprite_xy: sprite::XY,
         rect: command::Rect,
     ) {
-        self.commands.push(
+        self.push_command_if_useful(
             Command {
                 rect,
                 sprite_xy,
@@ -54,7 +54,7 @@ impl Commands {
             )
         };
 
-        self.commands.push(
+        self.push_command_if_useful(
             Command {
                 rect: Rect::from_unscaled(
                     unscaled::Rect {
@@ -455,6 +455,13 @@ impl Commands {
             y + card::LINE_H_2_OFFSET.get(),
             card::TEXT_COLOUR,
         );
+    }
+
+    fn push_command_if_useful(&mut self, command: Command) {
+        if command.rect.x_min != command.rect.x_max
+        && command.rect.y_min != command.rect.y_max {
+            self.commands.push(command);
+        }
     }
 }
 
