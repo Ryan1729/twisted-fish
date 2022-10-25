@@ -39,7 +39,7 @@ impl State {
             input: Input::default(),
             speaker: Speaker::default(),
             help_vis: HelpVis::default(),
-            top_index: 70//0,
+            top_index: 0,
         }
     }
 }
