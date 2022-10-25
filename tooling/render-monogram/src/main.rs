@@ -2,7 +2,10 @@ fn main() {
     let json = include_str!("../monogram-bitmap.json");
 
     const CHAR_W: u8 = 5;
+    #[cfg(not(feature = "some_accents"))]
     const CHAR_ASC: u8 = 2;
+    #[cfg(feature = "some_accents")]
+    const CHAR_ASC: u8 = 3;
     const CHAR_DESC: u8 = 2;
     const CHAR_H: u8 = CHAR_ASC + 5 + CHAR_DESC;
     const MAX_ROW_DIGITS: u8 = 2;
@@ -18,8 +21,10 @@ fn main() {
         SkippingCloseQuote,
         SkippingOpenQuote,
         OpenBracket(u8),
-        // We skip the first three rows because we only care about English right now.
+        // We skip the first n rows because we only care about certain characters 
+        // right now.
         FirstComma(u8),
+        #[allow(unused)]
         SecondComma(u8),
         ThirdComma(u8),
         RemainingDigits(u8, Chunks, u8),
@@ -34,6 +39,16 @@ fn main() {
     const OUTPUT_W: usize = CHAR_W as usize * OUTPUT_W_IN_CHARS;
     const OUTPUT_H: usize = CHAR_H as usize * OUTPUT_H_IN_CHARS;
 
+    #[cfg(not(feature = "some_accents"))]
+    fn is_desired(c: char) -> bool {
+        c.is_ascii()
+    }
+
+    #[cfg(feature = "some_accents")]
+    fn is_desired(c: char) -> bool {
+        c.is_ascii() || c == 'é' || c == 'í'
+    }
+
     let mut output = [0u8; OUTPUT_W * OUTPUT_H];
     let mut state = State::OpenQuote;
 
@@ -41,7 +56,7 @@ fn main() {
         state = match (state, json_char) {
             (OpenQuote, '"') => Char,
             (Char, '\\') => BackslashChar,
-            (Char | BackslashChar, c) if c.is_ascii() => CloseQuote(c as u8),
+            (Char | BackslashChar, c) if is_desired(c) => CloseQuote(c as u8),
             (Char | BackslashChar, _) => SkippingCloseQuote,
             (SkippingCloseQuote, '"') => SkippingOpenQuote,
             (SkippingOpenQuote, '"') => Char,
@@ -53,6 +68,9 @@ fn main() {
                 | ThirdComma(_),
                 ch
             ) if ch.is_ascii_digit() => state,
+            #[cfg(feature = "some_accents")]
+            (FirstComma(c), ',') => ThirdComma(c),
+            #[cfg(not(feature = "some_accents"))]
             (FirstComma(c), ',') => SecondComma(c),
             (SecondComma(c), ',') => ThirdComma(c),
             (ThirdComma(c), ',') => RemainingDigits(c, <_>::default(), 0),

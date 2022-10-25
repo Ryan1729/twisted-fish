@@ -11,3 +11,4 @@ image = { version = "0.24", optional = true }
 [features]
 default = []
 png_output = ["image"]
+some_accents = []
