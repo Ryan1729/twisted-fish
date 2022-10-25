@@ -1,6 +1,6 @@
 use game::Splat;
 use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
-use platform_types::{Button, Input, Speaker, SFX, unscaled};
+use platform_types::{Button, Input, Speaker, SFX, unscaled, command};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -15,7 +15,8 @@ pub struct State {
     commands: Commands,
     input: Input,
     speaker: Speaker,
-    help_vis: HelpVis
+    help_vis: HelpVis,
+    top_index: usize,
 }
 
 impl State {
@@ -38,6 +39,7 @@ impl State {
             input: Input::default(),
             speaker: Speaker::default(),
             help_vis: HelpVis::default(),
+            top_index: 70//0,
         }
     }
 }
@@ -64,7 +66,8 @@ impl platform_types::State for State {
         render(
             &mut self.commands,
             &self.game_state,
-            self.help_vis
+            self.help_vis,
+            self.top_index,
         );
 
         self.input.previous_gamepad = self.input.gamepad;
@@ -99,6 +102,7 @@ fn render(
     commands: &mut Commands,
     state: &game::State,
     help_vis: HelpVis,
+    top_index: usize,
 ) {
     match help_vis {
         HelpVis::Shown => {
@@ -199,11 +203,11 @@ https://datagoblin.itch.io/monogram
 Everything Else
 ----------------
 Ryan Wiedemann (Ryan1729 on github)
-"; //TODO decide what to do about the accented characters above.
+";
 
             for (y, line) in text::lines(HELP)
-                //.skip(self.top_index)
-                //.take(HEIGHT_IN_CHARS)
+                .skip(top_index)
+                .take(command::h_to_usize(command::HEIGHT * CHAR_ADVANCE_H))
                 .enumerate()
             {
                 let y = y as unscaled::Inner;

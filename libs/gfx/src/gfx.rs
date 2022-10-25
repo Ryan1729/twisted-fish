@@ -32,17 +32,32 @@ impl Commands {
 
     pub fn print_char(
         &mut self,
-        character: u8,
+        mut character: u8,
         x: unscaled::X,
-        y: unscaled::Y,
+        mut y: unscaled::Y,
         colour_override: ARGB
     ) {
+        const FONT_OFFSET: sprite::H = unscaled::h_const_mul(
+            card::IMAGE_H.get(),
+            models::RANK_COUNT as _
+        );
+        let mut font_offset = FONT_OFFSET;
+
+        let mut h = CHAR_H.get();
+        // If it's one of the accented characters ...
+        if character > 0xE0 {
+            // ... we want to shift back into the extras characters we stuffed into 
+            // the gfx where non-printables go, ...
+            character -= 0xD0;
+
+            // ... and we need an extra pixel for the accents
+            h += unscaled::H(1);
+            font_offset -= unscaled::H(1);
+            y = y.saturating_sub(unscaled::H(1));
+        }
+
         let sprite_xy = {
             const SPRITES_PER_ROW: u8 = FONT_WIDTH / CHAR_WIDTH;
-            const FONT_OFFSET: sprite::H = unscaled::h_const_mul(
-                card::IMAGE_H.get(),
-                models::RANK_COUNT as _
-            );
 
             (
                 sprite::X(Into::into(
@@ -50,7 +65,7 @@ impl Commands {
                 )),
                 sprite::Y(Into::into(
                     (character / SPRITES_PER_ROW) * CHAR_HEIGHT,
-                )) + FONT_OFFSET,
+                )) + font_offset,
             )
         };
 
@@ -61,7 +76,7 @@ impl Commands {
                         x,
                         y,
                         w: CHAR_W.get(),
-                        h: CHAR_H.get(),
+                        h,
                     }
                 ),
                 sprite_xy,
