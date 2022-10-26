@@ -248,9 +248,9 @@ pub mod sprite {
     pub use super::unscaled::{W, H};
 
     pub type Inner = u16;
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct X(pub Inner);
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct Y(pub Inner);
 
     impl From<X> for usize {
@@ -318,7 +318,7 @@ pub mod command {
     pub const WIDTH_W: unscaled::W = unscaled::W(WIDTH);
     pub const HEIGHT_H: unscaled::H = unscaled::H(HEIGHT);
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct X(unscaled::X);
 
     impl X {
@@ -345,7 +345,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct Y(unscaled::Y);
 
     impl Y {
@@ -372,7 +372,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct W(unscaled::W);
 
     impl W {
@@ -395,7 +395,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct H(unscaled::H);
 
     impl H {
@@ -572,7 +572,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, Default)]
     pub struct Rect {
         pub x_min: X,
         pub y_min: Y,
@@ -598,7 +598,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, Default)]
     pub struct Command {
         pub rect: Rect,
         pub sprite_xy: sprite::XY,
