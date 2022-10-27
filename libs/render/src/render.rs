@@ -759,12 +759,17 @@ pub fn render(
 
                         let mut rendered = under_array.clone();
 
-                        for i in 0usize..wide::WIDTH as usize {
-                            let src_i =
-                                (sprite_y + y_iter_count) * src_w
-                                + (sprite_x + x_iter_count + i);
+                        let base_src_i =
+                            (sprite_y + y_iter_count) * src_w
+                            + (sprite_x + x_iter_count);
 
-                            let mut gfx_colour: ARGB = GFX[src_i];
+                        let mut gfx_colour_a_array = [0; wide::WIDTH as usize];
+                        let mut gfx_colour_r_array = [0; wide::WIDTH as usize];
+                        let mut gfx_colour_g_array = [0; wide::WIDTH as usize];
+                        let mut gfx_colour_b_array = [0; wide::WIDTH as usize];
+
+                        for i in 0usize..wide::WIDTH as usize {
+                            let mut gfx_colour: ARGB = GFX[base_src_i + i];
                             let is_full_alpha = gfx_colour >= 0xFF00_0000;
                             if is_full_alpha
                             // is not fully transparent
@@ -773,6 +778,18 @@ pub fn render(
                                 gfx_colour = colour_override;
                             }
 
+                            gfx_colour_a_array[i] = ((gfx_colour >> 24) & 255) as u8;
+                            gfx_colour_r_array[i] = ((gfx_colour >> 16) & 255) as u8;
+                            gfx_colour_g_array[i] = ((gfx_colour >>  8) & 255) as u8;
+                            gfx_colour_b_array[i] = ((gfx_colour      ) & 255) as u8;
+                        }
+
+                        let mut rendered_a = [0; wide::WIDTH as usize];
+                        let mut rendered_r = [0; wide::WIDTH as usize];
+                        let mut rendered_g = [0; wide::WIDTH as usize];
+                        let mut rendered_b = [0; wide::WIDTH as usize];
+
+                        for i in 0usize..wide::WIDTH as usize {
                             fn f32_to_u8(x: f32) -> u8 {
                                 // This saturates instead of being UB
                                 // as of rust 1.45.0
@@ -788,12 +805,6 @@ pub fn render(
                                 f * f
                             }
 
-                            // `_g` for gfx.
-                            let a_g = ((gfx_colour >> 24) & 255) as u8;
-                            let r_g = ((gfx_colour >> 16) & 255) as u8;
-                            let g_g = ((gfx_colour >>  8) & 255) as u8;
-                            let b_g = ((gfx_colour      ) & 255) as u8;
-
                             let under = under_array[i];
 
                             // `_u` for under.
@@ -802,10 +813,10 @@ pub fn render(
                             let g_u = ((under >>  8) & 255) as u8;
                             let b_u = ((under      ) & 255) as u8;
 
-                            let a_g = gamma_to_linear(a_g);
-                            let r_g = gamma_to_linear(r_g);
-                            let g_g = gamma_to_linear(g_g);
-                            let b_g = gamma_to_linear(b_g);
+                            let a_g = gamma_to_linear(gfx_colour_a_array[i]);
+                            let r_g = gamma_to_linear(gfx_colour_r_array[i]);
+                            let g_g = gamma_to_linear(gfx_colour_g_array[i]);
+                            let b_g = gamma_to_linear(gfx_colour_b_array[i]);
 
                             let a_u = gamma_to_linear(a_u);
                             let r_u = gamma_to_linear(r_u);
@@ -818,16 +829,18 @@ pub fn render(
                             let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
                             let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
 
-                            let a_o = linear_to_gamma(a_o);
-                            let r_o = linear_to_gamma(r_o);
-                            let g_o = linear_to_gamma(g_o);
-                            let b_o = linear_to_gamma(b_o);
+                            rendered_a[i] = ARGB::from(linear_to_gamma(a_o));
+                            rendered_r[i] = ARGB::from(linear_to_gamma(r_o));
+                            rendered_g[i] = ARGB::from(linear_to_gamma(g_o));
+                            rendered_b[i] = ARGB::from(linear_to_gamma(b_o));
+                        }
 
+                        for i in 0usize..wide::WIDTH as usize {
                             rendered[i] =
-                                  (ARGB::from(a_o) << 24)
-                                | (ARGB::from(r_o) << 16)
-                                | (ARGB::from(g_o) <<  8)
-                                | (ARGB::from(b_o)      );
+                                  (rendered_a[i] << 24)
+                                | (rendered_r[i] << 16)
+                                | (rendered_g[i] <<  8)
+                                | (rendered_b[i]      );
                         }
 
                         // SAFETY: The pointers produced by the code generated by
