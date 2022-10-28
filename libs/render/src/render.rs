@@ -804,22 +804,17 @@ pub fn render(
                             gfx_colour_b_array[i] = ((gfx_colour      ) & 255) as u8;
                         }
 
+                        let mut o_a = [0.; wide::WIDTH as usize];
+                        let mut o_r = [0.; wide::WIDTH as usize];
+                        let mut o_g = [0.; wide::WIDTH as usize];
+                        let mut o_b = [0.; wide::WIDTH as usize];
+
                         let mut rendered_a = [0; wide::WIDTH as usize];
                         let mut rendered_r = [0; wide::WIDTH as usize];
                         let mut rendered_g = [0; wide::WIDTH as usize];
                         let mut rendered_b = [0; wide::WIDTH as usize];
 
                         for i in 0usize..wide::WIDTH as usize {
-                            fn f32_to_u8(x: f32) -> u8 {
-                                // This saturates instead of being UB
-                                // as of rust 1.45.0
-                                x as u8
-                            }
-                            // Interprets 1.0 as full bright.
-                            fn linear_to_gamma(x: f32) -> u8 {
-                                f32_to_u8(255. * x.sqrt())
-                            }
-
                             fn gamma_to_linear(x: u8) -> f32 {
                                 let f = (x as f32)/255.;
                                 f * f
@@ -843,16 +838,27 @@ pub fn render(
                             let g_u = gamma_to_linear(g_u);
                             let b_u = gamma_to_linear(b_u);
 
-                            // `_o` for output.
-                            let a_o = a_g + a_u * (1. - a_g);
-                            let r_o = (r_g * a_g + r_u * (1. - a_g)) / a_o;
-                            let g_o = (g_g * a_g + g_u * (1. - a_g)) / a_o;
-                            let b_o = (b_g * a_g + b_u * (1. - a_g)) / a_o;
+                            // `o` for output.
+                            o_a[i] = a_g + a_u * (1. - a_g);
+                            o_r[i] = (r_g * a_g + r_u * (1. - a_g)) / o_a[i];
+                            o_g[i] = (g_g * a_g + g_u * (1. - a_g)) / o_a[i];
+                            o_b[i] = (b_g * a_g + b_u * (1. - a_g)) / o_a[i];
+                        }
 
-                            rendered_a[i] = ARGB::from(linear_to_gamma(a_o));
-                            rendered_r[i] = ARGB::from(linear_to_gamma(r_o));
-                            rendered_g[i] = ARGB::from(linear_to_gamma(g_o));
-                            rendered_b[i] = ARGB::from(linear_to_gamma(b_o));
+                        for i in 0usize..wide::WIDTH as usize {
+                            fn f32_to_u8(x: f32) -> u8 {
+                                // This saturates instead of being UB
+                                // as of rust 1.45.0
+                                x as u8
+                            }
+                            // Interprets 1.0 as full bright.
+                            fn linear_to_gamma(x: f32) -> u8 {
+                                f32_to_u8(255. * x.sqrt())
+                            }
+                            rendered_a[i] = ARGB::from(linear_to_gamma(o_a[i]));
+                            rendered_r[i] = ARGB::from(linear_to_gamma(o_r[i]));
+                            rendered_g[i] = ARGB::from(linear_to_gamma(o_g[i]));
+                            rendered_b[i] = ARGB::from(linear_to_gamma(o_b[i]));
                         }
 
                         let rendered_a = unsafe {
