@@ -846,14 +846,14 @@ pub fn render(
                         }
 
                         for i in 0usize..wide::WIDTH as usize {
-                            fn f32_to_u8(x: f32) -> u8 {
+                            fn f32_to_ARGB(x: f32) -> ARGB {
                                 // This saturates instead of being UB
                                 // as of rust 1.45.0
-                                x as u8
+                                x as ARGB
                             }
                             // Interprets 1.0 as full bright.
-                            fn linear_to_gamma(x: f32) -> u8 {
-                                f32_to_u8(255. * x.sqrt())
+                            fn linear_to_gamma(x: f32) -> ARGB {
+                                f32_to_ARGB(255. * x.sqrt())
                             }
                             rendered_a[i] = ARGB::from(linear_to_gamma(o_a[i]));
                             rendered_r[i] = ARGB::from(linear_to_gamma(o_r[i]));
