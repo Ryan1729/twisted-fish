@@ -846,19 +846,10 @@ pub fn render(
                         }
 
                         for i in 0usize..wide::WIDTH as usize {
-                            fn f32_to_ARGB(x: f32) -> ARGB {
-                                // This saturates instead of being UB
-                                // as of rust 1.45.0
-                                x as ARGB
-                            }
-                            // Interprets 1.0 as full bright.
-                            fn linear_to_gamma(x: f32) -> ARGB {
-                                f32_to_ARGB(255. * x.sqrt())
-                            }
-                            rendered_a[i] = ARGB::from(linear_to_gamma(o_a[i]));
-                            rendered_r[i] = ARGB::from(linear_to_gamma(o_r[i]));
-                            rendered_g[i] = ARGB::from(linear_to_gamma(o_g[i]));
-                            rendered_b[i] = ARGB::from(linear_to_gamma(o_b[i]));
+                            rendered_a[i] = (255. * o_a[i].sqrt()) as ARGB;
+                            rendered_r[i] = (255. * o_r[i].sqrt()) as ARGB;
+                            rendered_g[i] = (255. * o_g[i].sqrt()) as ARGB;
+                            rendered_b[i] = (255. * o_b[i].sqrt()) as ARGB;
                         }
 
                         let rendered_a = unsafe {
