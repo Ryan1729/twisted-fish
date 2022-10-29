@@ -407,6 +407,90 @@ mod wide {
         });
     }
     pub use _left_shift_32 as left_shift_32;
+
+    #[macro_export]
+    macro_rules! _f32_to_u32 {
+        (
+            $a: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_cvtps_epi32($a)
+        });
+    }
+    pub use _f32_to_u32 as f32_to_u32;
+
+    #[macro_export]
+    macro_rules! _u32_to_f32 {
+        (
+            $a: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_cvtepi32_ps($a)
+        });
+    }
+    pub use _u32_to_f32 as u32_to_f32;
+
+    #[macro_export]
+    macro_rules! _f32 {
+        (
+            $a: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_set_ps1($a)
+        });
+    }
+    pub use _f32 as f32;
+
+    #[macro_export]
+    macro_rules! _add {
+        (
+            $a: expr,
+            $b: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_add_ps($a, $b)
+        });
+    }
+    pub use _add as add;
+
+    #[macro_export]
+    macro_rules! _sub {
+        (
+            $a: expr,
+            $b: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_sub_ps($a, $b)
+        });
+    }
+    pub use _sub as sub;
+
+    #[macro_export]
+    macro_rules! _mul {
+        (
+            $a: expr,
+            $b: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_mul_ps($a, $b)
+        });
+    }
+    pub use _mul as mul;
+
+    #[macro_export]
+    macro_rules! _div {
+        (
+            $a: expr,
+            $b: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_div_ps($a, $b)
+        });
+    }
+    pub use _div as div;
+
+    #[macro_export]
+    macro_rules! _sqrt {
+        (
+            $a: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_sqrt_ps($a)
+        });
+    }
+    pub use _sqrt as sqrt;
 }
 
 // TODO support wasm32
@@ -798,80 +882,197 @@ pub fn render(
                                 gfx_colour = colour_override;
                             }
 
-                            gfx_colour_a_array[i] = ((gfx_colour >> 24) & 255) as u8;
-                            gfx_colour_r_array[i] = ((gfx_colour >> 16) & 255) as u8;
-                            gfx_colour_g_array[i] = ((gfx_colour >>  8) & 255) as u8;
-                            gfx_colour_b_array[i] = ((gfx_colour      ) & 255) as u8;
+                            gfx_colour_a_array[i] = ARGB::from(((gfx_colour >> 24) & 255) as u8);
+                            gfx_colour_r_array[i] = ARGB::from(((gfx_colour >> 16) & 255) as u8);
+                            gfx_colour_g_array[i] = ARGB::from(((gfx_colour >>  8) & 255) as u8);
+                            gfx_colour_b_array[i] = ARGB::from(((gfx_colour      ) & 255) as u8);
                         }
 
-                        let mut o_a = [0.; wide::WIDTH as usize];
-                        let mut o_r = [0.; wide::WIDTH as usize];
-                        let mut o_g = [0.; wide::WIDTH as usize];
-                        let mut o_b = [0.; wide::WIDTH as usize];
-
-                        let mut rendered_a = [0; wide::WIDTH as usize];
-                        let mut rendered_r = [0; wide::WIDTH as usize];
-                        let mut rendered_g = [0; wide::WIDTH as usize];
-                        let mut rendered_b = [0; wide::WIDTH as usize];
+                        let mut under_a_array = [0; wide::WIDTH as usize];
+                        let mut under_r_array = [0; wide::WIDTH as usize];
+                        let mut under_g_array = [0; wide::WIDTH as usize];
+                        let mut under_b_array = [0; wide::WIDTH as usize];
 
                         for i in 0usize..wide::WIDTH as usize {
-                            fn gamma_to_linear(x: u8) -> f32 {
-                                let f = (x as f32)/255.;
-                                f * f
-                            }
-
                             let under = under_array[i];
 
-                            // `_u` for under.
-                            let a_u = ((under >> 24) & 255) as u8;
-                            let r_u = ((under >> 16) & 255) as u8;
-                            let g_u = ((under >>  8) & 255) as u8;
-                            let b_u = ((under      ) & 255) as u8;
-
-                            let a_g = gamma_to_linear(gfx_colour_a_array[i]);
-                            let r_g = gamma_to_linear(gfx_colour_r_array[i]);
-                            let g_g = gamma_to_linear(gfx_colour_g_array[i]);
-                            let b_g = gamma_to_linear(gfx_colour_b_array[i]);
-
-                            let a_u = gamma_to_linear(a_u);
-                            let r_u = gamma_to_linear(r_u);
-                            let g_u = gamma_to_linear(g_u);
-                            let b_u = gamma_to_linear(b_u);
-
-                            // `o` for output.
-                            o_a[i] = a_g + a_u * (1. - a_g);
-                            o_r[i] = (r_g * a_g + r_u * (1. - a_g)) / o_a[i];
-                            o_g[i] = (g_g * a_g + g_u * (1. - a_g)) / o_a[i];
-                            o_b[i] = (b_g * a_g + b_u * (1. - a_g)) / o_a[i];
+                            under_a_array[i] = ARGB::from(((under >> 24) & 255) as u8);
+                            under_r_array[i] = ARGB::from(((under >> 16) & 255) as u8);
+                            under_g_array[i] = ARGB::from(((under >>  8) & 255) as u8);
+                            under_b_array[i] = ARGB::from(((under      ) & 255) as u8);
                         }
 
-                        for i in 0usize..wide::WIDTH as usize {
-                            rendered_a[i] = (255. * o_a[i].sqrt()) as ARGB;
-                            rendered_r[i] = (255. * o_r[i].sqrt()) as ARGB;
-                            rendered_g[i] = (255. * o_g[i].sqrt()) as ARGB;
-                            rendered_b[i] = (255. * o_b[i].sqrt()) as ARGB;
-                        }
+                        let gfx_colour_a = unsafe {
+                            wide::load!(
+                                gfx_colour_a_array.as_ptr()
+                            )
+                        };
+                        let gfx_colour_r = unsafe {
+                            wide::load!(
+                                gfx_colour_r_array.as_ptr()
+                            )
+                        };
+                        let gfx_colour_g = unsafe {
+                            wide::load!(
+                                gfx_colour_g_array.as_ptr()
+                            )
+                        };
+                        let gfx_colour_b = unsafe {
+                            wide::load!(
+                                gfx_colour_b_array.as_ptr()
+                            )
+                        };
 
-                        let rendered_a = unsafe {
+                        let under_a = unsafe {
                             wide::load!(
-                                rendered_a.as_ptr()
+                                under_a_array.as_ptr()
                             )
                         };
-                        let rendered_r = unsafe {
+                        let under_r = unsafe {
                             wide::load!(
-                                rendered_r.as_ptr()
+                                under_r_array.as_ptr()
                             )
                         };
-                        let rendered_g = unsafe {
+                        let under_g = unsafe {
                             wide::load!(
-                                rendered_g.as_ptr()
+                                under_g_array.as_ptr()
                             )
                         };
-                        let rendered_b = unsafe {
+                        let under_b = unsafe {
                             wide::load!(
-                                rendered_b.as_ptr()
+                                under_b_array.as_ptr()
                             )
                         };
+
+                        let wide_inv_255_f32 = wide::f32!(1./255.);
+
+                        // gamma to linear
+                        let mut a_g = wide::mul!(
+                            wide::u32_to_f32!(
+                                gfx_colour_a
+                            ),
+                            wide_inv_255_f32
+                        );
+                        a_g = wide::mul!(a_g, a_g);
+                        let mut r_g = wide::mul!(
+                            wide::u32_to_f32!(
+                                gfx_colour_r
+                            ),
+                            wide_inv_255_f32
+                        );
+                        r_g = wide::mul!(r_g, r_g);
+                        let mut g_g = wide::mul!(
+                            wide::u32_to_f32!(
+                                gfx_colour_g
+                            ),
+                            wide_inv_255_f32
+                        );
+                        g_g = wide::mul!(g_g, g_g);
+                        let mut b_g = wide::mul!(
+                            wide::u32_to_f32!(
+                                gfx_colour_b
+                            ),
+                            wide_inv_255_f32
+                        );
+                        b_g = wide::mul!(b_g, b_g);
+
+                        let mut a_u = wide::mul!(
+                            wide::u32_to_f32!(
+                                under_a
+                            ),
+                            wide_inv_255_f32
+                        );
+                        a_u = wide::mul!(a_u, a_u);
+                        let mut r_u = wide::mul!(
+                            wide::u32_to_f32!(
+                                under_r
+                            ),
+                            wide_inv_255_f32
+                        );
+                        r_u = wide::mul!(r_u, r_u);
+                        let mut g_u = wide::mul!(
+                            wide::u32_to_f32!(
+                                under_g
+                            ),
+                            wide_inv_255_f32
+                        );
+                        g_u = wide::mul!(g_u, g_u);
+                        let mut b_u = wide::mul!(
+                            wide::u32_to_f32!(
+                                under_b
+                            ),
+                            wide_inv_255_f32
+                        );
+                        b_u = wide::mul!(b_u, b_u);
+
+                        let wide_1_f32 = wide::f32!(1.);
+
+                        // perform alpha blending
+                        let o_a = wide::add!(
+                            a_g,
+                            wide::mul!(
+                                a_u,
+                                wide::sub!(wide_1_f32, a_g)
+                            )
+                        );
+                        let o_r = wide::div!(
+                            wide::add!(
+                                wide::mul!(r_g, a_g),
+                                wide::mul!(
+                                    r_u,
+                                    wide::sub!(wide_1_f32, a_g)
+                                )
+                            ),
+                            o_a
+                        );
+                        let o_g = wide::div!(
+                            wide::add!(
+                                wide::mul!(g_g, a_g),
+                                wide::mul!(
+                                    g_u,
+                                    wide::sub!(wide_1_f32, a_g)
+                                )
+                            ),
+                            o_a
+                        );
+                        let o_b = wide::div!(
+                            wide::add!(
+                                wide::mul!(b_g, a_g),
+                                wide::mul!(
+                                    b_u,
+                                    wide::sub!(wide_1_f32, a_g)
+                                )
+                            ),
+                            o_a
+                        );
+
+                        let wide_255_f32 = wide::f32!(255.);
+
+                        // linear to gamma
+                        let rendered_a = wide::f32_to_u32!(
+                            wide::mul!(
+                                wide_255_f32,
+                                wide::sqrt!(o_a)
+                            )
+                        );
+                        let rendered_r = wide::f32_to_u32!(
+                            wide::mul!(
+                                wide_255_f32,
+                                wide::sqrt!(o_r)
+                            )
+                        );
+                        let rendered_g = wide::f32_to_u32!(
+                            wide::mul!(
+                                wide_255_f32,
+                                wide::sqrt!(o_g)
+                            )
+                        );
+                        let rendered_b = wide::f32_to_u32!(
+                            wide::mul!(
+                                wide_255_f32,
+                                wide::sqrt!(o_b)
+                            )
+                        );
 
                         let rendered = wide::or!(
                             wide::or!(
