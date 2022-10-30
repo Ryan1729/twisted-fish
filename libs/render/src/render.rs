@@ -283,7 +283,7 @@ mod wide {
     #[macro_export]
     macro_rules! _load {
         (
-            $addr: expr
+            $addr: expr $(,)?
         ) => ({
             use core::arch::x86_64::__m128i as V;
 
@@ -881,26 +881,24 @@ pub fn render(
                             (sprite_y + y_iter_count) * src_w
                             + (sprite_x + x_iter_count);
 
-                        let mut gfx_colour_a_array = [0; wide::WIDTH as usize];
-                        let mut gfx_colour_r_array = [0; wide::WIDTH as usize];
-                        let mut gfx_colour_g_array = [0; wide::WIDTH as usize];
-                        let mut gfx_colour_b_array = [0; wide::WIDTH as usize];
+                        let mut gfx_colours = [0; wide::WIDTH as usize];
 
                         for i in 0usize..wide::WIDTH as usize {
-                            let mut gfx_colour: ARGB = GFX[base_src_i + i];
-                            let is_full_alpha = gfx_colour >= 0xFF00_0000;
+                            gfx_colours[i] = GFX[base_src_i + i];
+                            let is_full_alpha = gfx_colours[i] >= 0xFF00_0000;
                             if is_full_alpha
                             // is not fully transparent
                             && colour_override > 0x00FF_FFFF
                             {
-                                gfx_colour = colour_override;
+                                gfx_colours[i] = colour_override;
                             }
-
-                            gfx_colour_a_array[i] = ARGB::from(((gfx_colour >> 24) & 255) as u8);
-                            gfx_colour_r_array[i] = ARGB::from(((gfx_colour >> 16) & 255) as u8);
-                            gfx_colour_g_array[i] = ARGB::from(((gfx_colour >>  8) & 255) as u8);
-                            gfx_colour_b_array[i] = ARGB::from(((gfx_colour      ) & 255) as u8);
                         }
+
+                        let gfx_colours = unsafe {
+                            wide::load!(
+                                gfx_colours.as_ptr(),
+                            )
+                        };
 
                         let unders = unsafe {
                             wide::load!(
@@ -910,6 +908,34 @@ pub fn render(
                         };
 
                         let wide_255_i32 = wide::i32!(255);
+
+                        // Don't need to mask the shifted in zeroes.
+                        let gfx_colour_a = wide::right_shift_32!(
+                            gfx_colours,
+                            24
+                        );
+
+                        let gfx_colour_r = wide::and!(
+                            wide::right_shift_32!(
+                                gfx_colours,
+                                16
+                            ),
+                            wide_255_i32
+                        );
+
+                        let gfx_colour_g = wide::and!(
+                            wide::right_shift_32!(
+                                gfx_colours,
+                                8
+                            ),
+                            wide_255_i32
+                        );
+
+                        // Don't need to shift since it's already in the right spot
+                        let gfx_colour_b = wide::and!(
+                            gfx_colours,
+                            wide_255_i32
+                        );
 
                         // Don't need to mask the shifted in zeroes.
                         let under_a = wide::right_shift_32!(
@@ -938,27 +964,6 @@ pub fn render(
                             unders,
                             wide_255_i32
                         );
-
-                        let gfx_colour_a = unsafe {
-                            wide::load!(
-                                gfx_colour_a_array.as_ptr()
-                            )
-                        };
-                        let gfx_colour_r = unsafe {
-                            wide::load!(
-                                gfx_colour_r_array.as_ptr()
-                            )
-                        };
-                        let gfx_colour_g = unsafe {
-                            wide::load!(
-                                gfx_colour_g_array.as_ptr()
-                            )
-                        };
-                        let gfx_colour_b = unsafe {
-                            wide::load!(
-                                gfx_colour_b_array.as_ptr()
-                            )
-                        };
 
                         let wide_inv_255_f32 = wide::f32!(1./255.);
 
