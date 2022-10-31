@@ -9,6 +9,9 @@ use platform_types::{
 
 use assets::{GFX, FONT, FONT_TRANSPARENT};
 
+const MIN_FULL_ALPHA: u32 = 0xFF00_0000;
+const MAX_ZERO_ALPHA: u32 = 0x00FF_FFFF;
+
 pub mod clip {
     use core::ops::Range;
     pub type X = u16;
@@ -398,6 +401,20 @@ mod wide {
     pub use _and as and;
 
     #[macro_export]
+    macro_rules! _and_not {
+        (
+            $just_anded: expr,
+            $notted: expr $(,)?
+        ) => (unsafe {
+            // "Compute the bitwise NOT of 128 bits (representing integer data) in 
+            // `a` and then AND with `b`, and store the result in dst."
+            // I prefer to not the second operand, so `a` and `b` are switched here.
+            core::arch::x86_64::_mm_andnot_si128($notted, $just_anded)
+        });
+    }
+    pub use _and_not as and_not;
+
+    #[macro_export]
     macro_rules! _or {
         (
             $a: expr,
@@ -523,6 +540,17 @@ mod wide {
         });
     }
     pub use _sqrt as sqrt;
+
+    #[macro_export]
+    macro_rules! _eq_mask_u32 {
+        (
+            $lhs: expr,
+            $rhs: expr $(,)?
+        ) => (unsafe {
+            core::arch::x86_64::_mm_cmpeq_epi32($lhs, $rhs)
+        });
+    }
+    pub use _eq_mask_u32 as eq_mask_u32;
 }
 
 // TODO support wasm32
@@ -540,7 +568,7 @@ mod wide {
 
 #[cfg(test)]
 mod wide_tests {
-    use super::wide::*;
+    use super::{wide::*, *};
 
     /// Thses names chosen to be the same length as `0`.
     const A: i32 = 0xAAAA_AAAAu32 as i32;
@@ -679,6 +707,13 @@ pub fn render(
         frame_buffer.cells.swap();
         return output;
     }
+
+
+    let wide_min_full_alpha_i32 = wide::i32!(MIN_FULL_ALPHA as i32);
+    let wide_zero = wide::i32!(0);
+    let wide_255_i32 = wide::i32!(255);
+    let wide_inv_255_f32 = wide::f32!(1./255.);
+    let wide_255_f32 = wide::f32!(255.);
 
     for cell_y in 0..CELLS_H {
         for cell_x in 0..CELLS_W {
@@ -836,6 +871,13 @@ pub fn render(
             ) in commands.iter().enumerate().skip(min_z.saturating_sub(1)) {
                 let z = command_i + 1;
 
+                let colour_override_value = wide::i32!(colour_override as i32);
+
+                let not_colour_override_mask = wide::eq_mask_u32!(
+                    colour_override_value,
+                    wide_zero
+                );
+
                 let clip_rect = calc_clip_rect!(rect);
 
                 let sprite_x = usize::from(sprite_x);
@@ -881,22 +923,31 @@ pub fn render(
                             (sprite_y + y_iter_count) * src_w
                             + (sprite_x + x_iter_count);
 
-                        let mut gfx_colours = [0; wide::WIDTH as usize];
-
-                        for i in 0usize..wide::WIDTH as usize {
-                            gfx_colours[i] = GFX[base_src_i + i];
-                            let is_full_alpha = gfx_colours[i] >= 0xFF00_0000;
-                            if is_full_alpha
-                            // is not fully transparent
-                            && colour_override > 0x00FF_FFFF
-                            {
-                                gfx_colours[i] = colour_override;
-                            }
-                        }
-
                         let gfx_colours = unsafe {
                             wide::load!(
-                                gfx_colours.as_ptr(),
+                                GFX.as_ptr(),
+                                base_src_i
+                            )
+                        };
+
+                        let is_full_alpha_mask = wide::eq_mask_u32!(
+                            wide::right_shift_32!(
+                                gfx_colours,
+                                24
+                            ),
+                            wide_255_i32
+                        );
+
+                        let do_override_mask = wide::and_not!(
+                            is_full_alpha_mask,
+                            not_colour_override_mask
+                        );
+
+                        let gfx_colours = unsafe {
+                            wide::pick_via_mask!(
+                                gfx_colours,
+                                colour_override_value,
+                                do_override_mask,
                             )
                         };
 
@@ -906,8 +957,6 @@ pub fn render(
                                 dest_indices[0],
                             )
                         };
-
-                        let wide_255_i32 = wide::i32!(255);
 
                         // Don't need to mask the shifted in zeroes.
                         let gfx_colour_a = wide::right_shift_32!(
@@ -964,8 +1013,6 @@ pub fn render(
                             unders,
                             wide_255_i32
                         );
-
-                        let wide_inv_255_f32 = wide::f32!(1./255.);
 
                         // gamma to linear
                         let mut a_g = wide::mul!(
@@ -1066,8 +1113,6 @@ pub fn render(
                             ),
                             o_a
                         );
-
-                        let wide_255_f32 = wide::f32!(255.);
 
                         // linear to gamma
                         let rendered_a = wide::f32_to_u32!(
