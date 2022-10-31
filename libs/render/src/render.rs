@@ -9,7 +9,6 @@ use platform_types::{
 
 use assets::{GFX, FONT, FONT_TRANSPARENT};
 
-const MIN_FULL_ALPHA: u32 = 0xFF00_0000;
 const MAX_ZERO_ALPHA: u32 = 0x00FF_FFFF;
 
 pub mod clip {
@@ -709,7 +708,6 @@ pub fn render(
     }
 
 
-    let wide_min_full_alpha_i32 = wide::i32!(MIN_FULL_ALPHA as i32);
     let wide_zero = wide::i32!(0);
     let wide_255_i32 = wide::i32!(255);
     let wide_inv_255_f32 = wide::f32!(1./255.);
