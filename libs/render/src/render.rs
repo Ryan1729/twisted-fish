@@ -1,15 +1,12 @@
 use platform_types::{
     Command,
     GFX_WIDTH,
-    FONT_WIDTH,
     ARGB,
     unscaled,
     command::{self, Rect},
 };
 
-use assets::{GFX, FONT, FONT_TRANSPARENT};
-
-const MAX_ZERO_ALPHA: u32 = 0x00FF_FFFF;
+use assets::GFX;
 
 pub mod clip {
     use core::ops::Range;
@@ -354,6 +351,7 @@ mod wide {
             $mask: expr $(,)?
         ) => ({
             let mask = $mask;
+            #[allow(unused_unsafe)]
             unsafe {
                 core::arch::x86_64::_mm_or_si128(
                     core::arch::x86_64::_mm_and_si128(
@@ -377,13 +375,15 @@ mod wide {
             $e1: expr,
             $e2: expr,
             $e3: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_set_epi32(
-                $e3,
-                $e2,
-                $e1,
-                $e0,
-            )
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_set_epi32(
+                    $e3,
+                    $e2,
+                    $e1,
+                    $e0,
+                )
+            }
         });
     }
     pub use _i32x4 as i32x4;
@@ -393,8 +393,10 @@ mod wide {
         (
             $a: expr,
             $b: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_and_si128($a, $b)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_and_si128($a, $b)
+            }
         });
     }
     pub use _and as and;
@@ -404,11 +406,13 @@ mod wide {
         (
             $just_anded: expr,
             $notted: expr $(,)?
-        ) => (unsafe {
-            // "Compute the bitwise NOT of 128 bits (representing integer data) in 
-            // `a` and then AND with `b`, and store the result in dst."
-            // I prefer to not the second operand, so `a` and `b` are switched here.
-            core::arch::x86_64::_mm_andnot_si128($notted, $just_anded)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                // "Compute the bitwise NOT of 128 bits (representing integer data) in 
+                // `a` and then AND with `b`, and store the result in dst."
+                // I prefer to not the second operand, so `a` and `b` are switched here.
+                core::arch::x86_64::_mm_andnot_si128($notted, $just_anded)
+            }
         });
     }
     pub use _and_not as and_not;
@@ -418,8 +422,10 @@ mod wide {
         (
             $a: expr,
             $b: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_or_si128($a, $b)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_or_si128($a, $b)
+            }
         });
     }
     pub use _or as or;
@@ -429,8 +435,10 @@ mod wide {
         (
             $a: expr,
             $imm8: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_slli_epi32($a, $imm8)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_slli_epi32($a, $imm8)
+            }
         });
     }
     pub use _left_shift_32 as left_shift_32;
@@ -440,8 +448,10 @@ mod wide {
         (
             $a: expr,
             $imm8: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_srli_epi32($a, $imm8)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_srli_epi32($a, $imm8)
+            }
         });
     }
     pub use _right_shift_32 as right_shift_32;
@@ -450,8 +460,10 @@ mod wide {
     macro_rules! _f32_to_u32 {
         (
             $a: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_cvtps_epi32($a)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_cvtps_epi32($a)
+            }
         });
     }
     pub use _f32_to_u32 as f32_to_u32;
@@ -460,8 +472,10 @@ mod wide {
     macro_rules! _u32_to_f32 {
         (
             $a: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_cvtepi32_ps($a)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_cvtepi32_ps($a)
+            }
         });
     }
     pub use _u32_to_f32 as u32_to_f32;
@@ -470,8 +484,10 @@ mod wide {
     macro_rules! _i32 {
         (
             $a: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_set1_epi32($a)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_set1_epi32($a)
+            }
         });
     }
     pub use _i32 as i32;
@@ -480,8 +496,10 @@ mod wide {
     macro_rules! _f32 {
         (
             $a: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_set_ps1($a)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_set_ps1($a)
+            }
         });
     }
     pub use _f32 as f32;
@@ -491,8 +509,10 @@ mod wide {
         (
             $a: expr,
             $b: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_add_ps($a, $b)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_add_ps($a, $b)
+            }
         });
     }
     pub use _add as add;
@@ -502,8 +522,10 @@ mod wide {
         (
             $a: expr,
             $b: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_sub_ps($a, $b)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_sub_ps($a, $b)
+            }
         });
     }
     pub use _sub as sub;
@@ -513,8 +535,10 @@ mod wide {
         (
             $a: expr,
             $b: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_mul_ps($a, $b)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_mul_ps($a, $b)
+            }
         });
     }
     pub use _mul as mul;
@@ -524,8 +548,10 @@ mod wide {
         (
             $a: expr,
             $b: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_div_ps($a, $b)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_div_ps($a, $b)
+            }
         });
     }
     pub use _div as div;
@@ -534,8 +560,10 @@ mod wide {
     macro_rules! _sqrt {
         (
             $a: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_sqrt_ps($a)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_sqrt_ps($a)
+            }
         });
     }
     pub use _sqrt as sqrt;
@@ -545,8 +573,10 @@ mod wide {
         (
             $lhs: expr,
             $rhs: expr $(,)?
-        ) => (unsafe {
-            core::arch::x86_64::_mm_cmpeq_epi32($lhs, $rhs)
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_cmpeq_epi32($lhs, $rhs)
+            }
         });
     }
     pub use _eq_mask_u32 as eq_mask_u32;
@@ -655,11 +685,6 @@ pub fn render(
         ),
     };
 
-    let cells_size = core::cmp::max(
-        (outer_clip_rect.width() + 1) / clip::W::from(CELLS_W),
-        (outer_clip_rect.height() + 1) / clip::H::from(CELLS_H),
-    );
-
     // Cached software rendering based on:
     // https://rxi.github.io/cached_software_rendering.html
     //
@@ -757,12 +782,10 @@ pub fn render(
                     let x_max = clip::W::from(x_max);
                     let y_max = clip::H::from(y_max);
 
-                    let mut clip_rect = clip::Rect {
+                    clip::Rect {
                         x: x_min..(x_max + 1),
                         y: y_min..(y_max + 1),
-                    };
-
-                    clip_rect
+                    }
                 })
             }
 
@@ -770,7 +793,7 @@ pub fn render(
                 command_i,
                 &Command {
                     sprite_xy: (sprite_x, sprite_y),
-                    colour_override,
+                    colour_override: _,
                     rect,
                 }
             ) in commands.iter().enumerate() {
@@ -810,14 +833,8 @@ pub fn render(
                                     (sprite_y + y_iter_count) * src_w
                                     + (sprite_x + x_iter_count + i);
 
-                                let mut gfx_colour: ARGB = GFX[src_i];
+                                let gfx_colour: ARGB = GFX[src_i];
                                 let is_full_alpha = gfx_colour >= 0xFF00_0000;
-                                if is_full_alpha
-                                // is not fully transparent
-                                && colour_override > 0x00FF_FFFF
-                                {
-                                    gfx_colour = colour_override;
-                                }
 
                                 // If a pixel is fully opaque, then we
                                 // can ignore all the pixels beneath it, so
@@ -941,13 +958,11 @@ pub fn render(
                             not_colour_override_mask
                         );
 
-                        let gfx_colours = unsafe {
-                            wide::pick_via_mask!(
-                                gfx_colours,
-                                colour_override_value,
-                                do_override_mask,
-                            )
-                        };
+                        let gfx_colours = wide::pick_via_mask!(
+                            gfx_colours,
+                            colour_override_value,
+                            do_override_mask,
+                        );
 
                         let unders = unsafe {
                             wide::load!(
@@ -1149,13 +1164,11 @@ pub fn render(
                             )
                         );
 
-                        let output = unsafe {
-                            wide::pick_via_mask!(
-                                unders,
-                                rendered,
-                                should_write
-                            )
-                        };
+                        let output = wide::pick_via_mask!(
+                            unders,
+                            rendered,
+                            should_write
+                        );
 
                         // SAFETY: The pointers produced by the code generated by
                         // this macro is valid to write 128 bytes to.
@@ -1179,7 +1192,7 @@ pub fn render(
 
 
     let mut src_i = 0;
-    let mut src_i_row_start = src_i;
+    let mut src_i_row_start;
     let mut y_remaining = multiplier;
     for y in outer_clip_rect.y {
         let mut x_remaining = multiplier;
@@ -1220,7 +1233,7 @@ pub fn render(
 
 // reportedly colourblind friendly colours
 // https://twitter.com/ea_accessible/status/968595073184092160
-
+#[allow(unused)]
 mod colours {
     use super::ARGB;
 
@@ -1240,6 +1253,7 @@ mod colours {
 use colours::*;
 
 #[rustfmt::skip]
+#[allow(unused)]
 const PALETTE: [ARGB; 8] = [
     BLUE,
     GREEN,
