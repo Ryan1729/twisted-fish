@@ -113,7 +113,7 @@ enum CurrentCells {
     B
 }
 
-type Z = usize;
+type Z = i32;
 
 pub struct FrameBuffer {
     pub buffer: Vec<ARGB>,
@@ -580,6 +580,19 @@ mod wide {
         });
     }
     pub use _eq_mask_u32 as eq_mask_u32;
+
+    #[macro_export]
+    macro_rules! _gt_mask_32 {
+        (
+            $lhs: expr,
+            $rhs: expr $(,)?
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_cmpgt_epi32($lhs, $rhs)
+            }
+        });
+    }
+    pub use _gt_mask_32 as gt_mask_32;
 }
 
 // TODO support wasm32
@@ -797,7 +810,7 @@ pub fn render(
                     rect,
                 }
             ) in commands.iter().enumerate() {
-                let z = command_i + 1;
+                let z = (command_i + 1) as i32;
 
                 let clip_rect = calc_clip_rect!(rect);
 
@@ -883,8 +896,11 @@ pub fn render(
                     colour_override,
                     rect,
                 }
-            ) in commands.iter().enumerate().skip(min_z.saturating_sub(1)) {
-                let z = command_i + 1;
+            ) in commands.iter()
+                .enumerate()
+                .skip((min_z as usize).saturating_sub(1)) {
+                let z = (command_i + 1) as i32;
+                let next_z = z + 1;
 
                 let colour_override_value = wide::i32!(colour_override as i32);
 
@@ -918,7 +934,6 @@ pub fn render(
                                 cell_clip_rect.contains(x + i, y)
                                 && x + i < clip_rect.x.end
                                 && dest_indices[i_usize] < frame_buffer.unscaled_buffer.len()
-                                && z >= frame_buffer.unscaled_z_buffer[dest_indices[i_usize]]
                             {
                                 0xFFFF_FFFF
                             } else {
@@ -933,6 +948,23 @@ pub fn render(
                                 should_write.as_ptr()
                             )
                         };
+
+                        let zs = unsafe {
+                            wide::load!(
+                                frame_buffer.unscaled_z_buffer.as_ptr(),
+                                dest_indices[0],
+                            )
+                        };
+
+                        let wide_next_z = wide::i32!(next_z);
+
+                        let should_write = wide::and!(
+                            should_write,
+                            wide::gt_mask_32!(
+                                wide_next_z,
+                                zs,
+                            )
+                        );
 
                         let base_src_i =
                             (sprite_y + y_iter_count) * src_w
