@@ -933,7 +933,6 @@ pub fn render(
                             should_write[i_usize] = if
                                 cell_clip_rect.contains(x + i, y)
                                 && x + i < clip_rect.x.end
-                                && dest_indices[i_usize] < frame_buffer.unscaled_buffer.len()
                             {
                                 0xFFFF_FFFF
                             } else {
