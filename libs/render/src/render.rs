@@ -29,13 +29,6 @@ pub mod clip {
         pub fn height(&self) -> H {
             self.y.end - self.y.start
         }
-
-        pub fn contains(&self, x: X, y: Y) -> bool {
-            self.x.start <= x
-            && x < self.x.end
-            && self.y.start <= y
-            && y < self.y.end
-        }
     }
 }
 
@@ -860,9 +853,14 @@ pub fn render(
                                 * usize::from(command::WIDTH)
                                 + usize::from(x) + i_usize;
 
+                            let x_i = x + i;
+                            
                             should_write[i as usize] =
-                                cell_clip_rect.contains(x + i, y)
-                                && x + i < clip_rect.x.end
+                                cell_clip_rect.x.start <= x_i
+                                && x_i < cell_clip_rect.x.end
+                                && cell_clip_rect.y.start <= y
+                                && y < cell_clip_rect.y.end
+                                && x_i < clip_rect.x.end
                                 && dest_indices[i_usize] < frame_buffer.unscaled_z_buffer.len();
                         }
 
@@ -963,8 +961,13 @@ pub fn render(
                                 * usize::from(command::WIDTH)
                                 + usize::from(x) + i_usize;
 
+                            let x_i = x + i;
+                            
                             should_write[i_usize] = if
-                                cell_clip_rect.contains(x + i, y)
+                                cell_clip_rect.x.start <= x_i
+                                && x_i < cell_clip_rect.x.end
+                                && cell_clip_rect.y.start <= y
+                                && y < cell_clip_rect.y.end
                             {
                                 0xFFFF_FFFF
                             } else {
