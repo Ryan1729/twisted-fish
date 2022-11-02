@@ -959,18 +959,14 @@ pub fn render(
                             wide_0_to_w
                         );
 
-                        let mut dest_indices = [0; wide::WIDTH as usize];
-                        for i in 0..wide::WIDTH {
-                            let i_usize = i as usize;
-                            dest_indices[i_usize] = usize::from(y)
-                                * usize::from(command::WIDTH)
-                                + usize::from(x) + i_usize;
-                        }
+                        let dest_index = usize::from(y)
+                            * usize::from(command::WIDTH)
+                            + usize::from(x);
 
                         let zs = unsafe {
                             wide::load!(
                                 frame_buffer.unscaled_z_buffer.as_ptr(),
-                                dest_indices[0],
+                                dest_index,
                             )
                         };
 
@@ -1049,7 +1045,7 @@ pub fn render(
                         let unders = unsafe {
                             wide::load!(
                                 frame_buffer.unscaled_buffer.as_ptr(),
-                                dest_indices[0],
+                                dest_index,
                             )
                         };
 
@@ -1258,7 +1254,7 @@ pub fn render(
                             wide::store!(
                                 output,
                                 frame_buffer.unscaled_buffer.as_mut_ptr(),
-                                dest_indices[0],
+                                dest_index,
                             );
                         }
 
