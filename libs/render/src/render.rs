@@ -936,6 +936,10 @@ pub fn render(
 
                 let clip_rect = calc_clip_rect!(rect);
                 let wide_x_end = wide::i32!(clip_rect.x.end.into());
+                let wide_cell_x_start = wide::i32!(cell_clip_rect.x.start.into());
+                let wide_cell_x_end = wide::i32!(cell_clip_rect.x.end.into());
+                let wide_cell_y_start = wide::i32!(cell_clip_rect.y.start.into());
+                let wide_cell_y_end = wide::i32!(cell_clip_rect.y.end.into());
 
                 let sprite_x = usize::from(sprite_x);
                 let sprite_y = usize::from(sprite_y);
@@ -964,9 +968,7 @@ pub fn render(
                             let x_i = x + i;
                             
                             should_write[i_usize] = if
-                                cell_clip_rect.x.start <= x_i
-                                && x_i < cell_clip_rect.x.end
-                                && cell_clip_rect.y.start <= y
+                                cell_clip_rect.y.start <= y
                                 && y < cell_clip_rect.y.end
                             {
                                 0xFFFF_FFFF
@@ -992,8 +994,24 @@ pub fn render(
 
                         let wide_next_z = wide::i32!(next_z);
 
+                        // This is written the way it is because sse2 doesn't have
+                        // a `<=`/`>=`, only `<`/`>`.
+                        let inside_rect_x_mask = wide::and_not!(
+                            wide::lt_mask_32!(
+                                wide_xs,
+                                wide_cell_x_end,
+                            ),
+                            wide::gt_mask_32!(
+                                wide_cell_x_start,
+                                wide_xs,
+                            )
+                        );
+
                         let should_write = wide::and!(
-                            should_write,
+                            wide::and!(
+                                inside_rect_x_mask,
+                                should_write,
+                            ),
                             wide::and!(
                                 wide::lt_mask_32!(
                                     wide_xs,
