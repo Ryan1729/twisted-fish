@@ -505,7 +505,7 @@ mod wide {
     pub use _f32 as f32;
 
     #[macro_export]
-    macro_rules! _add {
+    macro_rules! _add_f32 {
         (
             $a: expr,
             $b: expr $(,)?
@@ -515,7 +515,20 @@ mod wide {
             }
         });
     }
-    pub use _add as add;
+    pub use _add_f32 as add_f32;
+
+    #[macro_export]
+    macro_rules! _add_i32 {
+        (
+            $a: expr,
+            $b: expr $(,)?
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_add_epi32($a, $b)
+            }
+        });
+    }
+    pub use _add_i32 as add_i32;
 
     #[macro_export]
     macro_rules! _sub {
@@ -567,6 +580,19 @@ mod wide {
         });
     }
     pub use _sqrt as sqrt;
+
+    #[macro_export]
+    macro_rules! _lt_mask_32 {
+        (
+            $lhs: expr,
+            $rhs: expr $(,)?
+        ) => ({#[allow(unused_unsafe)]
+            unsafe {
+                core::arch::x86_64::_mm_cmplt_epi32($lhs, $rhs)
+            }
+        });
+    }
+    pub use _lt_mask_32 as lt_mask_32;
 
     #[macro_export]
     macro_rules! _eq_mask_u32 {
@@ -750,6 +776,7 @@ pub fn render(
     let wide_255_i32 = wide::i32!(255);
     let wide_inv_255_f32 = wide::f32!(1./255.);
     let wide_255_f32 = wide::f32!(255.);
+    let wide_0_to_w = wide::i32x4!(0, 1, 2, 3);
 
     for cell_y in 0..CELLS_H {
         for cell_x in 0..CELLS_W {
@@ -910,6 +937,7 @@ pub fn render(
                 );
 
                 let clip_rect = calc_clip_rect!(rect);
+                let wide_x_end = wide::i32!(clip_rect.x.end.into());
 
                 let sprite_x = usize::from(sprite_x);
                 let sprite_y = usize::from(sprite_y);
@@ -922,6 +950,11 @@ pub fn render(
                     let mut x = clip_rect.x.start;
 
                     while x < clip_rect.x.end {
+                        let wide_xs = wide::add_i32!(
+                            wide::i32!(x.into()),
+                            wide_0_to_w
+                        );
+
                         let mut should_write = [0u32; wide::WIDTH as usize];
                         let mut dest_indices = [0; wide::WIDTH as usize];
                         for i in 0..wide::WIDTH {
@@ -932,7 +965,6 @@ pub fn render(
 
                             should_write[i_usize] = if
                                 cell_clip_rect.contains(x + i, y)
-                                && x + i < clip_rect.x.end
                             {
                                 0xFFFF_FFFF
                             } else {
@@ -959,9 +991,15 @@ pub fn render(
 
                         let should_write = wide::and!(
                             should_write,
-                            wide::gt_mask_32!(
-                                wide_next_z,
-                                zs,
+                            wide::and!(
+                                wide::lt_mask_32!(
+                                    wide_xs,
+                                    wide_x_end
+                                ),
+                                wide::gt_mask_32!(
+                                    wide_next_z,
+                                    zs,
+                                )
                             )
                         );
 
@@ -1120,7 +1158,7 @@ pub fn render(
                         let wide_1_f32 = wide::f32!(1.);
 
                         // perform alpha blending
-                        let o_a = wide::add!(
+                        let o_a = wide::add_f32!(
                             a_g,
                             wide::mul!(
                                 a_u,
@@ -1128,7 +1166,7 @@ pub fn render(
                             )
                         );
                         let o_r = wide::div!(
-                            wide::add!(
+                            wide::add_f32!(
                                 wide::mul!(r_g, a_g),
                                 wide::mul!(
                                     r_u,
@@ -1138,7 +1176,7 @@ pub fn render(
                             o_a
                         );
                         let o_g = wide::div!(
-                            wide::add!(
+                            wide::add_f32!(
                                 wide::mul!(g_g, a_g),
                                 wide::mul!(
                                     g_u,
@@ -1148,7 +1186,7 @@ pub fn render(
                             o_a
                         );
                         let o_b = wide::div!(
-                            wide::add!(
+                            wide::add_f32!(
                                 wide::mul!(b_g, a_g),
                                 wide::mul!(
                                     b_u,
