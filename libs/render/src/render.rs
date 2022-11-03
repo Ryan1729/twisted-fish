@@ -550,17 +550,16 @@ mod wide {
     pub use _mul as mul;
 
     #[macro_export]
-    macro_rules! _div {
+    macro_rules! _recip {
         (
-            $a: expr,
-            $b: expr $(,)?
+            $a: expr $(,)?
         ) => ({#[allow(unused_unsafe)]
             unsafe {
-                core::arch::x86_64::_mm_div_ps($a, $b)
+                core::arch::x86_64::_mm_rcp_ps($a)
             }
         });
     }
-    pub use _div as div;
+    pub use _recip as recip;
 
     #[macro_export]
     macro_rules! _sqrt {
@@ -1174,7 +1173,10 @@ pub fn render(
                                 wide::sub!(wide_1_f32, a_g)
                             )
                         );
-                        let o_r = wide::div!(
+
+                        let inv_o_a = wide::recip!(o_a);
+
+                        let o_r = wide::mul!(
                             wide::add_f32!(
                                 wide::mul!(r_g, a_g),
                                 wide::mul!(
@@ -1182,9 +1184,9 @@ pub fn render(
                                     wide::sub!(wide_1_f32, a_g)
                                 )
                             ),
-                            o_a
+                            inv_o_a
                         );
-                        let o_g = wide::div!(
+                        let o_g = wide::mul!(
                             wide::add_f32!(
                                 wide::mul!(g_g, a_g),
                                 wide::mul!(
@@ -1192,9 +1194,9 @@ pub fn render(
                                     wide::sub!(wide_1_f32, a_g)
                                 )
                             ),
-                            o_a
+                            inv_o_a
                         );
-                        let o_b = wide::div!(
+                        let o_b = wide::mul!(
                             wide::add_f32!(
                                 wide::mul!(b_g, a_g),
                                 wide::mul!(
@@ -1202,7 +1204,7 @@ pub fn render(
                                     wide::sub!(wide_1_f32, a_g)
                                 )
                             ),
-                            o_a
+                            inv_o_a
                         );
 
                         // linear to gamma
