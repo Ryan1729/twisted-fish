@@ -883,8 +883,6 @@ pub fn render(
                             wide_255_i32
                         );
 
-                        let zs = wide_0;
-
                         // This is written the way it is because sse2 doesn't have
                         // a `<=`/`>=`, only `<`/`>`.
                         let inside_rect_x_mask = wide::and_not!(
@@ -928,33 +926,9 @@ pub fn render(
                         // transparent then we need to render
                         // whatever is behind it. So we do not set
                         // the z value.
-                        let zs = wide::pick_via_mask!(
-                            zs,
+                        let zs = wide::and!(
                             wide_z,
                             should_write
-                        );
-
-                        // This is written the way it is because sse2 doesn't have
-                        // a `<=`/`>=`, only `<`/`>`.
-                        let inside_rect_x_mask = wide::and_not!(
-                            wide::lt_mask_32!(
-                                wide_xs,
-                                wide_cell_x_end,
-                            ),
-                            wide::gt_mask_32!(
-                                wide_cell_x_start,
-                                wide_xs,
-                            )
-                        );
-                        let inside_rect_y_mask = wide::and_not!(
-                            wide::lt_mask_32!(
-                                wide_y,
-                                wide_cell_y_end,
-                            ),
-                            wide::gt_mask_32!(
-                                wide_cell_y_start,
-                                wide_y,
-                            )
                         );
 
                         let should_write = wide::and!(
