@@ -1,3 +1,4 @@
+#![deny(clippy::shadow_unrelated)]
 use platform_types::{
     Command,
     GFX_WIDTH,
@@ -677,31 +678,27 @@ pub fn render(
 ) -> NeedsRedraw {
     let mut output = NeedsRedraw::No;
 
-    // The dimensions the commands are written in terms of.
-    let src_w = command::WIDTH;
-    let src_h = command::HEIGHT;
-
-    if frame_buffer.width < src_w
-    || frame_buffer.height < src_h {
-        frame_buffer.width = src_w;
-        frame_buffer.height = src_h;
+    if frame_buffer.width < command::WIDTH
+    || frame_buffer.height < command::HEIGHT {
+        frame_buffer.width = command::WIDTH;
+        frame_buffer.height = command::HEIGHT;
     }
 
-    let width_multiplier = frame_buffer.width / src_w;
-    let height_multiplier = frame_buffer.height / src_h;
+    let width_multiplier = frame_buffer.width / command::WIDTH;
+    let height_multiplier = frame_buffer.height / command::HEIGHT;
     let multiplier = core::cmp::min(width_multiplier, height_multiplier);
     if multiplier == 0 {
         debug_assert!(multiplier != 0);
         return output;
     }
 
-    let vertical_bars_width: clip::W = frame_buffer.width - (multiplier * src_w);
+    let vertical_bars_width: clip::W = frame_buffer.width - (multiplier * command::WIDTH);
 
     let left_bar_width: clip::W = (vertical_bars_width + 1) / 2;
 
     let right_bar_width: clip::W = vertical_bars_width / 2;
 
-    let horizontal_bars_height: clip::H = frame_buffer.height - (multiplier * src_h);
+    let horizontal_bars_height: clip::H = frame_buffer.height - (multiplier * command::HEIGHT);
 
     let top_bar_height: clip::H = (horizontal_bars_height + 1) / 2;
 
@@ -764,7 +761,9 @@ pub fn render(
     }
 
 
-    let wide_zero = wide::i32!(0);
+    let wide_0 = wide::i32!(0);
+    let wide_1 = wide::i32!(1);
+    let wide_1_f32 = wide::f32!(1.);
     let wide_255_i32 = wide::i32!(255);
     let wide_inv_255_f32 = wide::f32!(1./255.);
     let wide_255_f32 = wide::f32!(255.);
@@ -832,13 +831,13 @@ pub fn render(
                 .enumerate() {
                 let z = (command_i + 1) as i32;
                 let wide_z = wide::i32!(z);
-                let next_z = z + 1;
+                let wide_next_z = wide::add_i32!(wide_z, wide_1);
 
                 let colour_override_value = wide::i32!(colour_override as i32);
 
                 let not_colour_override_mask = wide::eq_mask_u32!(
                     colour_override_value,
-                    wide_zero
+                    wide_0
                 );
 
                 let clip_rect = calc_clip_rect!(rect);
@@ -955,15 +954,12 @@ pub fn render(
                             );
                         }
 
-
                         let zs = unsafe {
                             wide::load!(
                                 frame_buffer.unscaled_z_buffer.as_ptr(),
                                 dest_index,
                             )
                         };
-
-                        let wide_next_z = wide::i32!(next_z);
 
                         // This is written the way it is because sse2 doesn't have
                         // a `<=`/`>=`, only `<`/`>`.
@@ -1003,25 +999,6 @@ pub fn render(
                                     zs,
                                 )
                             )
-                        );
-
-                        let base_src_i =
-                            (sprite_y + y_iter_count) * src_w
-                            + (sprite_x + x_iter_count);
-
-                        let gfx_colours = unsafe {
-                            wide::load!(
-                                GFX.as_ptr(),
-                                base_src_i
-                            )
-                        };
-
-                        let is_full_alpha_mask = wide::eq_mask_u32!(
-                            wide::right_shift_32!(
-                                gfx_colours,
-                                24
-                            ),
-                            wide_255_i32
                         );
 
                         let do_override_mask = wide::and_not!(
@@ -1157,8 +1134,6 @@ pub fn render(
                         );
                         b_u = wide::mul!(b_u, b_u);
 
-                        let wide_1_f32 = wide::f32!(1.);
-
                         // perform alpha blending
                         let o_a = wide::add_f32!(
                             a_g,
@@ -1238,7 +1213,7 @@ pub fn render(
                             )
                         );
 
-                        let output = wide::pick_via_mask!(
+                        let to_store = wide::pick_via_mask!(
                             unders,
                             rendered,
                             should_write
@@ -1248,7 +1223,7 @@ pub fn render(
                         // this macro is valid to write 128 bytes to.
                         unsafe {
                             wide::store!(
-                                output,
+                                to_store,
                                 frame_buffer.unscaled_buffer.as_mut_ptr(),
                                 dest_index,
                             );
