@@ -758,7 +758,6 @@ pub fn render(
 
 
     let wide_0 = wide::i32!(0);
-    let wide_1 = wide::i32!(1);
     let wide_1_f32 = wide::f32!(1.);
     let wide_255_i32 = wide::i32!(255);
     let wide_inv_255_f32 = wide::f32!(1./255.);
@@ -815,18 +814,12 @@ pub fn render(
                 })
             }
 
-            for (
-                command_i,
-                &Command {
-                    sprite_xy: (sprite_x, sprite_y),
-                    colour_override,
-                    rect,
-                }
-            ) in commands.iter()
-                .enumerate() {
-                let z = (command_i + 1) as i32;
-                let wide_z = wide::i32!(z);
-                let wide_next_z = wide::add_i32!(wide_z, wide_1);
+
+            for &Command {
+                sprite_xy: (sprite_x, sprite_y),
+                colour_override,
+                rect,
+            } in commands.iter() {
 
                 let colour_override_value = wide::i32!(colour_override as i32);
 
@@ -911,40 +904,9 @@ pub fn render(
                                 inside_rect_x_mask,
                                 inside_rect_y_mask,
                             ),
-                            wide::and!(
-                                wide::lt_mask_32!(
-                                    wide_xs,
-                                    wide_x_end
-                                ),
-                                is_full_alpha_mask,
-                            )
-                        );
-
-                        // If a pixel is fully opaque, then we
-                        // can ignore all the pixels beneath it, so
-                        // we set the z value. If it is at all
-                        // transparent then we need to render
-                        // whatever is behind it. So we do not set
-                        // the z value.
-                        let zs = wide::and!(
-                            wide_z,
-                            should_write
-                        );
-
-                        let should_write = wide::and!(
-                            wide::and!(
-                                inside_rect_x_mask,
-                                inside_rect_y_mask,
-                            ),
-                            wide::and!(
-                                wide::lt_mask_32!(
-                                    wide_xs,
-                                    wide_x_end
-                                ),
-                                wide::gt_mask_32!(
-                                    wide_next_z,
-                                    zs,
-                                )
+                            wide::lt_mask_32!(
+                                wide_xs,
+                                wide_x_end
                             )
                         );
 
