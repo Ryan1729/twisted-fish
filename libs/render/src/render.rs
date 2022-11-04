@@ -834,6 +834,12 @@ pub fn render(
 
                 let clip_rect = calc_clip_rect!(rect);
 
+                let wide_x_end = wide::i32!(clip_rect.x.end.into());
+                let wide_cell_x_start = wide::i32!(cell_clip_rect.x.start.into());
+                let wide_cell_x_end = wide::i32!(cell_clip_rect.x.end.into());
+                let wide_cell_y_start = wide::i32!(cell_clip_rect.y.start.into());
+                let wide_cell_y_end = wide::i32!(cell_clip_rect.y.end.into());
+
                 let sprite_x = usize::from(sprite_x);
                 let sprite_y = usize::from(sprite_y);
 
@@ -844,34 +850,17 @@ pub fn render(
                     let mut x_iter_count = 0;
                     let mut x = clip_rect.x.start;
 
+                    let wide_y = wide::i32!(y.into());
+
                     while x < clip_rect.x.end {
-                        let mut should_write = [0; wide::WIDTH as usize];
-                        let mut dest_indices = [0; wide::WIDTH as usize];
-                        for i in 0..wide::WIDTH {
-                            let i_usize = i as usize;
-                            dest_indices[i_usize] = usize::from(y)
-                                * usize::from(command::WIDTH)
-                                + usize::from(x) + i_usize;
+                        let wide_xs = wide::add_i32!(
+                            wide::i32!(x.into()),
+                            wide_0_to_w
+                        );
 
-                            let x_i = x + i;
-                            
-                            should_write[i as usize] =
-                                if cell_clip_rect.x.start <= x_i
-                                && x_i < cell_clip_rect.x.end
-                                && cell_clip_rect.y.start <= y
-                                && y < cell_clip_rect.y.end
-                                && x_i < clip_rect.x.end {
-                                0xFFFF_FFFFu32
-                            } else {
-                                0
-                            };
-                        }
-
-                        let should_write = unsafe {
-                            wide::load!(
-                                should_write.as_ptr()
-                            )
-                        };
+                        let dest_index = usize::from(y)
+                            * usize::from(command::WIDTH)
+                            + usize::from(x);
 
                         let base_src_i =
                             (sprite_y + y_iter_count) * src_w
@@ -895,13 +884,45 @@ pub fn render(
                         let zs = unsafe {
                             wide::load!(
                                 frame_buffer.unscaled_z_buffer.as_ptr(),
-                                dest_indices[0],
+                                dest_index,
                             )
                         };
 
+                        // This is written the way it is because sse2 doesn't have
+                        // a `<=`/`>=`, only `<`/`>`.
+                        let inside_rect_x_mask = wide::and_not!(
+                            wide::lt_mask_32!(
+                                wide_xs,
+                                wide_cell_x_end,
+                            ),
+                            wide::gt_mask_32!(
+                                wide_cell_x_start,
+                                wide_xs,
+                            )
+                        );
+                        let inside_rect_y_mask = wide::and_not!(
+                            wide::lt_mask_32!(
+                                wide_y,
+                                wide_cell_y_end,
+                            ),
+                            wide::gt_mask_32!(
+                                wide_cell_y_start,
+                                wide_y,
+                            )
+                        );
+
                         let should_write = wide::and!(
-                            should_write,
-                            is_full_alpha_mask
+                            wide::and!(
+                                inside_rect_x_mask,
+                                inside_rect_y_mask,
+                            ),
+                            wide::and!(
+                                wide::lt_mask_32!(
+                                    wide_xs,
+                                    wide_x_end
+                                ),
+                                is_full_alpha_mask,
+                            )
                         );
 
                         // If a pixel is fully opaque, then we
@@ -922,7 +943,7 @@ pub fn render(
                             wide::store!(
                                 zs,
                                 frame_buffer.unscaled_z_buffer.as_mut_ptr(),
-                                dest_indices[0],
+                                dest_index,
                             );
                         }
 
