@@ -830,10 +830,6 @@ pub fn render(
 
                 let clip_rect = calc_clip_rect!(rect);
                 let wide_x_end = wide::i32!(clip_rect.x.end.into());
-                let wide_cell_x_start = wide::i32!(cell_clip_rect.x.start.into());
-                let wide_cell_x_end = wide::i32!(cell_clip_rect.x.end.into());
-                let wide_cell_y_start = wide::i32!(cell_clip_rect.y.start.into());
-                let wide_cell_y_end = wide::i32!(cell_clip_rect.y.end.into());
 
                 let sprite_x = usize::from(sprite_x);
                 let sprite_y = usize::from(sprite_y);
@@ -844,8 +840,6 @@ pub fn render(
                 for y in clip_rect.y {
                     let mut x_iter_count = 0;
                     let mut x = clip_rect.x.start;
-
-                    let wide_y = wide::i32!(y.into());
 
                     while x < clip_rect.x.end {
                         let wide_xs = wide::add_i32!(
@@ -894,39 +888,11 @@ pub fn render(
                             do_override_mask,
                         );
 
-                        // This is written the way it is because sse2 doesn't have
-                        // a `<=`/`>=`, only `<`/`>`.
-                        let inside_rect_x_mask = wide::and_not!(
-                            wide::lt_mask_32!(
-                                wide_xs,
-                                wide_cell_x_end,
-                            ),
-                            wide::gt_mask_32!(
-                                wide_cell_x_start,
-                                wide_xs,
-                            )
-                        );
-                        let inside_rect_y_mask = wide::and_not!(
-                            wide::lt_mask_32!(
-                                wide_y,
-                                wide_cell_y_end,
-                            ),
-                            wide::gt_mask_32!(
-                                wide_cell_y_start,
-                                wide_y,
-                            )
-                        );
-
-                        let should_write = wide::and!(
-                            wide::and!(
-                                inside_rect_x_mask,
-                                inside_rect_y_mask,
-                            ),
+                        let should_write = 
                             wide::lt_mask_32!(
                                 wide_xs,
                                 wide_x_end
-                            )
-                        );
+                            );
 
                         // Don't need to mask the shifted in zeroes.
                         let gfx_colour_a = wide::right_shift_32!(
