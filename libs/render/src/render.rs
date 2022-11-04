@@ -860,8 +860,7 @@ pub fn render(
                                 && x_i < cell_clip_rect.x.end
                                 && cell_clip_rect.y.start <= y
                                 && y < cell_clip_rect.y.end
-                                && x_i < clip_rect.x.end
-                                && dest_indices[i_usize] < frame_buffer.unscaled_z_buffer.len() {
+                                && x_i < clip_rect.x.end {
                                 0xFFFF_FFFFu32
                             } else {
                                 0
