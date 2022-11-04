@@ -857,6 +857,13 @@ pub fn render(
                             * usize::from(command::WIDTH)
                             + usize::from(x);
 
+                        let unders = unsafe {
+                            wide::load!(
+                                frame_buffer.unscaled_buffer.as_ptr(),
+                                dest_index,
+                            )
+                        };
+
                         let base_src_i =
                             (sprite_y + y_iter_count) * src_w
                             + (sprite_x + x_iter_count);
@@ -874,6 +881,17 @@ pub fn render(
                                 24
                             ),
                             wide_255_i32
+                        );
+
+                        let do_override_mask = wide::and_not!(
+                            is_full_alpha_mask,
+                            not_colour_override_mask
+                        );
+
+                        let gfx_colours = wide::pick_via_mask!(
+                            gfx_colours,
+                            colour_override_value,
+                            do_override_mask,
                         );
 
                         // This is written the way it is because sse2 doesn't have
@@ -909,24 +927,6 @@ pub fn render(
                                 wide_x_end
                             )
                         );
-
-                        let do_override_mask = wide::and_not!(
-                            is_full_alpha_mask,
-                            not_colour_override_mask
-                        );
-
-                        let gfx_colours = wide::pick_via_mask!(
-                            gfx_colours,
-                            colour_override_value,
-                            do_override_mask,
-                        );
-
-                        let unders = unsafe {
-                            wide::load!(
-                                frame_buffer.unscaled_buffer.as_ptr(),
-                                dest_index,
-                            )
-                        };
 
                         // Don't need to mask the shifted in zeroes.
                         let gfx_colour_a = wide::right_shift_32!(
@@ -1054,12 +1054,14 @@ pub fn render(
 
                         let inv_o_a = wide::recip!(o_a);
 
+                        let one_minus_a_g = wide::sub!(wide_1_f32, a_g);
+
                         let o_r = wide::mul!(
                             wide::add_f32!(
                                 wide::mul!(r_g, a_g),
                                 wide::mul!(
                                     r_u,
-                                    wide::sub!(wide_1_f32, a_g)
+                                    one_minus_a_g
                                 )
                             ),
                             inv_o_a
@@ -1069,7 +1071,7 @@ pub fn render(
                                 wide::mul!(g_g, a_g),
                                 wide::mul!(
                                     g_u,
-                                    wide::sub!(wide_1_f32, a_g)
+                                    one_minus_a_g
                                 )
                             ),
                             inv_o_a
@@ -1079,7 +1081,7 @@ pub fn render(
                                 wide::mul!(b_g, a_g),
                                 wide::mul!(
                                     b_u,
-                                    wide::sub!(wide_1_f32, a_g)
+                                    one_minus_a_g
                                 )
                             ),
                             inv_o_a
