@@ -954,25 +954,7 @@ pub fn render(
                     y_iter_count += 1;
                 }
             }
-
-            // The minimum z of the whole cell. If a given command's z is below this
-            // value, then we can skip that entire command, for this cell.
-            let mut min_z = Z::MAX;
-
-            for y in cell_clip_rect.y.clone() {
-                for x in cell_clip_rect.x.clone() {
-                    let d_i = usize::from(y)
-                    * usize::from(command::WIDTH)
-                    + usize::from(x);
-
-                    if d_i < frame_buffer.unscaled_z_buffer.len() {
-                        min_z = core::cmp::min(
-                            min_z,
-                            frame_buffer.unscaled_z_buffer[d_i]
-                        );
-                    }
-                }
-            }
+            let after_z_loop = Instant::now();
 
             for (
                 command_i,
@@ -982,8 +964,7 @@ pub fn render(
                     rect,
                 }
             ) in commands.iter()
-                .enumerate()
-                .skip((min_z as usize).saturating_sub(1)) {
+                .enumerate() {
                 let z = (command_i + 1) as i32;
                 let next_z = z + 1;
 
