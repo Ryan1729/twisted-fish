@@ -825,15 +825,23 @@ pub fn render(
                 command_i,
                 &Command {
                     sprite_xy: (sprite_x, sprite_y),
-                    colour_override: _,
+                    colour_override,
                     rect,
                 }
-            ) in commands.iter().enumerate() {
+            ) in commands.iter()
+                .enumerate() {
                 let z = (command_i + 1) as i32;
                 let wide_z = wide::i32!(z);
+                let next_z = z + 1;
+
+                let colour_override_value = wide::i32!(colour_override as i32);
+
+                let not_colour_override_mask = wide::eq_mask_u32!(
+                    colour_override_value,
+                    wide_zero
+                );
 
                 let clip_rect = calc_clip_rect!(rect);
-
                 let wide_x_end = wide::i32!(clip_rect.x.end.into());
                 let wide_cell_x_start = wide::i32!(cell_clip_rect.x.start.into());
                 let wide_cell_x_end = wide::i32!(cell_clip_rect.x.end.into());
@@ -947,62 +955,6 @@ pub fn render(
                             );
                         }
 
-                        x_iter_count += wide::WIDTH as usize;
-                        x += wide::WIDTH;
-                    }
-
-                    y_iter_count += 1;
-                }
-            }
-            let after_z_loop = Instant::now();
-
-            for (
-                command_i,
-                &Command {
-                    sprite_xy: (sprite_x, sprite_y),
-                    colour_override,
-                    rect,
-                }
-            ) in commands.iter()
-                .enumerate() {
-                let z = (command_i + 1) as i32;
-                let next_z = z + 1;
-
-                let colour_override_value = wide::i32!(colour_override as i32);
-
-                let not_colour_override_mask = wide::eq_mask_u32!(
-                    colour_override_value,
-                    wide_zero
-                );
-
-                let clip_rect = calc_clip_rect!(rect);
-                let wide_x_end = wide::i32!(clip_rect.x.end.into());
-                let wide_cell_x_start = wide::i32!(cell_clip_rect.x.start.into());
-                let wide_cell_x_end = wide::i32!(cell_clip_rect.x.end.into());
-                let wide_cell_y_start = wide::i32!(cell_clip_rect.y.start.into());
-                let wide_cell_y_end = wide::i32!(cell_clip_rect.y.end.into());
-
-                let sprite_x = usize::from(sprite_x);
-                let sprite_y = usize::from(sprite_y);
-
-                let src_w = GFX_WIDTH as usize;
-
-                let mut y_iter_count = 0;
-                for y in clip_rect.y {
-                    let mut x_iter_count = 0;
-                    let mut x = clip_rect.x.start;
-
-                    let wide_y = wide::i32!(y.into());
-
-                    while x < clip_rect.x.end {
-                        let wide_xs = wide::add_i32!(
-                            wide::i32!(x.into()),
-                            wide_0_to_w
-                        );
-
-                        let dest_index = usize::from(y)
-                            * usize::from(command::WIDTH)
-                            + usize::from(x);
 
                         let zs = unsafe {
                             wide::load!(
