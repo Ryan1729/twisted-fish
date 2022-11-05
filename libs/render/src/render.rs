@@ -33,10 +33,6 @@ pub mod clip {
     }
 }
 
-const CELLS_W: u8 = 1;
-const CELLS_H: u8 = 1;
-const CELLS_LENGTH: usize = CELLS_W as usize * CELLS_H as usize;
-
 /// Implements a 32 bit FNV-1a hash
 mod hash {
     use super::*;
@@ -90,15 +86,7 @@ mod hash {
 
         bytes(hash, &colour_override.to_ne_bytes());
     }
-
-    pub fn hash(hash: &mut Cell, hashed: Cell) {
-        // We prioritize speed over portablilty of hashes between architechtures,
-        // which we expect wouldn't come up anyway. Hence `to_ne_bytes`.
-        bytes(hash, &hashed.0.to_ne_bytes());
-    }
 }
-
-type Cells = [hash::Cell; CELLS_LENGTH];
 
 #[derive(Copy, Clone, Default)]
 enum CurrentCells {
@@ -132,19 +120,19 @@ impl FrameBuffer {
 #[derive(Default)]
 pub struct HashCells {
     current_cells: CurrentCells,
-    cells_a: Cells,
-    cells_b: Cells,
+    cells_a: hash::Cell,
+    cells_b: hash::Cell,
 }
 
 impl HashCells {
-    fn current_mut(&mut self) -> &mut Cells {
+    fn current_mut(&mut self) -> &mut hash::Cell {
         match self.current_cells {
             CurrentCells::A => &mut self.cells_a,
             CurrentCells::B => &mut self.cells_b,
         }
     }
 
-    fn current_and_prev(&self) -> (&Cells, &Cells) {
+    fn current_and_prev(&self) -> (&hash::Cell, &hash::Cell) {
         match self.current_cells {
             CurrentCells::A => (&self.cells_a, &self.cells_b),
             CurrentCells::B => (&self.cells_b, &self.cells_a),
@@ -162,47 +150,15 @@ impl HashCells {
         &mut self,
         commands: &[Command],
         (w, h): (u16, u16),
-        cells_size: u16,
     ) {
         let cells = self.current_mut();
-        *cells = [<_>::default(); CELLS_LENGTH];
+        *cells = <_>::default();
 
-        for y in 0..CELLS_H {
-            for x in 0..CELLS_H {
-                let i = usize::from(y)
-                        * usize::from(CELLS_W)
-                        + usize::from(x);
-                hash::u16(&mut cells[i], w);
-                hash::u16(&mut cells[i], h);
-            }
-        }
+        hash::u16(cells, w);
+        hash::u16(cells, h);
 
         for command in commands {
-            let mut hash = <_>::default();
-            hash::u16(&mut hash, cells_size);
-            hash::command(&mut hash, command);
-
-            // update hash of overlapping cells
-            let r = &command.rect;
-            let r_x_min = clip::X::from(r.x_min);
-            let r_y_min = clip::Y::from(r.y_min);
-            let r_x_max = clip::W::from(r.x_max);
-            let r_y_max = clip::H::from(r.y_max);
-
-            for y in r_y_min / cells_size..=(r_y_max + 1) / cells_size {
-                for x in r_x_min / cells_size..=(r_x_max + 1) / cells_size {
-                    let i = usize::from(y)
-                            * usize::from(CELLS_W)
-                            + usize::from(x);
-                    // We want to allow drawing things that are partially offscreen.
-                    if i < cells.len() {
-                        hash::hash(
-                            &mut cells[i],
-                            hash
-                        );
-                    }
-                }
-            }
+            hash::command(cells, command);
         }
     }
 }
@@ -398,7 +354,7 @@ mod wide {
             $notted: expr $(,)?
         ) => ({#[allow(unused_unsafe)]
             unsafe {
-                // "Compute the bitwise NOT of 128 bits (representing integer data) in 
+                // "Compute the bitwise NOT of 128 bits (representing integer data) in
                 // `a` and then AND with `b`, and store the result in dst."
                 // I prefer to not the second operand, so `a` and `b` are switched here.
                 core::arch::x86_64::_mm_andnot_si128($notted, $just_anded)
@@ -672,8 +628,6 @@ pub fn render(
     frame_buffer: &mut FrameBuffer,
     commands: &[Command],
 ) -> NeedsRedraw {
-    let mut output = NeedsRedraw::No;
-
     if frame_buffer.width < command::WIDTH
     || frame_buffer.height < command::HEIGHT {
         frame_buffer.width = command::WIDTH;
@@ -685,7 +639,7 @@ pub fn render(
     let multiplier = core::cmp::min(width_multiplier, height_multiplier);
     if multiplier == 0 {
         debug_assert!(multiplier != 0);
-        return output;
+        return NeedsRedraw::No;
     }
 
     let vertical_bars_width: clip::W = frame_buffer.width - (multiplier * command::WIDTH);
@@ -709,26 +663,17 @@ pub fn render(
         ),
     };
 
-    // Cached software rendering based on:
-    // https://rxi.github.io/cached_software_rendering.html
-    //
-    // TODO Attempt to merge adjacent regions for cells that are
-    // adjacent and render merged regions only once each.
-    //   Compute boolean mask of cells that need redrawing (`[bool; CELLS_LENGTH]`)
-    //   Scan through mask until we find a true, then try to expand a rectangle by
-    //     going right and down from that point alternately.
-    //   Render once with expanded cell_clip_rect
-    //   Mark the rendered cells as false, keep scanning.
 
-    let unscaled_cells_size = core::cmp::max(
-        command::WIDTH / clip::W::from(CELLS_W),
-        command::HEIGHT / clip::H::from(CELLS_H),
-    );
+    // This started as cached software rendering based on:
+    // https://rxi.github.io/cached_software_rendering.html
+    // But, a single cell turned out to be the most performant,
+    // in this particular case, so the code was simplifed with
+    // that in mind. Maybe it faster to have a single cell, just
+    // because the rendered size is so small. Not sure.
 
     frame_buffer.cells.reset_then_hash_commands(
         commands,
         (frame_buffer.width, frame_buffer.height),
-        unscaled_cells_size
     );
 
     let expected_length = usize::from(frame_buffer.width)
@@ -744,18 +689,11 @@ pub fn render(
     }
 
     let (cells, cells_prev) = frame_buffer.cells.current_and_prev();
-    for cell_i in 0..CELLS_LENGTH {
-        if cells[cell_i] == cells_prev[cell_i] {
-            continue
-        }
-        output = NeedsRedraw::Yes;
-    }
 
-    if let NeedsRedraw::No = output {
+    if cells == cells_prev {
         frame_buffer.cells.swap();
-        return output;
+        return NeedsRedraw::No;
     }
-
 
     let wide_0 = wide::i32!(0);
     let wide_1_f32 = wide::f32!(1.);
@@ -764,359 +702,324 @@ pub fn render(
     let wide_255_f32 = wide::f32!(255.);
     let wide_0_to_w = wide::i32x4!(0, 1, 2, 3);
 
-    for cell_y in 0..CELLS_H {
-        for cell_x in 0..CELLS_W {
-            let cell_i = usize::from(cell_y)
-            * usize::from(CELLS_W)
-            + usize::from(cell_x);
+    // Hopefully this compiles to something not inefficent
+    for i in 0..frame_buffer.unscaled_buffer.len() {
+        frame_buffer.unscaled_buffer[i] = colours::BLACK;
+    }
 
-            if cells[cell_i] == cells_prev[cell_i] {
-                continue
-            }
+    for &Command {
+        sprite_xy: (sprite_x, sprite_y),
+        colour_override,
+        rect,
+    } in commands.iter() {
+        let colour_override_value = wide::i32!(colour_override as i32);
 
-            let cell_x = clip::X::from(cell_x);
-            let cell_y = clip::Y::from(cell_y);
-            let cell_clip_rect = clip::Rect {
-                x: cell_x * unscaled_cells_size..(cell_x + 1) * unscaled_cells_size,
-                y: cell_y * unscaled_cells_size..(cell_y + 1) * unscaled_cells_size,
-            };
+        let not_colour_override_mask = wide::eq_mask_u32!(
+            colour_override_value,
+            wide_0
+        );
 
-            // Hopefully this compiles to something not inefficent
-            for y in cell_clip_rect.y.clone() {
-                for x in cell_clip_rect.x.clone() {
-                    let d_i = usize::from(y)
-                        * usize::from(command::WIDTH)
-                        + usize::from(x);
-                    if d_i < frame_buffer.unscaled_buffer.len() {
-                        frame_buffer.unscaled_buffer[d_i] = colours::BLACK;
-                    }
-                }
-            }
+        let Rect {
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+        } = rect;
 
-            macro_rules! calc_clip_rect {
-                ($rect: ident) => ({
-                    let Rect {
-                        x_min,
-                        y_min,
-                        x_max,
-                        y_max,
-                    } = $rect;
+        // TODO make this wide too?
+        let x_min = clip::X::from(x_min);
+        let y_min = clip::Y::from(y_min);
+        let x_max = clip::W::from(x_max);
+        let y_max = clip::H::from(y_max);
 
-                    let x_min = clip::X::from(x_min);
-                    let y_min = clip::Y::from(y_min);
-                    let x_max = clip::W::from(x_max);
-                    let y_max = clip::H::from(y_max);
+        let x_end = x_max + 1;
+        let y_end = y_max + 1;
+        let wide_x_end = wide::i32!(x_end.into());
 
-                    clip::Rect {
-                        x: x_min..(x_max + 1),
-                        y: y_min..(y_max + 1),
-                    }
-                })
-            }
+        let sprite_x = usize::from(sprite_x);
+        let sprite_y = usize::from(sprite_y);
 
+        let src_w = GFX_WIDTH as usize;
 
-            for &Command {
-                sprite_xy: (sprite_x, sprite_y),
-                colour_override,
-                rect,
-            } in commands.iter() {
+        let mut y_iter_count = 0;
+        for y in y_min..y_end {
+            let mut x_iter_count = 0;
+            let mut x = x_min;
 
-                let colour_override_value = wide::i32!(colour_override as i32);
-
-                let not_colour_override_mask = wide::eq_mask_u32!(
-                    colour_override_value,
-                    wide_0
+            while x < x_end {
+                let wide_xs = wide::add_i32!(
+                    wide::i32!(x.into()),
+                    wide_0_to_w
                 );
 
-                let clip_rect = calc_clip_rect!(rect);
-                let wide_x_end = wide::i32!(clip_rect.x.end.into());
+                let dest_index = usize::from(y)
+                    * usize::from(command::WIDTH)
+                    + usize::from(x);
 
-                let sprite_x = usize::from(sprite_x);
-                let sprite_y = usize::from(sprite_y);
+                let unders = unsafe {
+                    wide::load!(
+                        frame_buffer.unscaled_buffer.as_ptr(),
+                        dest_index,
+                    )
+                };
 
-                let src_w = GFX_WIDTH as usize;
+                let base_src_i =
+                    (sprite_y + y_iter_count) * src_w
+                    + (sprite_x + x_iter_count);
 
-                let mut y_iter_count = 0;
-                for y in clip_rect.y {
-                    let mut x_iter_count = 0;
-                    let mut x = clip_rect.x.start;
+                let gfx_colours = unsafe {
+                    wide::load!(
+                        GFX.as_ptr(),
+                        base_src_i
+                    )
+                };
 
-                    while x < clip_rect.x.end {
-                        let wide_xs = wide::add_i32!(
-                            wide::i32!(x.into()),
-                            wide_0_to_w
-                        );
+                let is_full_alpha_mask = wide::eq_mask_u32!(
+                    wide::right_shift_32!(
+                        gfx_colours,
+                        24
+                    ),
+                    wide_255_i32
+                );
 
-                        let dest_index = usize::from(y)
-                            * usize::from(command::WIDTH)
-                            + usize::from(x);
+                let do_override_mask = wide::and_not!(
+                    is_full_alpha_mask,
+                    not_colour_override_mask
+                );
 
-                        let unders = unsafe {
-                            wide::load!(
-                                frame_buffer.unscaled_buffer.as_ptr(),
-                                dest_index,
-                            )
-                        };
+                let gfx_colours = wide::pick_via_mask!(
+                    gfx_colours,
+                    colour_override_value,
+                    do_override_mask,
+                );
 
-                        let base_src_i =
-                            (sprite_y + y_iter_count) * src_w
-                            + (sprite_x + x_iter_count);
+                let should_write =
+                    wide::lt_mask_32!(
+                        wide_xs,
+                        wide_x_end
+                    );
 
-                        let gfx_colours = unsafe {
-                            wide::load!(
-                                GFX.as_ptr(),
-                                base_src_i
-                            )
-                        };
+                // Don't need to mask the shifted in zeroes.
+                let gfx_colour_a = wide::right_shift_32!(
+                    gfx_colours,
+                    24
+                );
 
-                        let is_full_alpha_mask = wide::eq_mask_u32!(
-                            wide::right_shift_32!(
-                                gfx_colours,
-                                24
-                            ),
-                            wide_255_i32
-                        );
+                let gfx_colour_r = wide::and!(
+                    wide::right_shift_32!(
+                        gfx_colours,
+                        16
+                    ),
+                    wide_255_i32
+                );
 
-                        let do_override_mask = wide::and_not!(
-                            is_full_alpha_mask,
-                            not_colour_override_mask
-                        );
+                let gfx_colour_g = wide::and!(
+                    wide::right_shift_32!(
+                        gfx_colours,
+                        8
+                    ),
+                    wide_255_i32
+                );
 
-                        let gfx_colours = wide::pick_via_mask!(
-                            gfx_colours,
-                            colour_override_value,
-                            do_override_mask,
-                        );
+                // Don't need to shift since it's already in the right spot
+                let gfx_colour_b = wide::and!(
+                    gfx_colours,
+                    wide_255_i32
+                );
 
-                        let should_write = 
-                            wide::lt_mask_32!(
-                                wide_xs,
-                                wide_x_end
-                            );
+                // Don't need to mask the shifted in zeroes.
+                let under_a = wide::right_shift_32!(
+                    unders,
+                    24
+                );
 
-                        // Don't need to mask the shifted in zeroes.
-                        let gfx_colour_a = wide::right_shift_32!(
-                            gfx_colours,
-                            24
-                        );
+                let under_r = wide::and!(
+                    wide::right_shift_32!(
+                        unders,
+                        16
+                    ),
+                    wide_255_i32
+                );
 
-                        let gfx_colour_r = wide::and!(
-                            wide::right_shift_32!(
-                                gfx_colours,
-                                16
-                            ),
-                            wide_255_i32
-                        );
+                let under_g = wide::and!(
+                    wide::right_shift_32!(
+                        unders,
+                        8
+                    ),
+                    wide_255_i32
+                );
 
-                        let gfx_colour_g = wide::and!(
-                            wide::right_shift_32!(
-                                gfx_colours,
-                                8
-                            ),
-                            wide_255_i32
-                        );
+                // Don't need to shift since it's already in the right spot
+                let under_b = wide::and!(
+                    unders,
+                    wide_255_i32
+                );
 
-                        // Don't need to shift since it's already in the right spot
-                        let gfx_colour_b = wide::and!(
-                            gfx_colours,
-                            wide_255_i32
-                        );
+                // gamma to linear
+                let mut a_g = wide::mul!(
+                    wide::u32_to_f32!(
+                        gfx_colour_a
+                    ),
+                    wide_inv_255_f32
+                );
+                a_g = wide::mul!(a_g, a_g);
+                let mut r_g = wide::mul!(
+                    wide::u32_to_f32!(
+                        gfx_colour_r
+                    ),
+                    wide_inv_255_f32
+                );
+                r_g = wide::mul!(r_g, r_g);
+                let mut g_g = wide::mul!(
+                    wide::u32_to_f32!(
+                        gfx_colour_g
+                    ),
+                    wide_inv_255_f32
+                );
+                g_g = wide::mul!(g_g, g_g);
+                let mut b_g = wide::mul!(
+                    wide::u32_to_f32!(
+                        gfx_colour_b
+                    ),
+                    wide_inv_255_f32
+                );
+                b_g = wide::mul!(b_g, b_g);
 
-                        // Don't need to mask the shifted in zeroes.
-                        let under_a = wide::right_shift_32!(
-                            unders,
-                            24
-                        );
+                let mut a_u = wide::mul!(
+                    wide::u32_to_f32!(
+                        under_a
+                    ),
+                    wide_inv_255_f32
+                );
+                a_u = wide::mul!(a_u, a_u);
+                let mut r_u = wide::mul!(
+                    wide::u32_to_f32!(
+                        under_r
+                    ),
+                    wide_inv_255_f32
+                );
+                r_u = wide::mul!(r_u, r_u);
+                let mut g_u = wide::mul!(
+                    wide::u32_to_f32!(
+                        under_g
+                    ),
+                    wide_inv_255_f32
+                );
+                g_u = wide::mul!(g_u, g_u);
+                let mut b_u = wide::mul!(
+                    wide::u32_to_f32!(
+                        under_b
+                    ),
+                    wide_inv_255_f32
+                );
+                b_u = wide::mul!(b_u, b_u);
 
-                        let under_r = wide::and!(
-                            wide::right_shift_32!(
-                                unders,
-                                16
-                            ),
-                            wide_255_i32
-                        );
+                // perform alpha blending
+                let o_a = wide::add_f32!(
+                    a_g,
+                    wide::mul!(
+                        a_u,
+                        wide::sub!(wide_1_f32, a_g)
+                    )
+                );
 
-                        let under_g = wide::and!(
-                            wide::right_shift_32!(
-                                unders,
-                                8
-                            ),
-                            wide_255_i32
-                        );
+                let inv_o_a = wide::recip!(o_a);
 
-                        // Don't need to shift since it's already in the right spot
-                        let under_b = wide::and!(
-                            unders,
-                            wide_255_i32
-                        );
+                let one_minus_a_g = wide::sub!(wide_1_f32, a_g);
 
-                        // gamma to linear
-                        let mut a_g = wide::mul!(
-                            wide::u32_to_f32!(
-                                gfx_colour_a
-                            ),
-                            wide_inv_255_f32
-                        );
-                        a_g = wide::mul!(a_g, a_g);
-                        let mut r_g = wide::mul!(
-                            wide::u32_to_f32!(
-                                gfx_colour_r
-                            ),
-                            wide_inv_255_f32
-                        );
-                        r_g = wide::mul!(r_g, r_g);
-                        let mut g_g = wide::mul!(
-                            wide::u32_to_f32!(
-                                gfx_colour_g
-                            ),
-                            wide_inv_255_f32
-                        );
-                        g_g = wide::mul!(g_g, g_g);
-                        let mut b_g = wide::mul!(
-                            wide::u32_to_f32!(
-                                gfx_colour_b
-                            ),
-                            wide_inv_255_f32
-                        );
-                        b_g = wide::mul!(b_g, b_g);
+                let o_r = wide::mul!(
+                    wide::add_f32!(
+                        wide::mul!(r_g, a_g),
+                        wide::mul!(
+                            r_u,
+                            one_minus_a_g
+                        )
+                    ),
+                    inv_o_a
+                );
+                let o_g = wide::mul!(
+                    wide::add_f32!(
+                        wide::mul!(g_g, a_g),
+                        wide::mul!(
+                            g_u,
+                            one_minus_a_g
+                        )
+                    ),
+                    inv_o_a
+                );
+                let o_b = wide::mul!(
+                    wide::add_f32!(
+                        wide::mul!(b_g, a_g),
+                        wide::mul!(
+                            b_u,
+                            one_minus_a_g
+                        )
+                    ),
+                    inv_o_a
+                );
 
-                        let mut a_u = wide::mul!(
-                            wide::u32_to_f32!(
-                                under_a
-                            ),
-                            wide_inv_255_f32
-                        );
-                        a_u = wide::mul!(a_u, a_u);
-                        let mut r_u = wide::mul!(
-                            wide::u32_to_f32!(
-                                under_r
-                            ),
-                            wide_inv_255_f32
-                        );
-                        r_u = wide::mul!(r_u, r_u);
-                        let mut g_u = wide::mul!(
-                            wide::u32_to_f32!(
-                                under_g
-                            ),
-                            wide_inv_255_f32
-                        );
-                        g_u = wide::mul!(g_u, g_u);
-                        let mut b_u = wide::mul!(
-                            wide::u32_to_f32!(
-                                under_b
-                            ),
-                            wide_inv_255_f32
-                        );
-                        b_u = wide::mul!(b_u, b_u);
+                // linear to gamma
+                let rendered_a = wide::f32_to_u32!(
+                    wide::mul!(
+                        wide_255_f32,
+                        wide::sqrt!(o_a)
+                    )
+                );
+                let rendered_r = wide::f32_to_u32!(
+                    wide::mul!(
+                        wide_255_f32,
+                        wide::sqrt!(o_r)
+                    )
+                );
+                let rendered_g = wide::f32_to_u32!(
+                    wide::mul!(
+                        wide_255_f32,
+                        wide::sqrt!(o_g)
+                    )
+                );
+                let rendered_b = wide::f32_to_u32!(
+                    wide::mul!(
+                        wide_255_f32,
+                        wide::sqrt!(o_b)
+                    )
+                );
 
-                        // perform alpha blending
-                        let o_a = wide::add_f32!(
-                            a_g,
-                            wide::mul!(
-                                a_u,
-                                wide::sub!(wide_1_f32, a_g)
-                            )
-                        );
+                let rendered = wide::or!(
+                    wide::or!(
+                        wide::left_shift_32!(rendered_a, 24),
+                        wide::left_shift_32!(rendered_r, 16),
+                    ),
+                    wide::or!(
+                        wide::left_shift_32!(rendered_g, 8),
+                        rendered_b,
+                    )
+                );
 
-                        let inv_o_a = wide::recip!(o_a);
+                let to_store = wide::pick_via_mask!(
+                    unders,
+                    rendered,
+                    should_write
+                );
 
-                        let one_minus_a_g = wide::sub!(wide_1_f32, a_g);
-
-                        let o_r = wide::mul!(
-                            wide::add_f32!(
-                                wide::mul!(r_g, a_g),
-                                wide::mul!(
-                                    r_u,
-                                    one_minus_a_g
-                                )
-                            ),
-                            inv_o_a
-                        );
-                        let o_g = wide::mul!(
-                            wide::add_f32!(
-                                wide::mul!(g_g, a_g),
-                                wide::mul!(
-                                    g_u,
-                                    one_minus_a_g
-                                )
-                            ),
-                            inv_o_a
-                        );
-                        let o_b = wide::mul!(
-                            wide::add_f32!(
-                                wide::mul!(b_g, a_g),
-                                wide::mul!(
-                                    b_u,
-                                    one_minus_a_g
-                                )
-                            ),
-                            inv_o_a
-                        );
-
-                        // linear to gamma
-                        let rendered_a = wide::f32_to_u32!(
-                            wide::mul!(
-                                wide_255_f32,
-                                wide::sqrt!(o_a)
-                            )
-                        );
-                        let rendered_r = wide::f32_to_u32!(
-                            wide::mul!(
-                                wide_255_f32,
-                                wide::sqrt!(o_r)
-                            )
-                        );
-                        let rendered_g = wide::f32_to_u32!(
-                            wide::mul!(
-                                wide_255_f32,
-                                wide::sqrt!(o_g)
-                            )
-                        );
-                        let rendered_b = wide::f32_to_u32!(
-                            wide::mul!(
-                                wide_255_f32,
-                                wide::sqrt!(o_b)
-                            )
-                        );
-
-                        let rendered = wide::or!(
-                            wide::or!(
-                                wide::left_shift_32!(rendered_a, 24),
-                                wide::left_shift_32!(rendered_r, 16),
-                            ),
-                            wide::or!(
-                                wide::left_shift_32!(rendered_g, 8),
-                                rendered_b,
-                            )
-                        );
-
-                        let to_store = wide::pick_via_mask!(
-                            unders,
-                            rendered,
-                            should_write
-                        );
-
-                        // SAFETY: The pointers produced by the code generated by
-                        // this macro is valid to write 128 bytes to.
-                        unsafe {
-                            wide::store!(
-                                to_store,
-                                frame_buffer.unscaled_buffer.as_mut_ptr(),
-                                dest_index,
-                            );
-                        }
-
-                        x_iter_count += wide::WIDTH as usize;
-                        x += wide::WIDTH;
-                    }
-
-                    y_iter_count += 1;
+                // SAFETY: The pointers produced by the code generated by
+                // this macro is valid to write 128 bytes to.
+                unsafe {
+                    wide::store!(
+                        to_store,
+                        frame_buffer.unscaled_buffer.as_mut_ptr(),
+                        dest_index,
+                    );
                 }
+
+                x_iter_count += wide::WIDTH as usize;
+                x += wide::WIDTH;
             }
+
+            y_iter_count += 1;
         }
     }
 
-
+    // TODO If we need some more render speed, this could be made wide as well.
     let mut src_i = 0;
     let mut src_i_row_start;
     let mut y_remaining = multiplier;
@@ -1154,7 +1057,7 @@ pub fn render(
 
     frame_buffer.cells.swap();
 
-    output
+    NeedsRedraw::Yes
 }
 
 // reportedly colourblind friendly colours
