@@ -33,8 +33,8 @@ pub mod clip {
     }
 }
 
-const CELLS_W: u8 = 4;
-const CELLS_H: u8 = 4;
+const CELLS_W: u8 = 1;
+const CELLS_H: u8 = 1;
 const CELLS_LENGTH: usize = CELLS_W as usize * CELLS_H as usize;
 
 /// Implements a 32 bit FNV-1a hash
