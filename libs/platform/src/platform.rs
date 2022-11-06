@@ -43,8 +43,10 @@ pub fn run<S: State + 'static>(mut state: S) {
     #[cfg(not(target_arch = "wasm32"))]
     let mut loop_helper = spin_sleep::LoopHelper::builder()
             .build_with_target_rate(60.0);
+    #[cfg(not(target_arch = "wasm32"))]
     let mut dropped_frames: u64 = 0;
     // Permit the first frame to be slow.
+    #[cfg(not(target_arch = "wasm32"))]
     let mut used_freebie = false;
 
     let mut just_gained_focus = true;
