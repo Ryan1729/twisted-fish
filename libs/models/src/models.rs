@@ -1,15 +1,52 @@
 use xs::Xs;
 
+macro_rules! compile_time_assert {
+    ($assertion: expr) => (
+        #[allow(unknown_lints, eq_op)]
+        // Based on the const_assert macro from static_assertions;
+        const _: [(); 0 - !{$assertion} as usize] = [];
+    )
+}
+
 pub const RANK_COUNT: u8 = 13;
 pub const SUIT_COUNT: u8 = 5;
 pub const FISH_COUNT: u8 = RANK_COUNT * SUIT_COUNT;
 pub const ZINGER_COUNT: u8 = 8;
 pub const DECK_SIZE: u8 = FISH_COUNT + ZINGER_COUNT;
 
-pub type Card = u8;
+pub type CardInner = u8;
+
+pub type Card = CardInner;
 
 pub fn gen_card(rng: &mut Xs) -> Card {
     xs::range(rng, 0..DECK_SIZE as _) as Card
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub struct CardOption(CardInner);
+
+compile_time_assert!{
+    CardInner::MAX > DECK_SIZE
+}
+
+impl CardOption {
+    pub const fn option(self) -> Option<Card> {
+        self.0.checked_sub(1)
+    }
+
+    pub const fn some(card: Card) -> Self {
+        Self(card + 1)
+    }
+
+    pub const NONE: Self = Self(0);
+
+    pub fn is_none(self) -> bool {
+        self == Self::NONE
+    }
+
+    pub fn is_some(self) -> bool {
+        self != Self::NONE
+    }
 }
 
 pub type Rank = u8;
@@ -86,5 +123,43 @@ pub fn get_zinger(card: Card) -> Option<Zinger> {
         Some(card - FISH_COUNT)
     } else {
         None
+    }
+}
+
+/// An ordered collection of cards that can hold at leat one copy of each card.
+#[derive(Clone)]
+pub struct Hand([CardOption; DECK_SIZE as usize]);
+
+impl Default for Hand {
+    fn default() -> Hand {
+        Hand([CardOption::NONE; DECK_SIZE as usize])
+    }
+}
+
+impl Hand {
+    pub fn fresh_deck(rng: &mut Xs) -> Self {
+        let mut output = [CardOption::NONE; DECK_SIZE as usize];
+
+        for i in 0..DECK_SIZE {
+            output[i as usize] = CardOption::some(i);
+        }
+
+        xs::shuffle(rng, &mut output);
+
+        Self(output)
+    }
+
+    pub fn len(&self) -> u8 {
+        for i in 0..DECK_SIZE {
+            if self.0[i as usize].is_none() {
+                return i;
+            }
+        }
+
+        DECK_SIZE
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }

@@ -1,6 +1,5 @@
-use game::Splat;
-use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
-use platform_types::{Button, Input, Speaker, SFX, unscaled, command};
+use gfx::{Commands, card, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
+use platform_types::{Button, Input, Speaker, SFX, unscaled::{self, X, Y}, command};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -31,7 +30,6 @@ impl State {
         features::log(&format!("{:?}", seed));
 
         let mut game_state = game::State::new(seed);
-        game_state.add_splat();
 
         Self {
             game_state,
@@ -92,7 +90,6 @@ impl platform_types::State for State {
 
 fn update(state: &mut game::State, input: Input, speaker: &mut Speaker) {
     if input.gamepad != <_>::default() {
-        state.add_splat();
         speaker.request_sfx(SFX::CardPlace);
     }
     state.tick();
@@ -230,8 +227,11 @@ fn render_game(
     commands: &mut Commands,
     state: &game::State,
 ) {
-    for &Splat { kind, x, y } in &state.splats {
-        commands.draw_card(kind, x, y);
+    if !state.deck.is_empty() {
+        commands.draw_card_back(
+            X((command::WIDTH - card::WIDTH.get().get()) / 2),
+            Y((command::HEIGHT - card::HEIGHT.get().get()) / 2),
+        );
     }
 }
 

@@ -472,6 +472,27 @@ impl Commands {
         );
     }
 
+    pub fn draw_card_back(
+        &mut self,
+        x: unscaled::X,
+        y: unscaled::Y
+    ) {
+        let image_x = card::BACKING_SPRITE_X;
+        let image_y = card::BACKING_SPRITE_BASE_Y
+            + unscaled::Inner::from(models::SUIT_COUNT + 2)
+            * card::HEIGHT.get();
+
+        self.sspr(
+            (image_x, image_y),
+            Rect::from_unscaled(unscaled::Rect {
+                x,
+                y,
+                w: card::WIDTH.get(),
+                h: card::HEIGHT.get(),
+            })
+        );
+    }
+
     fn push_command_if_useful(&mut self, command: Command) {
         if command.rect.x_min != command.rect.x_max
         && command.rect.y_min != command.rect.y_max {
