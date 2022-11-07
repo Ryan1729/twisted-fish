@@ -56,11 +56,20 @@ impl platform_types::State for State {
             self.speaker.request_sfx(SFX::ButtonPress);
         }
 
-        update(
-            &mut self.game_state,
-            self.input,
-            &mut self.speaker,
-        );
+        match self.help_vis {
+            HelpVis::Shown => {
+                if self.input.gamepad.contains(Button::DOWN) {
+                    self.top_index += 1;
+                } else if self.input.gamepad.contains(Button::UP) {
+                    self.top_index = self.top_index.saturating_sub(1);
+                }
+            },
+            HelpVis::Hidden => update_game(
+                &mut self.game_state,
+                self.input,
+                &mut self.speaker,
+            ),
+        }
         render(
             &mut self.commands,
             &self.game_state,
@@ -88,7 +97,7 @@ impl platform_types::State for State {
     }
 }
 
-fn update(state: &mut game::State, input: Input, speaker: &mut Speaker) {
+fn update_game(state: &mut game::State, input: Input, speaker: &mut Speaker) {
     if input.gamepad != <_>::default() {
         speaker.request_sfx(SFX::CardPlace);
     }
