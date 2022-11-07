@@ -15,7 +15,7 @@ pub struct State {
     input: Input,
     speaker: Speaker,
     help_vis: HelpVis,
-    top_index: usize,
+    top_index_with_offset: usize,
 }
 
 impl State {
@@ -37,7 +37,7 @@ impl State {
             input: Input::default(),
             speaker: Speaker::default(),
             help_vis: HelpVis::default(),
-            top_index: 0,
+            top_index_with_offset: 0,
         }
     }
 }
@@ -59,9 +59,10 @@ impl platform_types::State for State {
         match self.help_vis {
             HelpVis::Shown => {
                 if self.input.gamepad.contains(Button::DOWN) {
-                    self.top_index += 1;
+                    self.top_index_with_offset += 1;
                 } else if self.input.gamepad.contains(Button::UP) {
-                    self.top_index = self.top_index.saturating_sub(1);
+                    self.top_index_with_offset =
+                        self.top_index_with_offset.saturating_sub(1);
                 }
             },
             HelpVis::Hidden => update_game(
@@ -74,7 +75,7 @@ impl platform_types::State for State {
             &mut self.commands,
             &self.game_state,
             self.help_vis,
-            self.top_index,
+            self.top_index_with_offset,
         );
 
         self.input.previous_gamepad = self.input.gamepad;
@@ -108,7 +109,7 @@ fn render(
     commands: &mut Commands,
     state: &game::State,
     help_vis: HelpVis,
-    top_index: usize,
+    top_index_with_offset: usize,
 ) {
     match help_vis {
         HelpVis::Shown => {
@@ -212,17 +213,28 @@ Ryan Wiedemann (Ryan1729 on github)
 ";
 
             for (y, line) in text::lines(HELP)
-                .skip(top_index)
+                .skip((top_index_with_offset as u16 / CHAR_ADVANCE_H.get().get()) as usize)
                 .take(command::h_to_usize(command::HEIGHT * CHAR_ADVANCE_H))
                 .enumerate()
             {
                 let y = y as unscaled::Inner;
 
+                let offset = top_index_with_offset as u16 % CHAR_ADVANCE_H.get().get();
+
                 commands.print_line(
                     line,
                     unscaled::X(CHAR_SPACING as _),
                     unscaled::Y(0)
-                    + y * CHAR_ADVANCE_H.get()
+                    // TODO investigate scrolling shimmering which seems to be
+                    // related to this part. Do we need to make the scrolling
+                    // speed up, then slow down or something? or is the offset
+                    // calculation just wrong?  Maybe it won't look right unless
+                    // we add more in-between frames?
+                    + unscaled::H(
+                        ((y + 1) * CHAR_ADVANCE_H.get().get())
+                        - offset
+                        - 1
+                    )
                     + CHAR_SPACING_H.get(),
                     0 // No override
                 );
@@ -252,7 +264,7 @@ mod text {
         }
 
         let mut output = Vec::with_capacity(bytes.len() + bytes.len() / width);
-    
+
         let mut x = 0;
         for word in split_whitespace(bytes) {
             x += word.len();
@@ -261,19 +273,19 @@ mod text {
                 output.extend(word.iter());
                 continue;
             }
-    
+
             if x >= width {
                 output.push(b'\n');
-    
+
                 x = word.len();
             } else if x > word.len() {
                 output.push(b' ');
-    
+
                 x += 1;
             }
             output.extend(word.iter());
         }
-    
+
         output
     }
 
