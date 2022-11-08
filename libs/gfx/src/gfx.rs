@@ -1,6 +1,6 @@
 use models::{Card, get_rank, get_suit, get_zinger, ranks, suits, zingers};
 
-use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH};
+use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT};
 
 #[derive(Default)]
 pub struct Commands {
@@ -101,8 +101,7 @@ impl Commands {
     pub fn draw_card(
         &mut self,
         card: Card,
-        x: unscaled::X,
-        y: unscaled::Y
+        xy: unscaled::XY,
     ) {
         let suit_opt = get_suit(card);
         let rank_opt = get_rank(card);
@@ -116,8 +115,8 @@ impl Commands {
                 * sprite::Inner::from(card / models::RANK_COUNT)
             ),
             Rect::from_unscaled(unscaled::Rect {
-                x,
-                y,
+                x: xy.x,
+                y: xy.y,
                 w: card::WIDTH.get(),
                 h: card::HEIGHT.get(),
             })
@@ -148,8 +147,8 @@ impl Commands {
         self.sspr(
             (image_x, image_y),
             Rect::from_unscaled(unscaled::Rect {
-                x: x + card::IMAGE_W_OFFSET.get(),
-                y: y + card::IMAGE_H_OFFSET.get(),
+                x: xy.x + card::IMAGE_W_OFFSET.get(),
+                y: xy.y + card::IMAGE_H_OFFSET.get(),
                 w: card::IMAGE_W.get(),
                 h: card::IMAGE_H.get(),
             })
@@ -460,22 +459,21 @@ impl Commands {
 
         self.print_line(
             line1,
-            x + card::LINE_W_OFFSET.get(),
-            y + card::LINE_H_1_OFFSET.get(),
+            xy.x + card::LINE_W_OFFSET.get(),
+            xy.y + card::LINE_H_1_OFFSET.get(),
             card::TEXT_COLOUR,
         );
         self.print_line(
             line2,
-            x + card::LINE_W_OFFSET.get(),
-            y + card::LINE_H_2_OFFSET.get(),
+            xy.x + card::LINE_W_OFFSET.get(),
+            xy.y + card::LINE_H_2_OFFSET.get(),
             card::TEXT_COLOUR,
         );
     }
 
     pub fn draw_card_back(
         &mut self,
-        x: unscaled::X,
-        y: unscaled::Y
+        xy: unscaled::XY,
     ) {
         let image_x = card::BACKING_SPRITE_X;
         let image_y = card::BACKING_SPRITE_BASE_Y
@@ -485,8 +483,8 @@ impl Commands {
         self.sspr(
             (image_x, image_y),
             Rect::from_unscaled(unscaled::Rect {
-                x,
-                y,
+                x: xy.x,
+                y: xy.y,
                 w: card::WIDTH.get(),
                 h: card::HEIGHT.get(),
             })
@@ -507,8 +505,8 @@ pub mod card {
     use command::{W, H, Inner, w_const_mul, h_const_add};
     use sprite::{x_const_add_w};
 
-    pub const WIDTH: W = W::clipped_inner(74);
-    pub const HEIGHT: H = H::clipped_inner(105);
+    pub const WIDTH: W = W::clipped(CARD_WIDTH);
+    pub const HEIGHT: H = H::clipped(CARD_HEIGHT);
 
     pub const IMAGE_W: W = W::clipped_inner(72);
     pub const IMAGE_H: H = H::clipped_inner(72);

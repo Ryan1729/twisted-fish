@@ -3,6 +3,9 @@
 /// `0xaarrggbb`
 pub type ARGB = u32;
 
+pub const CARD_WIDTH: unscaled::W = unscaled::W(74);
+pub const CARD_HEIGHT: unscaled::H = unscaled::H(105);
+
 pub mod unscaled {
     ///! Values are in pixels.
 
@@ -15,7 +18,7 @@ pub mod unscaled {
     macro_rules! def {
         ($($name: ident, $inner_name: ident)+) => {$(
             pub type $inner_name = Inner;
-            #[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+            #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
             pub struct $name(pub $inner_name);
 
             impl $name {
@@ -79,6 +82,14 @@ pub mod unscaled {
         H(a.0 / b)
     }
 
+    pub const fn x_const_add_w(x: X, w: W) -> X {
+        X(x.0 + w.0)
+    }
+
+    pub const fn y_const_add_h(y: Y, h: H) -> Y {
+        Y(y.0 + h.0)
+    }
+
     macro_rules! self_add_sub_def {
         ($($name: ident)+) => {$(
             impl core::ops::AddAssign for $name {
@@ -130,6 +141,14 @@ pub mod unscaled {
         }
     }
 
+    impl core::ops::Sub<X> for X {
+        type Output = W;
+
+        fn sub(self, other: X) -> Self::Output {
+            W(self.0 - other.0)
+        }
+    }
+
     impl X {
         pub const fn saturating_add(self, w: W) -> X {
             X(self.0.saturating_add(w.0))
@@ -155,6 +174,14 @@ pub mod unscaled {
         }
     }
 
+    impl core::ops::Sub<Y> for Y {
+        type Output = H;
+
+        fn sub(self, other: Y) -> Self::Output {
+            H(self.0 - other.0)
+        }
+    }
+
     impl Y {
         pub const fn saturating_add(self, h: H) -> Y {
             Y(self.0.saturating_add(h.0))
@@ -164,6 +191,11 @@ pub mod unscaled {
         }
     }
 
+    #[derive(Clone, Copy, Default, PartialEq, Eq)]
+    pub struct XY {
+        pub x: X,
+        pub y: Y,
+    }
 
     impl core::ops::MulAssign<Inner> for W {
         fn mul_assign(&mut self, inner: Inner) {
@@ -189,6 +221,21 @@ pub mod unscaled {
         }
     }
 
+    impl core::ops::DivAssign<Inner> for W {
+        fn div_assign(&mut self, inner: Inner) {
+            self.0 /= inner;
+        }
+    }
+
+    impl core::ops::Div<Inner> for W {
+        type Output = Self;
+
+        fn div(mut self, inner: Inner) -> Self::Output {
+            self /= inner;
+            self
+        }
+    }
+
     impl core::ops::MulAssign<Inner> for H {
         fn mul_assign(&mut self, inner: Inner) {
             self.0 *= inner;
@@ -210,6 +257,21 @@ pub mod unscaled {
         fn mul(self, mut h: H) -> Self::Output {
             h *= self;
             h
+        }
+    }
+
+    impl core::ops::DivAssign<Inner> for H {
+        fn div_assign(&mut self, inner: Inner) {
+            self.0 /= inner;
+        }
+    }
+
+    impl core::ops::Div<Inner> for H {
+        type Output = Self;
+
+        fn div(mut self, inner: Inner) -> Self::Output {
+            self /= inner;
+            self
         }
     }
 

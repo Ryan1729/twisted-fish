@@ -1,5 +1,5 @@
 use gfx::{Commands, card, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
-use platform_types::{Button, Input, Speaker, SFX, unscaled::{self, X, Y}, command};
+use platform_types::{Button, Input, Speaker, CARD_WIDTH, SFX, unscaled::{self, X, Y}, command};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -249,10 +249,19 @@ fn render_game(
     state: &game::State,
 ) {
     if !state.deck.is_empty() {
-        commands.draw_card_back(
-            X((command::WIDTH - card::WIDTH.get().get()) / 2),
-            Y((command::HEIGHT - card::HEIGHT.get().get()) / 2),
-        );
+        commands.draw_card_back(game::DECK_XY);
+    }
+
+    for anim in state.animations.iter() {
+        commands.draw_card_back(anim.at);
+    }
+
+    let mut xy = game::PLAYER_BASE_XY;
+
+    for card in state.player.iter() {
+        commands.draw_card(card, xy);
+
+        xy.x += CARD_WIDTH / 2;
     }
 }
 

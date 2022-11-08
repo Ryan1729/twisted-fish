@@ -23,7 +23,7 @@ pub fn gen_card(rng: &mut Xs) -> Card {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub struct CardOption(CardInner);
+struct CardOption(CardInner);
 
 compile_time_assert!{
     CardInner::MAX > DECK_SIZE
@@ -161,5 +161,37 @@ impl Hand {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn push(&mut self, card: Card) {
+        let mut pushed = false;
+
+        for i in 0..(DECK_SIZE as usize) {
+            if self.0[i].is_none() {
+                self.0[i] = CardOption::some(card);
+                pushed = true;
+                break
+            }
+        }
+
+        debug_assert!(pushed);
+    }
+
+    pub fn draw(&mut self) -> Option<Card> {
+        for i in (0..DECK_SIZE as usize).rev() {
+            if self.0[i].is_some() {
+                let output = self.0[i].option();
+
+                self.0[i] = CardOption::NONE;
+
+                return output;
+            }
+        }
+
+        None
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Card> + '_ {
+        self.0.iter().filter_map(|co| co.option())
     }
 }
