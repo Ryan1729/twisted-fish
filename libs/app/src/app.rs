@@ -1,5 +1,6 @@
+use game::Spread;
 use gfx::{Commands, card, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
-use platform_types::{Button, Input, Speaker, CARD_WIDTH, SFX, unscaled::{self, X, Y}, command};
+use platform_types::{Button, Input, Speaker, CARD_WIDTH, CARD_HEIGHT, SFX, unscaled::{self, X, Y, XY}, command};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -244,6 +245,45 @@ Ryan Wiedemann (Ryan1729 on github)
     }
 }
 
+fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
+    match spread {
+        Spread::LTR((min_edge, max_edge), y) => {
+            if len == 0 {
+                return XY { x: min_edge, y };
+            }
+        
+            let span = CARD_WIDTH;
+        
+            let full_width = max_edge - min_edge;
+            let usable_width = full_width - span;
+        
+            let offset = core::cmp::min(usable_width / len.into(), span);
+
+            XY {
+                x: min_edge.saturating_add(offset * index.into()),
+                y
+            }
+        },
+        Spread::TTB((min_edge, max_edge), x) => {
+            if len == 0 {
+                return XY { x, y: min_edge };
+            }
+        
+            let span = CARD_HEIGHT;
+        
+            let full_height = max_edge - min_edge;
+            let usable_height = full_height - span;
+        
+            let offset = core::cmp::min(usable_height / len.into(), span);
+
+            XY {
+                x,
+                y: min_edge.saturating_add(offset * index.into())
+            }
+        },
+    }
+}
+
 fn render_game(
     commands: &mut Commands,
     state: &game::State,
@@ -256,12 +296,12 @@ fn render_game(
         commands.draw_card_back(anim.at);
     }
 
-    let mut xy = game::PLAYER_BASE_XY;
-
-    for card in state.player.iter() {
-        commands.draw_card(card, xy);
-
-        xy.x += CARD_WIDTH / 2;
+    let len = state.player.len();
+    for (i, card) in state.player.enumerated_iter() {
+        commands.draw_card(
+            card,
+            get_card_position(game::PLAYER_SPREAD, len, i)
+        );
     }
 }
 

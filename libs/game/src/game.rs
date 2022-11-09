@@ -1,7 +1,7 @@
 use models::{Card, Hand, DECK_SIZE};
 use platform_types::{
     command,
-    unscaled::{self, X, Y, XY, W, H},
+    unscaled::{self, X, Y, XY, W, H, x_const_add_w, w_const_sub},
     CARD_WIDTH,
     CARD_HEIGHT
 };
@@ -16,6 +16,21 @@ pub const PLAYER_BASE_XY: XY = XY {
     x: X(CARD_WIDTH.get()),
     y: Y(command::HEIGHT - CARD_HEIGHT.get()),
 };
+
+pub enum Spread {
+    /// Left To Right
+    LTR((X, X), Y),
+    /// Top To Bottom
+    TTB((Y, Y), X),
+}
+
+pub const PLAYER_SPREAD: Spread = Spread::LTR(
+    (
+        PLAYER_BASE_XY.x,
+        x_const_add_w(X(0), w_const_sub(command::WIDTH_W, CARD_WIDTH))
+    ),
+    PLAYER_BASE_XY.y
+);
 
 const INITIAL_HAND_SIZE: u8 = 8;
 

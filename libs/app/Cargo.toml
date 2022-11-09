@@ -9,14 +9,17 @@ path = "src/app.rs"
 
 [dependencies]
 
+[dependencies.features]
+path = "../features"
+
 [dependencies.game]
 path = "../game"
 
 [dependencies.gfx]
 path = "../gfx"
 
-[dependencies.features]
-path = "../features"
+[dependencies.models]
+path = "../models"
 
 [dependencies.platform_types]
 path = "../platform_types"

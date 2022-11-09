@@ -37,6 +37,7 @@ dependencies = [
  "features",
  "game",
  "gfx",
+ "models",
  "platform_types",
 ]
 

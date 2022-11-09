@@ -126,6 +126,8 @@ pub fn get_zinger(card: Card) -> Option<Zinger> {
     }
 }
 
+pub type HandLen = u8;
+
 /// An ordered collection of cards that can hold at leat one copy of each card.
 #[derive(Clone)]
 pub struct Hand([CardOption; DECK_SIZE as usize]);
@@ -149,7 +151,7 @@ impl Hand {
         Self(output)
     }
 
-    pub fn len(&self) -> u8 {
+    pub fn len(&self) -> HandLen {
         for i in 0..DECK_SIZE {
             if self.0[i as usize].is_none() {
                 return i;
@@ -193,5 +195,18 @@ impl Hand {
 
     pub fn iter(&self) -> impl Iterator<Item = Card> + '_ {
         self.0.iter().filter_map(|co| co.option())
+    }
+}
+
+pub type CardIndex = u8;
+
+impl Hand {
+    pub fn enumerated_iter(&self) -> impl Iterator<Item = (CardIndex, Card)> + '_ {
+        compile_time_assert!{DECK_SIZE as u64 <= CardIndex::MAX as u64}
+
+        self.iter()
+            .enumerate()
+            // We rely on the len never being above `DECK_SIZE`.
+            .map(|(i, e)| (CardIndex::try_from(i).unwrap(), e))
     }
 }
