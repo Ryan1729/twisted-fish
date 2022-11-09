@@ -1,4 +1,4 @@
-use game::Spread;
+use game::{HandId, Spread};
 use gfx::{Commands, card, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
 use platform_types::{Button, Input, Speaker, CARD_WIDTH, CARD_HEIGHT, SFX, unscaled::{self, X, Y, XY}, command};
 pub use platform_types::StateParams;
@@ -254,8 +254,8 @@ fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
         
             let span = CARD_WIDTH;
         
-            let full_width = max_edge - min_edge;
-            let usable_width = full_width - span;
+            let full_width = max_edge.saturating_point_sub(min_edge);
+            let usable_width = full_width.saturating_sub(span);
         
             let offset = core::cmp::min(usable_width / len.into(), span);
 
@@ -271,8 +271,8 @@ fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
         
             let span = CARD_HEIGHT;
         
-            let full_height = max_edge - min_edge;
-            let usable_height = full_height - span;
+            let full_width = max_edge.saturating_point_sub(min_edge);
+            let usable_height = full_width.saturating_sub(span);
         
             let offset = core::cmp::min(usable_height / len.into(), span);
 
@@ -296,12 +296,16 @@ fn render_game(
         commands.draw_card_back(anim.at);
     }
 
-    let len = state.player.len();
-    for (i, card) in state.player.enumerated_iter() {
-        commands.draw_card(
-            card,
-            get_card_position(game::PLAYER_SPREAD, len, i)
-        );
+    // Rev to put player cards on top.
+    for id in HandId::ALL.into_iter().rev() {
+        let hand = state.hand(id);
+        let len = hand.len();
+        for (i, card) in hand.enumerated_iter() {
+            commands.draw_card(
+                card,
+                get_card_position(game::spread(id), len, i)
+            );
+        }
     }
 }
 

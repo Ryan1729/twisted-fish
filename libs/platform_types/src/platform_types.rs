@@ -121,6 +121,12 @@ pub mod unscaled {
                     self
                 }
             }
+
+            impl $name {
+                pub fn saturating_sub(self, other: Self) -> Self {
+                    Self(self.0.saturating_sub(other.0))
+                }
+            }
         )*}
     }
 
@@ -156,8 +162,10 @@ pub mod unscaled {
         pub const fn saturating_sub(self, w: W) -> X {
             X(self.0.saturating_sub(w.0))
         }
+        pub const fn saturating_point_sub(self, x: X) -> W {
+            W(self.0.saturating_sub(x.0))
+        }
     }
-
 
     impl core::ops::AddAssign<H> for Y {
         fn add_assign(&mut self, other: H) {
@@ -188,6 +196,9 @@ pub mod unscaled {
         }
         pub const fn saturating_sub(self, h: H) -> Y {
             Y(self.0.saturating_sub(h.0))
+        }
+        pub const fn saturating_point_sub(self, y: Y) -> H {
+            H(self.0.saturating_sub(y.0))
         }
     }
 

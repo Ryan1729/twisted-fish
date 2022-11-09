@@ -1,7 +1,7 @@
 use models::{Card, Hand, DECK_SIZE};
 use platform_types::{
     command,
-    unscaled::{self, X, Y, XY, W, H, x_const_add_w, w_const_sub},
+    unscaled::{self, X, Y, XY, W, H, x_const_add_w, w_const_sub, y_const_add_h, h_const_sub},
     CARD_WIDTH,
     CARD_HEIGHT
 };
@@ -13,8 +13,23 @@ pub const DECK_XY: XY = XY {
 };
 
 pub const PLAYER_BASE_XY: XY = XY {
-    x: X(CARD_WIDTH.get()),
+    x: X(CARD_WIDTH.get() * 5 / 4),
     y: Y(command::HEIGHT - CARD_HEIGHT.get()),
+};
+
+pub const CPU1_BASE_XY: XY = XY {
+    x: X(0),
+    y: Y(CARD_HEIGHT.get() / 2),
+};
+
+pub const CPU2_BASE_XY: XY = XY {
+    x: X(CARD_WIDTH.get() * 5 / 4),
+    y: Y(0),
+};
+
+pub const CPU3_BASE_XY: XY = XY {
+    x: X(command::WIDTH - CARD_WIDTH.get()),
+    y: Y(CARD_HEIGHT.get() / 2),
 };
 
 pub enum Spread {
@@ -31,6 +46,40 @@ pub const PLAYER_SPREAD: Spread = Spread::LTR(
     ),
     PLAYER_BASE_XY.y
 );
+
+pub const CPU1_SPREAD: Spread = Spread::TTB(
+    (
+        CPU1_BASE_XY.y,
+        Y(command::HEIGHT - (CARD_HEIGHT.get() / 2))
+    ),
+    CPU1_BASE_XY.x
+);
+
+pub const CPU2_SPREAD: Spread = Spread::LTR(
+    (
+        CPU2_BASE_XY.x,
+        x_const_add_w(X(0), w_const_sub(command::WIDTH_W, CARD_WIDTH))
+    ),
+    CPU2_BASE_XY.y
+);
+
+pub const CPU3_SPREAD: Spread = Spread::TTB(
+    (
+        CPU3_BASE_XY.y,
+        Y(command::HEIGHT - (CARD_HEIGHT.get() / 2)),
+    ),
+    CPU3_BASE_XY.x
+);
+
+pub fn spread(id: HandId) -> Spread {
+    match id {
+        HandId::Player => PLAYER_SPREAD,
+        HandId::Cpu1 => CPU1_SPREAD,
+        HandId::Cpu2 => CPU2_SPREAD,
+        HandId::Cpu3 => CPU3_SPREAD,
+    }
+    
+}
 
 const INITIAL_HAND_SIZE: u8 = 8;
 
@@ -73,18 +122,37 @@ pub enum AnimationAction {
 #[derive(Clone, Copy)]
 pub enum HandId {
     Player,
+    Cpu1,
+    Cpu2,
+    Cpu3,
 }
+
+// TODO macro for this, I guess?
+impl HandId {
+    pub const ALL: [HandId; 4] = [
+        HandId::Player, 
+        HandId::Cpu1, 
+        HandId::Cpu2, 
+        HandId::Cpu3,
+    ];
+}
+
 
 #[derive(Clone, Default)]
 pub struct State {
     pub rng: Xs,
     pub deck: Hand,
     pub player: Hand,
+    pub cpu1: Hand,
+    pub cpu2: Hand,
+    pub cpu3: Hand,
     pub animations: Animations,
 }
 
 impl State {
     pub fn new(seed: Seed) -> State {
+        use HandId::*;
+
         let mut rng = xs::from_seed(seed);
 
         let mut state = State {
@@ -93,10 +161,8 @@ impl State {
             .. <_>::default()
         };
 
-        let hands = [HandId::Player];
-
         for _ in 0..INITIAL_HAND_SIZE {
-            for id in hands {
+            for id in HandId::ALL {
                 let card = match state.deck.draw() {
                     Some(card) => card,
                     None => continue,
@@ -108,6 +174,9 @@ impl State {
                             // TODO different based on how many cards are in the
                             // hand already? Maybe account for any hand sorting?
                             HandId::Player => PLAYER_BASE_XY,
+                            HandId::Cpu1 => CPU1_BASE_XY,
+                            HandId::Cpu2 => CPU2_BASE_XY,
+                            HandId::Cpu3 => CPU3_BASE_XY,
                         };
 
                         animations[i] = Animation {
@@ -174,12 +243,24 @@ impl State {
                     AnimationAction::AddToHand(id) => {
                         let hand = match id {
                             HandId::Player => &mut self.player,
+                            HandId::Cpu1 => &mut self.cpu1,
+                            HandId::Cpu2 => &mut self.cpu2,
+                            HandId::Cpu3 => &mut self.cpu3,
                         };
 
                         hand.push(anim.card);
                     }
                 }
             }
+        }
+    }
+
+    pub fn hand(&self, id: HandId) -> &Hand {
+        match id {
+            HandId::Player => &self.player,
+            HandId::Cpu1 => &self.cpu1,
+            HandId::Cpu2 => &self.cpu2,
+            HandId::Cpu3 => &self.cpu3,
         }
     }
 }
