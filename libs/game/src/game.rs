@@ -169,7 +169,7 @@ impl State {
         };
 
         for card_i in 0..INITIAL_HAND_SIZE {
-            for id in HandId::ALL {
+            for (id_i, id) in HandId::ALL.into_iter().enumerate() {
                 let card = match state.deck.draw() {
                     Some(card) => card,
                     None => continue,
@@ -193,7 +193,7 @@ impl State {
                             action: AnimationAction::AddToHand(id),
                             delay: card_i
                                 .saturating_mul(HandId::ALL.len() as u8)
-                                .saturating_mul(2),
+                                .saturating_add(id_i as u8),
                         };
 
                         break;
