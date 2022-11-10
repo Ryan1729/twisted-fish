@@ -293,7 +293,9 @@ fn render_game(
     }
 
     for anim in state.animations.iter() {
-        commands.draw_card_back(anim.at);
+        if anim.is_active() {
+            commands.draw_card_back(anim.at);
+        }
     }
 
     // Rev to put player cards on top.

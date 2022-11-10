@@ -98,8 +98,11 @@ impl Animations {
     }
 }
 
+pub type Frames = u8;
+
 #[derive(Clone, Copy, Default)]
 pub struct Animation {
+    pub delay: Frames,
     pub card: Card,
     pub at: XY,
     pub target: XY,
@@ -107,8 +110,12 @@ pub struct Animation {
 }
 
 impl Animation {
-    fn is_done(&self) -> bool {
+    pub fn is_done(&self) -> bool {
         self.at == self.target
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.delay == 0
     }
 }
 
@@ -161,7 +168,7 @@ impl State {
             .. <_>::default()
         };
 
-        for _ in 0..INITIAL_HAND_SIZE {
+        for card_i in 0..INITIAL_HAND_SIZE {
             for id in HandId::ALL {
                 let card = match state.deck.draw() {
                     Some(card) => card,
@@ -184,6 +191,9 @@ impl State {
                             at: DECK_XY,
                             target,
                             action: AnimationAction::AddToHand(id),
+                            delay: card_i
+                                .saturating_mul(HandId::ALL.len() as u8)
+                                .saturating_mul(2),
                         };
 
                         break;
@@ -200,6 +210,11 @@ impl State {
 
         for anim in self.animations.0.iter_mut() {
             if anim.is_done() { continue }
+
+            if anim.delay > 0 { 
+                anim.delay -= 1;
+                continue 
+            }
 
             let x_rate = 1;
             let y_rate = 1;
