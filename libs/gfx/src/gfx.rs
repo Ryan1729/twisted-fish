@@ -103,6 +103,8 @@ impl Commands {
         card: Card,
         xy: unscaled::XY,
     ) {
+        self.draw_shadow_for_card_at(xy);
+
         let suit_opt = get_suit(card);
         let rank_opt = get_rank(card);
         let zinger_opt = get_zinger(card);
@@ -475,6 +477,8 @@ impl Commands {
         &mut self,
         xy: unscaled::XY,
     ) {
+        self.draw_shadow_for_card_at(xy);
+
         let image_x = card::BACKING_SPRITE_X;
         let image_y = card::BACKING_SPRITE_BASE_Y
             + unscaled::Inner::from(models::SUIT_COUNT + 2)
@@ -485,6 +489,26 @@ impl Commands {
             Rect::from_unscaled(unscaled::Rect {
                 x: xy.x,
                 y: xy.y,
+                w: card::WIDTH.get(),
+                h: card::HEIGHT.get(),
+            })
+        );
+    }
+
+    fn draw_shadow_for_card_at(
+        &mut self,
+        xy: unscaled::XY,
+    ) {
+        let image_x = card::BACKING_SPRITE_X;
+        let image_y = card::BACKING_SPRITE_BASE_Y
+            + unscaled::Inner::from(models::SUIT_COUNT + 1)
+            * card::HEIGHT.get();
+
+        self.sspr(
+            (image_x, image_y),
+            Rect::from_unscaled(unscaled::Rect {
+                x: xy.x + unscaled::W(2),
+                y: xy.y + unscaled::H(2),
                 w: card::WIDTH.get(),
                 h: card::HEIGHT.get(),
             })
