@@ -1,6 +1,6 @@
 use game::{HandId, Spread};
-use gfx::{Commands, card, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
-use platform_types::{Button, Input, Speaker, CARD_WIDTH, CARD_HEIGHT, SFX, unscaled::{self, X, Y, XY}, command};
+use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
+use platform_types::{Button, Input, Speaker, CARD_WIDTH, CARD_HEIGHT, SFX, unscaled::{self, XY}, command};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -30,10 +30,8 @@ impl State {
         // not the macro.
         features::log(&format!("{:?}", seed));
 
-        let mut game_state = game::State::new(seed);
-
         Self {
-            game_state,
+            game_state: game::State::new(seed),
             commands: Commands::default(),
             input: Input::default(),
             speaker: Speaker::default(),

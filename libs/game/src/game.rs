@@ -1,7 +1,7 @@
 use models::{Card, Hand, DECK_SIZE};
 use platform_types::{
     command,
-    unscaled::{self, X, Y, XY, W, H, x_const_add_w, w_const_sub, y_const_add_h, h_const_sub},
+    unscaled::{self, X, Y, XY, W, H, x_const_add_w, w_const_sub},
     CARD_WIDTH,
     CARD_HEIGHT
 };
@@ -158,8 +158,6 @@ pub struct State {
 
 impl State {
     pub fn new(seed: Seed) -> State {
-        use HandId::*;
-
         let mut rng = xs::from_seed(seed);
 
         let mut state = State {
