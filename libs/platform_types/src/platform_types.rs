@@ -313,7 +313,6 @@ const FONT_HEIGHT_IN_CHARS: u8 = 16;
 
 pub const FONT_WIDTH: u8 = CHAR_WIDTH * FONT_WIDTH_IN_CHARS;
 pub const FONT_HEIGHT: u8 = CHAR_HEIGHT * FONT_HEIGHT_IN_CHARS;
-pub const FONT_LENGTH: usize = FONT_WIDTH as usize * FONT_HEIGHT as usize;
 
 pub type PaletteIndex = u8;
 
