@@ -1,16 +1,18 @@
-//Read in the png and output the palletted data as a text array
+//Read in the png and output the data as a text array
 extern crate png;
 
 use std::fs::File;
 use std::io::prelude::*;
 
 const IMAGE_FILENAME: &'static str = "../../assets/gfx.png";
-// for relatively rare font extension
-//const IMAGE_FILENAME: &'static str = "../../assets/font.png";
 // for testing
 // const IMAGE_FILENAME: &'static str = "assets/pallete.png";
 
-fn main() -> Result<(), Box<std::error::Error>> {
+const OUTPUT_FILENAME: &'static str = "../../libs/assets/src/gfx.in";
+// for testing
+// const OUTPUT_FILENAME: &'static str = "out.txt";
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let decoder = png::Decoder::new(File::open(IMAGE_FILENAME)?);
     let (info, mut reader) = decoder.read_info()?;
     println!(
@@ -30,13 +32,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
     // The default options
     reader.next_frame(&mut buf)?;
 
-    let filename = "out.txt";
+    let output_filename = OUTPUT_FILENAME;
 
-    let mut file = File::create(filename)?;
+    let mut file = File::create(output_filename)?;
 
     use png::ColorType::*;
     let pixel_width = match info.color_type {
-        RGB => 3,
         RGBA => 4,
         _ => unimplemented!(
             "This program cannot handle {:?} images (yet.)",
@@ -44,33 +45,29 @@ fn main() -> Result<(), Box<std::error::Error>> {
         ),
     };
 
-    let mut colour_indices = Vec::with_capacity(buf.len() / pixel_width);
+    let mut pixels = Vec::with_capacity(buf.len() / pixel_width);
 
     for colour in buf.chunks(pixel_width) {
-        let index = match (colour[0], colour[1], colour[2]) {
-            //pallete
-            (51, 82, 225) => 0,
-            (48, 176, 110) => 1,
-            (222, 73, 73) => 2,
-            (255, 185, 55) => 3,
-            (83, 51, 84) => 4,
-            (90, 125, 139) => 5,
-            (238, 238, 238) => 6,
-            (34, 34, 34) => 7,
-            //map pure white and black to font gfx colours
-            (255, 255, 255) => 6,
-            (0, 0, 0) => 0,
-            _ => 255,
-        };
+        let argb =
+        ((colour[3] as u32) << 24)
+        | ((colour[0] as u32) << 16)
+        | ((colour[1] as u32) << 8)
+        | ((colour[2] as u32));
 
-        colour_indices.push(index);
+        pixels.push(argb);
     }
 
-    let mut output = String::with_capacity(colour_indices.len() * 3 + 256);
+    let mut output = String::with_capacity(
+        pixels.len() * "0xFFFFFFFF, ".len()
+        // Newlines for each row
+        + 1024
+        // Extra for start and end of array
+        + 8
+    );
     output.push_str("[\n");
-    for chunk in colour_indices.chunks(128) {
+    for chunk in pixels.chunks(512) {
         for colour in chunk.iter() {
-            output.push_str(&format!("{}, ", colour));
+            output.push_str(&format!("0x{colour:08X}, "));
         }
         output.push('\n');
     }
@@ -78,7 +75,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     file.write_all(output.as_bytes())?;
 
-    println!("overwrote {}", filename);
+    println!("overwrote {}", output_filename);
 
     Ok(())
 }
