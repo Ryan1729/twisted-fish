@@ -300,12 +300,25 @@ fn render_game(
     for id in HandId::ALL.into_iter().rev() {
         let hand = state.hand(id);
         let len = hand.len();
-        for (i, card) in hand.enumerated_iter() {
-            commands.draw_card(
-                card,
-                get_card_position(game::spread(id), len, i)
-            );
+
+        match id.facing() {
+            game::Facing::Up => {
+                for (i, card) in hand.enumerated_iter() {
+                    commands.draw_card(
+                        card,
+                        get_card_position(game::spread(id), len, i)
+                    );
+                }
+            },
+            game::Facing::Down => {
+                for i in 0..len {
+                    commands.draw_card_back(
+                        get_card_position(game::spread(id), len, i)
+                    );
+                }
+            }
         }
+        
     }
 }
 

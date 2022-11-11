@@ -144,6 +144,24 @@ impl HandId {
     ];
 }
 
+#[derive(Default)]
+pub enum Facing {
+    #[default]
+    Down,
+    Up,
+}
+
+impl HandId {
+    pub fn facing(self) -> Facing {
+        match self {
+            HandId::Player => Facing::Up,
+            HandId::Cpu1
+            | HandId::Cpu2
+            | HandId::Cpu3 => Facing::Down,
+        }
+    }
+}
+
 
 #[derive(Clone, Default)]
 pub struct State {
