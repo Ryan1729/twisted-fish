@@ -209,4 +209,8 @@ impl Hand {
             // We rely on the len never being above `DECK_SIZE`.
             .map(|(i, e)| (CardIndex::try_from(i).unwrap(), e))
     }
+
+    pub fn get(&self, i: CardIndex) -> Option<Card> {
+        self.0.get(usize::from(i)).and_then(|co| co.option())
+    }
 }

@@ -301,24 +301,37 @@ fn render_game(
         let hand = state.hand(id);
         let len = hand.len();
 
-        match id.facing() {
-            game::Facing::Up => {
-                for (i, card) in hand.enumerated_iter() {
-                    commands.draw_card(
-                        card,
-                        get_card_position(game::spread(id), len, i)
-                    );
-                }
-            },
-            game::Facing::Down => {
-                for i in 0..len {
-                    commands.draw_card_back(
-                        get_card_position(game::spread(id), len, i)
-                    );
-                }
+        if id == HandId::Player {
+            for (i, card) in hand.enumerated_iter() {
+                if state.selected == i { continue }
+
+                commands.draw_card(
+                    card,
+                    get_card_position(game::spread(id), len, i)
+                );
+            }
+
+            if let Some(card) = hand.get(state.selected) {
+                let selected_pos = get_card_position(
+                    game::spread(id),
+                    len,
+                    state.selected
+                );
+    
+                commands.draw_card(
+                    card,
+                    selected_pos
+                );
+    
+                commands.draw_selectrum(selected_pos);
+            }
+        } else {
+            for i in 0..len {
+                commands.draw_card_back(
+                    get_card_position(game::spread(id), len, i)
+                );
             }
         }
-        
     }
 }
 

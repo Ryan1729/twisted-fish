@@ -126,7 +126,7 @@ pub enum AnimationAction {
     AddToHand(HandId)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum HandId {
     Player,
     Cpu1,
@@ -162,6 +162,8 @@ impl HandId {
     }
 }
 
+// Maybe make this an enum later?
+pub type Selected = u8;
 
 #[derive(Clone, Default)]
 pub struct State {
@@ -172,6 +174,7 @@ pub struct State {
     pub cpu2: Hand,
     pub cpu3: Hand,
     pub animations: Animations,
+    pub selected: Selected,
 }
 
 impl State {
