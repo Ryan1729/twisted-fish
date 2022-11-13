@@ -78,7 +78,7 @@ pub fn spread(id: HandId) -> Spread {
         HandId::Cpu2 => CPU2_SPREAD,
         HandId::Cpu3 => CPU3_SPREAD,
     }
-    
+
 }
 
 const INITIAL_HAND_SIZE: u8 = 8;
@@ -136,10 +136,18 @@ pub enum HandId {
 
 // TODO macro for this, I guess?
 impl HandId {
-    pub const ALL: [HandId; 4] = [
-        HandId::Player, 
-        HandId::Cpu1, 
-        HandId::Cpu2, 
+    pub const COUNT: u8 = 4;
+
+    pub const ALL: [HandId; Self::COUNT as usize] = [
+        HandId::Player,
+        HandId::Cpu1,
+        HandId::Cpu2,
+        HandId::Cpu3,
+    ];
+
+    pub const CPUS: [HandId; (Self::COUNT - 1) as usize] = [
+        HandId::Cpu1,
+        HandId::Cpu2,
         HandId::Cpu3,
     ];
 }
@@ -230,9 +238,9 @@ impl State {
         for anim in self.animations.0.iter_mut() {
             if anim.is_done() { continue }
 
-            if anim.delay > 0 { 
+            if anim.delay > 0 {
                 anim.delay -= 1;
-                continue 
+                continue
             }
 
             let x_rate = 1;
@@ -271,7 +279,7 @@ impl State {
                 _ => anim.at.y,
             };
 
-            if anim.is_done() { 
+            if anim.is_done() {
                 match anim.action {
                     AnimationAction::DoNothing => {},
                     AnimationAction::AddToHand(id) => {

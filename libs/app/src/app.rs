@@ -297,40 +297,44 @@ fn render_game(
     }
 
     // Rev to put player cards on top.
-    for id in HandId::ALL.into_iter().rev() {
+    for id in HandId::CPUS.into_iter() {
         let hand = state.hand(id);
         let len = hand.len();
 
-        if id == HandId::Player {
-            for (i, card) in hand.enumerated_iter() {
-                if state.selected == i { continue }
+        for i in 0..len {
+            commands.draw_card_back(
+                get_card_position(game::spread(id), len, i)
+            );
+        }
+    }
 
-                commands.draw_card(
-                    card,
-                    get_card_position(game::spread(id), len, i)
-                );
-            }
+    {
+        let id = HandId::Player;
+        let hand = state.hand(id);
+        let len = hand.len();
 
-            if let Some(card) = hand.get(state.selected) {
-                let selected_pos = get_card_position(
-                    game::spread(id),
-                    len,
-                    state.selected
-                );
-    
-                commands.draw_card(
-                    card,
-                    selected_pos
-                );
-    
-                commands.draw_selectrum(selected_pos);
-            }
-        } else {
-            for i in 0..len {
-                commands.draw_card_back(
-                    get_card_position(game::spread(id), len, i)
-                );
-            }
+        for (i, card) in hand.enumerated_iter() {
+            if state.selected == i { continue }
+
+            commands.draw_card(
+                card,
+                get_card_position(game::spread(id), len, i)
+            );
+        }
+
+        if let Some(card) = hand.get(state.selected) {
+            let selected_pos = get_card_position(
+                game::spread(id),
+                len,
+                state.selected
+            );
+
+            commands.draw_card(
+                card,
+                selected_pos
+            );
+
+            commands.draw_selectrum(selected_pos);
         }
     }
 }
