@@ -3,8 +3,9 @@ use platform_types::{
     Command,
     GFX_WIDTH,
     ARGB,
-    unscaled,
     command::{self, Rect},
+    sprite,
+    unscaled,
 };
 
 use assets::GFX;
@@ -81,8 +82,8 @@ mod hash {
         u16(hash, x_max.get().get());
         u16(hash, y_max.get().get());
 
-        u16(hash, sprite_xy.0.0);
-        u16(hash, sprite_xy.1.0);
+        u16(hash, sprite_xy.x.0);
+        u16(hash, sprite_xy.y.0);
 
         bytes(hash, &colour_override.to_ne_bytes());
     }
@@ -1070,7 +1071,7 @@ pub fn render(
     }
 
     for &Command {
-        sprite_xy: (sprite_x, sprite_y),
+        sprite_xy: sprite::XY { x: sprite_x, y: sprite_y },
         colour_override,
         rect,
     } in commands.iter() {

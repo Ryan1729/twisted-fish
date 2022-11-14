@@ -287,11 +287,43 @@ pub mod unscaled {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct WH {
+        pub w: W,
+        pub h: H,
+    }
+
+    impl core::ops::AddAssign<WH> for XY {
+        fn add_assign(&mut self, other: WH) {
+            self.x += other.w;
+            self.y += other.h;
+        }
+    }
+
+    impl core::ops::Add<WH> for XY {
+        type Output = Self;
+
+        fn add(mut self, other: WH) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct Rect {
         pub x: X,
         pub y: Y,
         pub w: W,
         pub h: H,
+    }
+
+    impl Rect {
+        pub fn xy(self) -> XY {
+            XY {
+                x: self.x,
+                y: self.y,
+            }
+        }
     }
 }
 
@@ -371,7 +403,45 @@ pub mod sprite {
         }
     }
 
-    pub type XY = (X, Y);
+    pub const fn y_const_add_h(y: Y, h: H) -> Y {
+        Y(y.0 + h.0)
+    }
+
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct XY {
+        pub x: X,
+        pub y: Y,
+    }
+
+    impl core::ops::AddAssign<W> for XY {
+        fn add_assign(&mut self, other: W) {
+            self.x += other;
+        }
+    }
+
+    impl core::ops::Add<W> for XY {
+        type Output = Self;
+
+        fn add(mut self, other: W) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::AddAssign<H> for XY {
+        fn add_assign(&mut self, other: H) {
+            self.y += other;
+        }
+    }
+
+    impl core::ops::Add<H> for XY {
+        type Output = Self;
+
+        fn add(mut self, other: H) -> Self::Output {
+            self += other;
+            self
+        }
+    }
 }
 
 pub mod command {

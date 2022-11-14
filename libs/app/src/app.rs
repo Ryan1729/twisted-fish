@@ -1,6 +1,6 @@
-use game::{HandId, Spread};
-use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
-use platform_types::{Button, Input, Speaker, CARD_WIDTH, CARD_HEIGHT, SFX, unscaled::{self, XY}, command};
+use game::{HandId, Menu, Spread};
+use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING, WINDOW_CONTENT_OFFSET};
+use platform_types::{Button, Input, Speaker, CARD_WIDTH, CARD_HEIGHT, SFX, unscaled::{self, X, Y, XY, W, H}, command};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -98,10 +98,39 @@ impl platform_types::State for State {
 }
 
 fn update_game(state: &mut game::State, input: Input, speaker: &mut Speaker) {
-    if input.gamepad != <_>::default() {
-        speaker.request_sfx(SFX::CardPlace);
+    match state.menu {
+        Menu::Selecting(selected) => {
+            if input.pressed_this_frame(Button::LEFT) {
+                state.menu = Menu::Selecting(
+                    if selected > 0 {
+                        selected - 1
+                    } else {
+                        0
+                    }
+                );
+            } else if input.pressed_this_frame(Button::RIGHT) {
+                state.menu = Menu::Selecting(
+                    if selected < state.player.len() - 1 {
+                        selected + 1
+                    } else {
+                        0
+                    }
+                );
+            } else if input.pressed_this_frame(Button::A) {
+                state.menu = Menu::Asking(selected);
+            } else {
+                // do nothing
+            }
+        },
+        Menu::Asking(selected) => {
+            if input.pressed_this_frame(Button::B) {
+                state.menu = Menu::Selecting(selected);
+            } else {
+                // do nothing
+            }
+        }
     }
-    state.tick();
+    state.tick(speaker);
 }
 
 fn render(
@@ -282,6 +311,16 @@ fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
     }
 }
 
+const ASKING_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 8;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};
+
 fn render_game(
     commands: &mut Commands,
     state: &game::State,
@@ -308,13 +347,18 @@ fn render_game(
         }
     }
 
-    {
+    'player_hand: {
         let id = HandId::Player;
         let hand = state.hand(id);
         let len = hand.len();
 
+        if len == 0 {
+            break 'player_hand
+        }
+
+        let selected = state.menu.selected();
         for (i, card) in hand.enumerated_iter() {
-            if state.selected == i { continue }
+            if selected == i { continue }
 
             commands.draw_card(
                 card,
@@ -322,19 +366,32 @@ fn render_game(
             );
         }
 
-        if let Some(card) = hand.get(state.selected) {
-            let selected_pos = get_card_position(
-                game::spread(id),
-                len,
-                state.selected
-            );
+        let player_card = hand.get(selected)
+            .expect("selected index should always be valid");
 
-            commands.draw_card(
-                card,
-                selected_pos
-            );
+        let selected_pos = get_card_position(
+            game::spread(id),
+            len,
+            selected
+        );
 
-            commands.draw_selectrum(selected_pos);
+        commands.draw_card(
+            player_card,
+            selected_pos
+        );
+
+        commands.draw_selectrum(selected_pos);
+
+        match state.menu {
+            Menu::Selecting(_) => {},
+            Menu::Asking(_) => {
+                commands.draw_nine_slice(ASKING_WINDOW);
+
+                commands.draw_card(
+                    player_card,
+                    ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET
+                );
+            },
         }
     }
 }

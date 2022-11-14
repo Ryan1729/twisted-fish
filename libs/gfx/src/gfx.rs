@@ -2,6 +2,11 @@ use models::{Card, get_rank, get_suit, get_zinger, ranks, suits, zingers};
 
 use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT};
 
+const FONT_OFFSET: sprite::H = unscaled::h_const_mul(
+    card::IMAGE_H.get(),
+    models::RANK_COUNT as _
+);
+
 #[derive(Default)]
 pub struct Commands {
     commands: Vec<Command>,
@@ -37,10 +42,6 @@ impl Commands {
         mut y: unscaled::Y,
         colour_override: ARGB
     ) {
-        const FONT_OFFSET: sprite::H = unscaled::h_const_mul(
-            card::IMAGE_H.get(),
-            models::RANK_COUNT as _
-        );
         let mut font_offset = FONT_OFFSET;
 
         let mut h = CHAR_H.get();
@@ -59,14 +60,14 @@ impl Commands {
         let sprite_xy = {
             const SPRITES_PER_ROW: u8 = FONT_WIDTH / CHAR_WIDTH;
 
-            (
-                sprite::X(Into::into(
+            sprite::XY {
+                x: sprite::X(Into::into(
                     (character % SPRITES_PER_ROW) * CHAR_WIDTH,
                 )),
-                sprite::Y(Into::into(
+                y: sprite::Y(Into::into(
                     (character / SPRITES_PER_ROW) * CHAR_HEIGHT,
                 )) + font_offset,
-            )
+            }
         };
 
         self.push_command_if_useful(
@@ -110,12 +111,12 @@ impl Commands {
         let zinger_opt = get_zinger(card);
 
         self.sspr(
-            (
-                card::BACKING_SPRITE_X,
-                card::BACKING_SPRITE_BASE_Y
+            sprite::XY {
+                x: card::BACKING_SPRITE_X,
+                y: card::BACKING_SPRITE_BASE_Y
                 + card::HEIGHT.get()
                 * sprite::Inner::from(card / models::RANK_COUNT)
-            ),
+            },
             Rect::from_unscaled(unscaled::Rect {
                 x: xy.x,
                 y: xy.y,
@@ -147,7 +148,10 @@ impl Commands {
         };
 
         self.sspr(
-            (image_x, image_y),
+            sprite::XY {
+                x: image_x,
+                y: image_y,
+            },
             Rect::from_unscaled(unscaled::Rect {
                 x: xy.x + card::IMAGE_W_OFFSET.get(),
                 y: xy.y + card::IMAGE_H_OFFSET.get(),
@@ -485,7 +489,10 @@ impl Commands {
             * card::HEIGHT.get();
 
         self.sspr(
-            (image_x, image_y),
+            sprite::XY {
+                x: image_x, 
+                y: image_y,
+            },
             Rect::from_unscaled(unscaled::Rect {
                 x: xy.x,
                 y: xy.y,
@@ -505,7 +512,10 @@ impl Commands {
             * card::HEIGHT.get();
 
         self.sspr(
-            (image_x, image_y),
+            sprite::XY {
+                x: image_x, 
+                y: image_y,
+            },
             Rect::from_unscaled(unscaled::Rect {
                 x: xy.x + unscaled::W(2),
                 y: xy.y + unscaled::H(2),
@@ -525,13 +535,139 @@ impl Commands {
             * card::HEIGHT.get();
 
         self.sspr(
-            (image_x, image_y),
+            sprite::XY {
+                x: image_x, 
+                y: image_y,
+            },
             Rect::from_unscaled(unscaled::Rect {
                 x: xy.x,
                 y: xy.y,
                 w: card::WIDTH.get(),
                 h: card::HEIGHT.get(),
             })
+        );
+    }
+
+    pub fn draw_nine_slice(
+        &mut self,
+        unscaled::Rect { x, y, w, h }: unscaled::Rect,
+    ) {
+        #![allow(non_snake_case)]
+
+        macro_rules! r {
+            ($x: ident, $y: ident $(,)?) => {
+                Rect::from_unscaled(unscaled::Rect {
+                    x: $x,
+                    y: $y,
+                    w: WIDTH,
+                    h: HEIGHT,
+                })
+            };
+        }
+
+        const WIDTH: unscaled::W = unscaled::W(8);
+        const HEIGHT: unscaled::H = unscaled::H(8);
+
+        const TOP_LEFT: sprite::XY = sprite::XY {
+            x: sprite::X(FONT_WIDTH as _),
+            y: sprite::y_const_add_h(sprite::Y(0), FONT_OFFSET),
+        };
+
+        let TOP: sprite::XY = TOP_LEFT + WIDTH;
+        let TOP_RIGHT: sprite::XY = TOP + WIDTH;
+
+        let MIDDLE_LEFT: sprite::XY = TOP_LEFT + HEIGHT;
+        let MIDDLE: sprite::XY = TOP + HEIGHT;
+        let MIDDLE_RIGHT: sprite::XY = TOP_RIGHT + HEIGHT;
+
+        let BOTTOM_LEFT: sprite::XY = MIDDLE_LEFT + HEIGHT;
+        let BOTTOM: sprite::XY = MIDDLE + HEIGHT;
+        let BOTTOM_RIGHT: sprite::XY = MIDDLE_RIGHT + HEIGHT;
+
+        let after_left_corner = x.saturating_add(WIDTH);
+        let before_right_corner = x.saturating_add(w).saturating_sub(WIDTH);
+
+        let below_top_corner = y.saturating_add(HEIGHT);
+        let above_bottom_corner = y.saturating_add(h).saturating_sub(HEIGHT);
+
+        macro_rules! step_by {
+            (
+                for $element: ident in $start: ident .. $end: ident 
+                step_by $by: ident 
+                $body: block
+            ) => ({
+                let mut $element = $start;
+                while $element < $end {
+                    $body
+
+                    $element += $by;
+                }
+            })
+        }
+
+        step_by!(
+            for fill_y in below_top_corner..above_bottom_corner
+            step_by HEIGHT {
+                step_by!(
+                    for fill_x in after_left_corner..before_right_corner
+                    step_by WIDTH {
+                        self.sspr(
+                            MIDDLE,
+                            r!(fill_x, fill_y),
+                        );
+                    }
+                )
+            }
+        );
+
+        step_by!(
+            for fill_x in after_left_corner..before_right_corner
+            step_by WIDTH {
+                self.sspr(
+                    TOP,
+                    r!(fill_x, y),
+                );
+    
+                self.sspr(
+                    BOTTOM,
+                    r!(fill_x, above_bottom_corner),
+                );
+            }
+        );
+
+        step_by!(
+            for fill_y in below_top_corner..above_bottom_corner
+            step_by HEIGHT {
+                self.sspr(
+                    MIDDLE_LEFT,
+                    r!(x, fill_y),
+                );
+    
+                self.sspr(
+                    MIDDLE_RIGHT,
+                    r!(before_right_corner, fill_y),
+                );
+            }
+        );
+
+        self.sspr(
+            TOP_LEFT,
+            r!(x, y),
+        );
+
+        self.sspr(
+            TOP_RIGHT,
+            r!(before_right_corner, y),
+        );
+
+        self.sspr(
+            BOTTOM_LEFT,
+            r!(x, above_bottom_corner),
+        );
+
+        self.sspr(
+            BOTTOM_RIGHT,
+            r!(before_right_corner, above_bottom_corner),
         );
     }
 
@@ -582,12 +718,10 @@ pub mod card {
     pub const LINE_H_2_OFFSET: H = h_const_add(LINE_H_1_OFFSET, CHAR_ADVANCE_H);
 }
 
-pub const TEN_CHAR: u8 = 27;
-
-pub const CLUB_CHAR: u8 = 31;
-pub const DIAMOND_CHAR: u8 = 29;
-pub const HEART_CHAR: u8 = 30;
-pub const SPADE_CHAR: u8 = 28;
+pub const WINDOW_CONTENT_OFFSET: unscaled::WH = unscaled::WH {
+    w: unscaled::W(3),
+    h: unscaled::H(3),
+};
 
 pub const CHAR_SPACING: u8 = 2;
 pub const CHAR_SPACING_W: command::W = command::W::clipped_inner(CHAR_SPACING as _);

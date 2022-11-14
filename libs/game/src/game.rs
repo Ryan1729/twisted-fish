@@ -1,7 +1,9 @@
-use models::{Card, Hand, DECK_SIZE};
+use models::{Card, CardIndex, Hand, DECK_SIZE};
 use platform_types::{
     command,
     unscaled::{self, X, Y, XY, W, H, x_const_add_w, w_const_sub},
+    Speaker,
+    SFX,
     CARD_WIDTH,
     CARD_HEIGHT
 };
@@ -170,8 +172,29 @@ impl HandId {
     }
 }
 
-// Maybe make this an enum later?
-pub type Selected = u8;
+
+#[derive(Copy, Clone)]
+pub enum Menu {
+    Selecting(CardIndex),
+    Asking(CardIndex),
+}
+
+impl Default for Menu {
+    fn default() -> Menu {
+        Menu::Selecting(CardIndex::default())
+    }
+}
+
+impl Menu {
+    // We assume there will probably be cases where there isn't a selected card.
+    // We'll see.
+    pub fn selected(self) -> CardIndex {
+        match self {
+            Self::Selecting(selected)
+            | Self::Asking(selected) => selected,
+        }
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct State {
@@ -182,7 +205,7 @@ pub struct State {
     pub cpu2: Hand,
     pub cpu3: Hand,
     pub animations: Animations,
-    pub selected: Selected,
+    pub menu: Menu,
 }
 
 impl State {
@@ -232,7 +255,7 @@ impl State {
         state
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self, speaker: &mut Speaker) {
         use core::cmp::{min, Ordering::*};
 
         for anim in self.animations.0.iter_mut() {
@@ -291,6 +314,8 @@ impl State {
                         };
 
                         hand.push(anim.card);
+
+                        speaker.request_sfx(SFX::CardPlace);
                     }
                 }
             }
