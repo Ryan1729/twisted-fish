@@ -117,7 +117,13 @@ fn update_game(state: &mut game::State, input: Input, speaker: &mut Speaker) {
                     }
                 );
             } else if input.pressed_this_frame(Button::A) {
-                state.menu = Menu::Asking(selected);
+                let player_card = state.player.get(selected)
+                    .expect("selected index should always be valid");
+                if let Some(_zinger) = models::get_zinger(player_card) {
+                    // TODO probably add specific menus for each zinger
+                } else {
+                    state.menu = Menu::Asking(selected);
+                }
             } else {
                 // do nothing
             }
