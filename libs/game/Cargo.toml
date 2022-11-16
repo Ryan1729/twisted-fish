@@ -7,6 +7,9 @@ edition = "2021"
 [lib]
 path = "src/game.rs"
 
+[dependencies.gfx]
+path = "../gfx"
+
 [dependencies.models]
 path = "../models"
 

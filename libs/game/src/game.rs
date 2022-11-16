@@ -1,7 +1,10 @@
 use models::{Card, CardIndex, Hand, DECK_SIZE};
+use gfx::{Commands, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
     unscaled::{self, X, Y, XY, W, H, x_const_add_w, w_const_sub},
+    Button,
+    Input,
     Speaker,
     SFX,
     CARD_WIDTH,
@@ -9,27 +12,27 @@ use platform_types::{
 };
 use xs::{Xs, Seed};
 
-pub const DECK_XY: XY = XY {
+const DECK_XY: XY = XY {
     x: X((command::WIDTH - CARD_WIDTH.get()) / 2),
     y: Y((command::HEIGHT - CARD_HEIGHT.get()) / 2),
 };
 
-pub const PLAYER_BASE_XY: XY = XY {
+const PLAYER_BASE_XY: XY = XY {
     x: X(CARD_WIDTH.get() * 5 / 4),
     y: Y(command::HEIGHT - CARD_HEIGHT.get()),
 };
 
-pub const CPU1_BASE_XY: XY = XY {
+const CPU1_BASE_XY: XY = XY {
     x: X(0),
     y: Y(CARD_HEIGHT.get() / 2),
 };
 
-pub const CPU2_BASE_XY: XY = XY {
+const CPU2_BASE_XY: XY = XY {
     x: X(CARD_WIDTH.get() * 5 / 4),
     y: Y(0),
 };
 
-pub const CPU3_BASE_XY: XY = XY {
+const CPU3_BASE_XY: XY = XY {
     x: X(command::WIDTH - CARD_WIDTH.get()),
     y: Y(CARD_HEIGHT.get() / 2),
 };
@@ -331,3 +334,170 @@ impl State {
         }
     }
 }
+
+pub fn update_and_render(
+    commands: &mut Commands,
+    state: &mut State,
+    input: Input,
+    speaker: &mut Speaker
+) {
+    match state.menu {
+        Menu::Selecting(selected) => {
+            if input.pressed_this_frame(Button::LEFT) {
+                state.menu = Menu::Selecting(
+                    if selected > 0 {
+                        selected - 1
+                    } else {
+                        0
+                    }
+                );
+            } else if input.pressed_this_frame(Button::RIGHT) {
+                state.menu = Menu::Selecting(
+                    if selected < state.player.len() - 1 {
+                        selected + 1
+                    } else {
+                        0
+                    }
+                );
+            } else if input.pressed_this_frame(Button::A) {
+                let player_card = state.player.get(selected)
+                    .expect("selected index should always be valid");
+                if let Some(_zinger) = models::get_zinger(player_card) {
+                    // TODO probably add specific menus for each zinger
+                } else {
+                    state.menu = Menu::Asking(selected);
+                }
+            } else {
+                // do nothing
+            }
+        },
+        Menu::Asking(selected) => {
+            if input.pressed_this_frame(Button::B) {
+                state.menu = Menu::Selecting(selected);
+            } else {
+                // do nothing
+            }
+        }
+    }
+
+    state.tick(speaker);
+
+    if !state.deck.is_empty() {
+        commands.draw_card_back(DECK_XY);
+    }
+
+    for anim in state.animations.iter() {
+        if anim.is_active() {
+            commands.draw_card_back(anim.at);
+        }
+    }
+
+    // Rev to put player cards on top.
+    for id in HandId::CPUS.into_iter() {
+        let hand = state.hand(id);
+        let len = hand.len();
+
+        for i in 0..len {
+            commands.draw_card_back(
+                get_card_position(spread(id), len, i)
+            );
+        }
+    }
+
+    'player_hand: {
+        let id = HandId::Player;
+        let hand = state.hand(id);
+        let len = hand.len();
+
+        if len == 0 {
+            break 'player_hand
+        }
+
+        let selected = state.menu.selected();
+        for (i, card) in hand.enumerated_iter() {
+            if selected == i { continue }
+
+            commands.draw_card(
+                card,
+                get_card_position(spread(id), len, i)
+            );
+        }
+
+        let player_card = hand.get(selected)
+            .expect("selected index should always be valid");
+
+        let selected_pos = get_card_position(
+            spread(id),
+            len,
+            selected
+        );
+
+        commands.draw_card(
+            player_card,
+            selected_pos
+        );
+
+        commands.draw_selectrum(selected_pos);
+
+        match state.menu {
+            Menu::Selecting(_) => {},
+            Menu::Asking(_) => {
+                commands.draw_nine_slice(ASKING_WINDOW);
+
+                commands.draw_card(
+                    player_card,
+                    ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET
+                );
+            },
+        }
+    }
+}
+
+fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
+    match spread {
+        Spread::LTR((min_edge, max_edge), y) => {
+            if len == 0 {
+                return XY { x: min_edge, y };
+            }
+        
+            let span = CARD_WIDTH;
+        
+            let full_width = max_edge.saturating_point_sub(min_edge);
+            let usable_width = full_width.saturating_sub(span);
+        
+            let offset = core::cmp::min(usable_width / len.into(), span);
+
+            XY {
+                x: min_edge.saturating_add(offset * index.into()),
+                y
+            }
+        },
+        Spread::TTB((min_edge, max_edge), x) => {
+            if len == 0 {
+                return XY { x, y: min_edge };
+            }
+        
+            let span = CARD_HEIGHT;
+        
+            let full_width = max_edge.saturating_point_sub(min_edge);
+            let usable_height = full_width.saturating_sub(span);
+        
+            let offset = core::cmp::min(usable_height / len.into(), span);
+
+            XY {
+                x,
+                y: min_edge.saturating_add(offset * index.into())
+            }
+        },
+    }
+}
+
+const ASKING_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 8;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};
