@@ -318,6 +318,15 @@ impl State {
 
                         hand.push(anim.card);
 
+                        if let HandId::Player = id {
+                            match self.menu {
+                                Menu::Selecting(_) => {
+                                    self.menu = Menu::Selecting(hand.len() - 1);
+                                },
+                                Menu::Asking(_) => {},
+                            }
+                        }
+
                         speaker.request_sfx(SFX::CardPlace);
                     }
                 }
