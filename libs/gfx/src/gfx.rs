@@ -38,10 +38,10 @@ impl Commands {
     pub fn print_char(
         &mut self,
         mut character: u8,
-        x: unscaled::X,
-        mut y: unscaled::Y,
+        unscaled::XY { x, y } : unscaled::XY,
         colour_override: ARGB
     ) {
+        let mut y = y;
         let mut font_offset = FONT_OFFSET;
 
         let mut h = CHAR_H.get();
@@ -89,13 +89,12 @@ impl Commands {
     pub fn print_line(
         &mut self,
         bytes: &[u8],
-        mut x: unscaled::X,
-        y: unscaled::Y,
+        mut xy : unscaled::XY,
         colour: ARGB,
     ) {
         for &c in bytes.iter() {
-            self.print_char(c, x, y, colour);
-            x += CHAR_ADVANCE_W.get();
+            self.print_char(c, xy, colour);
+            xy.x += CHAR_ADVANCE_W.get();
         }
     }
 
@@ -465,14 +464,12 @@ impl Commands {
 
         self.print_line(
             line1,
-            xy.x + card::LINE_W_OFFSET.get(),
-            xy.y + card::LINE_H_1_OFFSET.get(),
+            xy + card::LINE_W_OFFSET.get() + card::LINE_H_1_OFFSET.get(),
             card::TEXT_COLOUR,
         );
         self.print_line(
             line2,
-            xy.x + card::LINE_W_OFFSET.get(),
-            xy.y + card::LINE_H_2_OFFSET.get(),
+            xy + card::LINE_W_OFFSET.get() + card::LINE_H_2_OFFSET.get(),
             card::TEXT_COLOUR,
         );
     }
@@ -547,12 +544,45 @@ impl Commands {
             })
         );
     }
+}
 
+#[derive(Clone, Copy)]
+pub enum NineSlice {
+    Window,
+    Button,
+    ButtonHot,
+    ButtonPressed,
+}
+
+impl NineSlice {
+    pub const WIDTH: unscaled::W = unscaled::W(8);
+    pub const HEIGHT: unscaled::H = unscaled::H(8);
+
+    fn top_left(self) -> sprite::XY {
+        const WIDTH: unscaled::W = NineSlice::WIDTH;
+
+        const BASE: sprite::XY = sprite::XY {
+            x: sprite::X(FONT_WIDTH as _),
+            y: sprite::y_const_add_h(sprite::Y(0), FONT_OFFSET),
+        };
+
+        match self {
+            NineSlice::Window => BASE,
+            NineSlice::Button => BASE + WIDTH * 3,
+            NineSlice::ButtonHot => BASE + WIDTH * 6,
+            NineSlice::ButtonPressed => BASE + WIDTH * 9,
+        }
+    }
+}
+
+impl Commands {
     pub fn draw_nine_slice(
         &mut self,
+        nine_slice: NineSlice,
         unscaled::Rect { x, y, w, h }: unscaled::Rect,
     ) {
-        #![allow(non_snake_case)]
+        const WIDTH: unscaled::W = NineSlice::WIDTH;
+        const HEIGHT: unscaled::H = NineSlice::HEIGHT;
 
         macro_rules! r {
             ($x: ident, $y: ident $(,)?) => {
@@ -565,24 +595,18 @@ impl Commands {
             };
         }
 
-        const WIDTH: unscaled::W = unscaled::W(8);
-        const HEIGHT: unscaled::H = unscaled::H(8);
+        let top_left: sprite::XY = nine_slice.top_left();
 
-        const TOP_LEFT: sprite::XY = sprite::XY {
-            x: sprite::X(FONT_WIDTH as _),
-            y: sprite::y_const_add_h(sprite::Y(0), FONT_OFFSET),
-        };
+        let top: sprite::XY = top_left + WIDTH;
+        let top_right: sprite::XY = top + WIDTH;
 
-        let TOP: sprite::XY = TOP_LEFT + WIDTH;
-        let TOP_RIGHT: sprite::XY = TOP + WIDTH;
+        let middle_left: sprite::XY = top_left + HEIGHT;
+        let middle: sprite::XY = top + HEIGHT;
+        let middle_right: sprite::XY = top_right + HEIGHT;
 
-        let MIDDLE_LEFT: sprite::XY = TOP_LEFT + HEIGHT;
-        let MIDDLE: sprite::XY = TOP + HEIGHT;
-        let MIDDLE_RIGHT: sprite::XY = TOP_RIGHT + HEIGHT;
-
-        let BOTTOM_LEFT: sprite::XY = MIDDLE_LEFT + HEIGHT;
-        let BOTTOM: sprite::XY = MIDDLE + HEIGHT;
-        let BOTTOM_RIGHT: sprite::XY = MIDDLE_RIGHT + HEIGHT;
+        let bottom_left: sprite::XY = middle_left + HEIGHT;
+        let bottom: sprite::XY = middle + HEIGHT;
+        let bottom_right: sprite::XY = middle_right + HEIGHT;
 
         let after_left_corner = x.saturating_add(WIDTH);
         let before_right_corner = x.saturating_add(w).saturating_sub(WIDTH);
@@ -612,7 +636,7 @@ impl Commands {
                     for fill_x in after_left_corner..before_right_corner
                     step_by WIDTH {
                         self.sspr(
-                            MIDDLE,
+                            middle,
                             r!(fill_x, fill_y),
                         );
                     }
@@ -624,12 +648,12 @@ impl Commands {
             for fill_x in after_left_corner..before_right_corner
             step_by WIDTH {
                 self.sspr(
-                    TOP,
+                    top,
                     r!(fill_x, y),
                 );
     
                 self.sspr(
-                    BOTTOM,
+                    bottom,
                     r!(fill_x, above_bottom_corner),
                 );
             }
@@ -639,34 +663,34 @@ impl Commands {
             for fill_y in below_top_corner..above_bottom_corner
             step_by HEIGHT {
                 self.sspr(
-                    MIDDLE_LEFT,
+                    middle_left,
                     r!(x, fill_y),
                 );
     
                 self.sspr(
-                    MIDDLE_RIGHT,
+                    middle_right,
                     r!(before_right_corner, fill_y),
                 );
             }
         );
 
         self.sspr(
-            TOP_LEFT,
+            top_left,
             r!(x, y),
         );
 
         self.sspr(
-            TOP_RIGHT,
+            top_right,
             r!(before_right_corner, y),
         );
 
         self.sspr(
-            BOTTOM_LEFT,
+            bottom_left,
             r!(x, above_bottom_corner),
         );
 
         self.sspr(
-            BOTTOM_RIGHT,
+            bottom_right,
             r!(before_right_corner, above_bottom_corner),
         );
     }
@@ -743,3 +767,22 @@ pub const CHAR_ADVANCE_H: command::H = command::H::clipped_inner(CHAR_ADVANCE_HE
 pub const WIDTH_IN_CHARS: command::Inner =
     command::WIDTH
     / CHAR_ADVANCE_WIDTH;
+
+pub type TextLength = unscaled::Inner;
+
+pub fn center_line_in_rect(
+    text_length: TextLength,
+    rect: unscaled::Rect
+) -> unscaled::XY {
+    let unscaled::Rect { x, y, w, h } = rect;
+
+    let mut xy = unscaled::XY {
+        x: x + (w / 2),
+        y: y + (h / 2),
+    };
+
+    xy -= (CHAR_W.get() / 2) * text_length;
+    xy -= CHAR_H.get() / 2;
+
+    xy
+}

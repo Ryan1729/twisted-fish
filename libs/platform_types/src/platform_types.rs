@@ -147,6 +147,21 @@ pub mod unscaled {
         }
     }
 
+    impl core::ops::SubAssign<W> for X {
+        fn sub_assign(&mut self, other: W) {
+            self.0 -= other.0;
+        }
+    }
+
+    impl core::ops::Sub<W> for X {
+        type Output = Self;
+
+        fn sub(mut self, other: W) -> Self::Output {
+            self -= other;
+            self
+        }
+    }
+
     impl core::ops::Sub<X> for X {
         type Output = W;
 
@@ -182,6 +197,21 @@ pub mod unscaled {
         }
     }
 
+    impl core::ops::SubAssign<H> for Y {
+        fn sub_assign(&mut self, other: H) {
+            self.0 -= other.0;
+        }
+    }
+
+    impl core::ops::Sub<H> for Y {
+        type Output = Self;
+
+        fn sub(mut self, other: H) -> Self::Output {
+            self -= other;
+            self
+        }
+    }
+
     impl core::ops::Sub<Y> for Y {
         type Output = H;
 
@@ -206,6 +236,66 @@ pub mod unscaled {
     pub struct XY {
         pub x: X,
         pub y: Y,
+    }
+
+    impl core::ops::AddAssign<W> for XY {
+        fn add_assign(&mut self, other: W) {
+            self.x += other;
+        }
+    }
+
+    impl core::ops::Add<W> for XY {
+        type Output = Self;
+
+        fn add(mut self, other: W) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::AddAssign<H> for XY {
+        fn add_assign(&mut self, other: H) {
+            self.y += other;
+        }
+    }
+
+    impl core::ops::Add<H> for XY {
+        type Output = Self;
+
+        fn add(mut self, other: H) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::SubAssign<W> for XY {
+        fn sub_assign(&mut self, other: W) {
+            self.x -= other;
+        }
+    }
+
+    impl core::ops::Sub<W> for XY {
+        type Output = Self;
+
+        fn sub(mut self, other: W) -> Self::Output {
+            self -= other;
+            self
+        }
+    }
+
+    impl core::ops::SubAssign<H> for XY {
+        fn sub_assign(&mut self, other: H) {
+            self.y -= other;
+        }
+    }
+
+    impl core::ops::Sub<H> for XY {
+        type Output = Self;
+
+        fn sub(mut self, other: H) -> Self::Output {
+            self -= other;
+            self
+        }
     }
 
     impl core::ops::MulAssign<Inner> for W {
@@ -322,6 +412,15 @@ pub mod unscaled {
             XY {
                 x: self.x,
                 y: self.y,
+            }
+        }
+
+        pub const fn xy_wh(xy: XY, wh: WH) -> Rect {
+            Rect {
+                x: xy.x,
+                y: xy.y,
+                w: wh.w,
+                h: wh.h,
             }
         }
     }
@@ -714,7 +813,7 @@ pub mod command {
         }
     }
 
-    #[derive(Clone, Copy, Debug, Default)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct Rect {
         pub x_min: X,
         pub y_min: Y,
@@ -738,6 +837,50 @@ pub mod command {
                 y_max: Y::clipped_inner((y + h).get() - 1),
             }
         }
+
+        pub fn unscaled(self) -> unscaled::Rect {
+            let Rect {
+                x_min,
+                y_min,
+                x_max,
+                y_max,
+            }: Rect = self;
+
+            unscaled::Rect {
+                x: x_min.get(),
+                y: y_min.get(),
+                w: x_max.get() - x_min.get() + unscaled::W(1),
+                h: y_max.get() - y_min.get() + unscaled::H(1),
+            }
+        }
+    }
+
+    #[test]
+    fn from_unscaled_then_unscaled_is_identity_on_this_example() {
+        let expected = Rect {
+            x_min: X::clipped_inner(2),
+            y_min: Y::clipped_inner(3),
+            x_max: X::clipped_inner(5),
+            y_max: Y::clipped_inner(7),
+        };
+
+        let actual = Rect::from_unscaled(expected.unscaled());
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn unscaled_then_from_unscaled_is_identity_on_this_example() {
+        let expected = unscaled::Rect {
+            x: unscaled::X(7),
+            y: unscaled::Y(5),
+            w: unscaled::W(3),
+            h: unscaled::H(2),
+        };
+
+        let actual = Rect::from_unscaled(expected).unscaled();
+
+        assert_eq!(expected, actual);
     }
 
     #[derive(Clone, Copy, Debug, Default)]
@@ -843,3 +986,34 @@ pub trait State {
 
     fn release(&mut self, button: Button);
 }
+
+// reportedly colourblind friendly colours
+// https://twitter.com/ea_accessible/status/968595073184092160
+pub mod colours {
+    use super::ARGB;
+
+    pub const BLUE: ARGB = 0xFF3352E1;
+    pub const GREEN: ARGB = 0xFF30B06E;
+    pub const RED: ARGB = 0xFFDE4949;
+    pub const YELLOW: ARGB = 0xFFFFB937;
+    pub const PURPLE: ARGB = 0xFF533354;
+    #[allow(unused)]
+    pub const GREY: ARGB = 0xFF5A7D8B;
+    #[allow(unused)]
+    pub const GRAY: ARGB = GREY;
+    pub const WHITE: ARGB = 0xFFEEEEEE;
+    pub const BLACK: ARGB = 0xFF222222;
+}
+
+pub use colours::*;
+
+pub const PALETTE: [ARGB; 8] = [
+    BLUE,
+    GREEN,
+    RED,
+    YELLOW,
+    PURPLE,
+    GREY,
+    WHITE,
+    BLACK,
+];

@@ -2,13 +2,14 @@ use models::{Card, CardIndex, Hand, DECK_SIZE};
 use gfx::{Commands, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
-    unscaled::{self, X, Y, XY, W, H, x_const_add_w, w_const_sub},
+    unscaled::{self, X, Y, XY, W, H, Rect, x_const_add_w, w_const_sub},
     Button,
     Input,
     Speaker,
     SFX,
     CARD_WIDTH,
-    CARD_HEIGHT
+    CARD_HEIGHT,
+    WHITE,
 };
 use xs::{Xs, Seed};
 
@@ -175,11 +176,23 @@ impl HandId {
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct Question {
+    pub target: HandId,
+}
+
+impl Default for Question {
+    fn default() -> Self {
+        Self {
+            target: HandId::Cpu1,
+        }
+    }
+}
 
 #[derive(Copy, Clone)]
 pub enum Menu {
     Selecting(CardIndex),
-    Asking(CardIndex),
+    Asking(CardIndex, Question),
 }
 
 impl Default for Menu {
@@ -194,7 +207,7 @@ impl Menu {
     pub fn selected(self) -> CardIndex {
         match self {
             Self::Selecting(selected)
-            | Self::Asking(selected) => selected,
+            | Self::Asking(selected, ..) => selected,
         }
     }
 }
@@ -209,6 +222,7 @@ pub struct State {
     pub cpu3: Hand,
     pub animations: Animations,
     pub menu: Menu,
+    pub ctx: ui::Context,
 }
 
 impl State {
@@ -323,7 +337,7 @@ impl State {
                                 Menu::Selecting(_) => {
                                     self.menu = Menu::Selecting(hand.len() - 1);
                                 },
-                                Menu::Asking(_) => {},
+                                Menu::Asking(..) => {},
                             }
                         }
 
@@ -344,12 +358,128 @@ impl State {
     }
 }
 
+mod ui {
+    use super::*;
+
+    /// A group of things that are used together to render UI. Naming suggestions
+    /// welcome!
+    pub(crate) struct Group<'commands, 'ctx, 'speaker> {
+        pub commands: &'commands mut Commands,
+        pub ctx: &'ctx mut Context,
+        pub input: Input,
+        pub speaker: &'speaker mut Speaker,
+    }
+
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+    pub enum Id {
+        #[default]
+        Zero,
+        Cpu1,
+        Cpu2,
+        Cpu3,
+    }
+
+    #[derive(Copy, Clone, Default)]
+    pub struct Context {
+        pub active: Id,
+        pub hot: Id,
+        pub next_hot: Id,
+    }
+
+    impl Context {
+        pub fn set_not_active(&mut self) {
+            self.active = Id::Zero;
+        }
+        pub fn set_active(&mut self, id: Id) {
+            self.active = id;
+        }
+        pub fn set_next_hot(&mut self, id: Id) {
+            self.next_hot = id;
+        }
+        pub fn set_not_hot(&mut self) {
+            self.hot = Id::Zero;
+        }
+        pub fn frame_init(&mut self) {
+            if self.active == Id::Zero {
+                self.hot = self.next_hot;
+            }
+            self.next_hot = Id::Zero;
+        }
+    }
+
+    pub(crate) struct ButtonSpec<'text> {
+        pub id: Id,
+        pub rect: unscaled::Rect,
+        pub text: &'text [u8],
+    }
+
+    pub(crate) fn button_press<'commands, 'ctx, 'speaker>(
+        group: &mut Group<'commands, 'ctx, 'speaker>,
+        id: Id,
+    ) -> bool {
+        let mut output = false;
+    
+        if group.ctx.active == id {
+            if group.input.released_this_frame(Button::A) {
+                output = group.ctx.hot == id;
+    
+                group.ctx.set_not_active();
+            }
+            group.ctx.set_next_hot(id);
+        } else if group.ctx.hot == id {
+            if group.input.pressed_this_frame(Button::A) {
+                group.ctx.set_active(id);
+                group.speaker.request_sfx(SFX::ButtonPress);
+            }
+            group.ctx.set_next_hot(id);
+        }
+    
+        output
+    }
+
+    pub(crate) fn do_button<'commands, 'ctx, 'speaker, 'text>(
+        group: &mut Group<'commands, 'ctx, 'speaker>,
+        spec: ButtonSpec<'text>,
+    ) -> bool {
+        use gfx::NineSlice as ns;
+        let id = spec.id;
+    
+        let result = button_press(group, id);
+    
+        if group.ctx.active == id && group.input.gamepad.contains(Button::A) {
+            group.commands.draw_nine_slice(ns::ButtonPressed, spec.rect);
+        } else if group.ctx.hot == id {
+            group.commands.draw_nine_slice(ns::ButtonHot, spec.rect);
+        } else {
+            group.commands.draw_nine_slice(ns::Button, spec.rect);
+        }
+    
+        let xy = gfx::center_line_in_rect(
+            spec.text.len() as _, 
+            spec.rect,
+        );
+    
+        //Long labels aren't great UX anyway, I think, so don't bother reflowing.
+        group.commands.print_line(
+            spec.text,
+            xy,
+            WHITE
+        );
+    
+        result
+    }
+}
+
+use ui::{ButtonSpec, Id::*, do_button};
+
 pub fn update_and_render(
     commands: &mut Commands,
     state: &mut State,
     input: Input,
     speaker: &mut Speaker
 ) {
+    state.ctx.frame_init();
+
     match state.menu {
         Menu::Selecting(selected) => {
             if input.pressed_this_frame(Button::LEFT) {
@@ -374,13 +504,13 @@ pub fn update_and_render(
                 if let Some(_zinger) = models::get_zinger(player_card) {
                     // TODO probably add specific menus for each zinger
                 } else {
-                    state.menu = Menu::Asking(selected);
+                    state.menu = Menu::Asking(selected, Default::default());
                 }
             } else {
                 // do nothing
             }
         },
-        Menu::Asking(selected) => {
+        Menu::Asking(selected, _) => {
             if input.pressed_this_frame(Button::B) {
                 state.menu = Menu::Selecting(selected);
             } else {
@@ -450,13 +580,64 @@ pub fn update_and_render(
 
         match state.menu {
             Menu::Selecting(_) => {},
-            Menu::Asking(_) => {
-                commands.draw_nine_slice(ASKING_WINDOW);
+            Menu::Asking(_, ref mut question) => {
+                commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
+
+                let card_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
 
                 commands.draw_card(
                     player_card,
-                    ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET
+                    card_xy
                 );
+
+                let button_base_xy = card_xy + CARD_WIDTH;
+
+                let mut group = ui::Group {
+                    commands,
+                    ctx: &mut state.ctx,
+                    input,
+                    speaker,
+                };
+
+                for (hand_id, spec) in [
+                    (
+                        HandId::Cpu1,
+                        ButtonSpec {
+                            id: Cpu1,
+                            rect: Rect::xy_wh(
+                                button_base_xy,
+                                ASKING_TARGET_WH,
+                            ),
+                            text: b"CPU 1",
+                        }
+                    ),
+                    (
+                        HandId::Cpu2,
+                        ButtonSpec {
+                            id: Cpu2,
+                            rect: Rect::xy_wh(
+                                button_base_xy + ASKING_TARGET_WH.h,
+                                ASKING_TARGET_WH,
+                            ),
+                            text: b"CPU 2",
+                        },
+                    ),
+                    (
+                        HandId::Cpu3,
+                        ButtonSpec {
+                            id: Cpu3,
+                            rect: Rect::xy_wh(
+                                button_base_xy + ASKING_TARGET_WH.h * 2,
+                                ASKING_TARGET_WH,
+                            ),
+                            text: b"CPU 3",
+                        },
+                    ),
+                ] {
+                    if do_button(&mut group, spec) {
+                        question.target = hand_id;
+                    }
+                }
             },
         }
     }
@@ -510,3 +691,9 @@ const ASKING_WINDOW: unscaled::Rect = {
         h: H(command::HEIGHT - OFFSET * 2),
     }
 };
+
+const ASKING_TARGET_WH: unscaled::WH = unscaled::WH {
+    w: W(ASKING_WINDOW.w.get() / 3),
+    h: H(ASKING_WINDOW.h.get() / 8),
+};
+

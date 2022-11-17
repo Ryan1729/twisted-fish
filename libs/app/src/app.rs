@@ -212,8 +212,10 @@ Ryan Wiedemann (Ryan1729 on github)
 
         commands.print_line(
             line,
-            unscaled::X(CHAR_SPACING as _),
-            unscaled::Y(0)
+            unscaled::XY {
+                x: unscaled::X(CHAR_SPACING as _),
+                y: unscaled::Y(0),
+            }
             // TODO investigate scrolling shimmering which seems to be
             // related to this part. Do we need to make the scrolling
             // speed up, then slow down or something? or is the offset

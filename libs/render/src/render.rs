@@ -3,6 +3,7 @@ use platform_types::{
     Command,
     GFX_WIDTH,
     ARGB,
+    colours,
     command::{self, Rect},
     sprite,
     unscaled,
@@ -1422,37 +1423,3 @@ pub fn render(
 
     NeedsRedraw::Yes
 }
-
-// reportedly colourblind friendly colours
-// https://twitter.com/ea_accessible/status/968595073184092160
-#[allow(unused)]
-mod colours {
-    use super::ARGB;
-
-    pub const BLUE: ARGB = 0xFF3352E1;
-    pub const GREEN: ARGB = 0xFF30B06E;
-    pub const RED: ARGB = 0xFFDE4949;
-    pub const YELLOW: ARGB = 0xFFFFB937;
-    pub const PURPLE: ARGB = 0xFF533354;
-    #[allow(unused)]
-    pub const GREY: ARGB = 0xFF5A7D8B;
-    #[allow(unused)]
-    pub const GRAY: ARGB = GREY;
-    pub const WHITE: ARGB = 0xFFEEEEEE;
-    pub const BLACK: ARGB = 0xFF222222;
-}
-
-use colours::*;
-
-#[rustfmt::skip]
-#[allow(unused)]
-const PALETTE: [ARGB; 8] = [
-    BLUE,
-    GREEN,
-    RED,
-    YELLOW,
-    PURPLE,
-    GREY,
-    WHITE,
-    BLACK,
-];
