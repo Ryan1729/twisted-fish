@@ -34,7 +34,7 @@ impl State {
             commands: Commands::default(),
             input: Input::default(),
             speaker: Speaker::default(),
-            help_vis: HelpVis::default(),
+            help_vis: if true { HelpVis::Hidden } else {HelpVis::default()},
             top_index_with_offset: 0,
         }
     }

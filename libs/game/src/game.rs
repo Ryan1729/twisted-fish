@@ -4,6 +4,7 @@ use platform_types::{
     command,
     unscaled::{self, X, Y, XY, W, H, Rect, x_const_add_w, w_const_sub},
     Button,
+    Dir,
     Input,
     Speaker,
     SFX,
@@ -379,7 +380,7 @@ mod ui {
         Cpu3,
     }
 
-    #[derive(Copy, Clone, Default)]
+    #[derive(Copy, Clone, Default, Debug)]
     pub struct Context {
         pub active: Id,
         pub hot: Id,
@@ -479,45 +480,6 @@ pub fn update_and_render(
     speaker: &mut Speaker
 ) {
     state.ctx.frame_init();
-
-    match state.menu {
-        Menu::Selecting(selected) => {
-            if input.pressed_this_frame(Button::LEFT) {
-                state.menu = Menu::Selecting(
-                    if selected > 0 {
-                        selected - 1
-                    } else {
-                        0
-                    }
-                );
-            } else if input.pressed_this_frame(Button::RIGHT) {
-                state.menu = Menu::Selecting(
-                    if selected < state.player.len() - 1 {
-                        selected + 1
-                    } else {
-                        0
-                    }
-                );
-            } else if input.pressed_this_frame(Button::A) {
-                let player_card = state.player.get(selected)
-                    .expect("selected index should always be valid");
-                if let Some(_zinger) = models::get_zinger(player_card) {
-                    // TODO probably add specific menus for each zinger
-                } else {
-                    state.menu = Menu::Asking(selected, Default::default());
-                }
-            } else {
-                // do nothing
-            }
-        },
-        Menu::Asking(selected, _) => {
-            if input.pressed_this_frame(Button::B) {
-                state.menu = Menu::Selecting(selected);
-            } else {
-                // do nothing
-            }
-        }
-    }
 
     state.tick(speaker);
 
@@ -639,6 +601,91 @@ pub fn update_and_render(
                     }
                 }
             },
+        }
+    }
+
+    match state.menu {
+        Menu::Selecting(selected) => {
+            if input.pressed_this_frame(Button::LEFT) {
+                state.menu = Menu::Selecting(
+                    if selected > 0 {
+                        selected - 1
+                    } else {
+                        0
+                    }
+                );
+            } else if input.pressed_this_frame(Button::RIGHT) {
+                state.menu = Menu::Selecting(
+                    if selected < state.player.len().saturating_sub(1) {
+                        selected + 1
+                    } else {
+                        0
+                    }
+                );
+            } else if input.pressed_this_frame(Button::A) {
+                let player_card = state.player.get(selected)
+                    .expect("selected index should always be valid");
+                if let Some(_zinger) = models::get_zinger(player_card) {
+                    // TODO probably add specific menus for each zinger
+                } else {
+                    state.menu = Menu::Asking(selected, Default::default());
+                    state.ctx.set_next_hot(Cpu1);
+                }
+            } else {
+                // do nothing
+            }
+        },
+        Menu::Asking(selected, _) => {
+            const GRID_W: usize = 1;
+            const GRID_H: usize = 3;
+            const GRID_LEN: usize = GRID_W * GRID_H;
+            const GRID: [ui::Id; GRID_LEN] = [
+                Cpu1,
+                Cpu2,
+                Cpu3,
+            ];
+
+            if input.pressed_this_frame(Button::B) {
+                state.menu = Menu::Selecting(selected);
+            } else if let Some(dir) = input.dir_pressed_this_frame() {
+                let old_id = state.ctx.hot;
+                let id_i = GRID.iter()
+                    .position(|el| *el == old_id)
+                    .unwrap_or_default();
+
+                let mut x = id_i % GRID_W;
+                let mut y = id_i / GRID_W;
+
+                // TODO skip over repeats in the same direction once we have those.
+                // Maybe skip `Zero` too.
+                match dir {
+                    Dir::Up => if y == 0 {
+                        y = GRID_H - 1;
+                    } else {
+                        y -= 1;
+                    },
+                    Dir::Down => if y >= GRID_H - 1 {
+                        y = 0;
+                    } else {
+                        y += 1;
+                    },
+                    Dir::Left => if x == 0 {
+                        x = GRID_W - 1;
+                    } else {
+                        x -= 1;
+                    },
+                    Dir::Right => if x >= GRID_W - 1 {
+                        x = 0;
+                    } else {
+                        x += 1;
+                    },
+                }
+
+                state.ctx.set_next_hot(GRID[x * GRID_W + y]);
+            } else {
+                // do nothing
+                state.ctx.set_next_hot(state.ctx.hot);
+            }
         }
     }
 }
