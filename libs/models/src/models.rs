@@ -55,23 +55,23 @@ pub mod ranks {
     use super::*;
 
     // Worth 5 points {
-    pub const BARNACLE: Suit = 0;
-    pub const CRAB: Suit = 1;
-    pub const DOGFISH: Suit = 2;
-    pub const EEL: Suit = 3;
-    pub const FLYING_FISH: Suit = 4;
-    pub const HAMMERHEAD: Suit = 5;
-    pub const JELLYFISH: Suit = 6;
-    pub const SHRIMP: Suit = 7;
+    pub const BARNACLE: Rank = 0;
+    pub const CRAB: Rank = 1;
+    pub const DOGFISH: Rank = 2;
+    pub const EEL: Rank = 3;
+    pub const FLYING_FISH: Rank = 4;
+    pub const HAMMERHEAD: Rank = 5;
+    pub const JELLYFISH: Rank = 6;
+    pub const SHRIMP: Rank = 7;
     // }
     // Worth 10 points {
-    pub const BLOWFISH: Suit = 8;
-    pub const CLOWNFISH: Suit = 9;
-    pub const STARFISH: Suit = 10;
-    pub const WHALE: Suit = 11;
+    pub const BLOWFISH: Rank = 8;
+    pub const CLOWNFISH: Rank = 9;
+    pub const STARFISH: Rank = 10;
+    pub const WHALE: Rank = 11;
     // }
     // Worth 15 points {
-    pub const CARD_SHARK: Suit = 12;
+    pub const CARD_SHARK: Rank = 12;
     // }
 }
 
@@ -83,23 +83,61 @@ pub fn get_rank(card: Card) -> Option<Rank> {
     }
 }
 
-pub type Suit = u8;
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Suit {
+    #[default]
+    Red,
+    Green,
+    Blue,
+    Yellow,
+    Purple,
+}
+
+impl Suit {
+    pub const COUNT: u8 = 5;
+
+    pub const ALL: [Suit; Suit::COUNT as usize] = [
+        Suit::Red,
+        Suit::Green,
+        Suit::Blue,
+        Suit::Yellow,
+        Suit::Purple,
+    ];
+
+    pub const TEXT: [&[u8]; Suit::COUNT as usize] = [
+        b"Red",
+        b"Green",
+        b"Blue",
+        b"Yellow",
+        b"Purple",
+    ];
+}
+
+pub type SuitNumber = u8;
 
 pub mod suits {
     use super::*;
 
-    pub const RED: Suit = 0;
-    pub const GREEN: Suit = 1;
-    pub const BLUE: Suit = 2;
-    pub const YELLOW: Suit = 3;
-    pub const PURPLE: Suit = 4;
+    pub const RED: SuitNumber = 0;
+    pub const GREEN: SuitNumber = 1;
+    pub const BLUE: SuitNumber = 2;
+    pub const YELLOW: SuitNumber = 3;
+    pub const PURPLE: SuitNumber = 4;
 }
 
 pub fn get_suit(card: Card) -> Option<Suit> {
     if card >= FISH_COUNT {
         None
     } else {
-        Some((card / RANK_COUNT) % SUIT_COUNT)
+        match (card / RANK_COUNT) % SUIT_COUNT {
+            suits::RED => Some(Suit::Red),
+            suits::GREEN => Some(Suit::Green),
+            suits::BLUE => Some(Suit::Blue),
+            suits::YELLOW => Some(Suit::Yellow),
+            suits::PURPLE => Some(Suit::Purple),
+            _ => None,
+        }
     }
 }
 

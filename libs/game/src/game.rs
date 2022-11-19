@@ -1,4 +1,4 @@
-use models::{Card, CardIndex, Hand, DECK_SIZE};
+use models::{Card, CardIndex, Hand, Suit, DECK_SIZE};
 use gfx::{Commands, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -180,12 +180,14 @@ impl HandId {
 #[derive(Copy, Clone)]
 pub struct Question {
     pub target: HandId,
+    pub suit: Suit,
 }
 
 impl Default for Question {
     fn default() -> Self {
         Self {
             target: HandId::Cpu1,
+            suit: Suit::default(),
         }
     }
 }
@@ -378,6 +380,7 @@ mod ui {
         Cpu1,
         Cpu2,
         Cpu3,
+        AskSuit(Suit),
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -600,6 +603,26 @@ pub fn update_and_render(
                         question.target = hand_id;
                     }
                 }
+
+                let suit_base_xy = button_base_xy + ASKING_TARGET_WH.w;
+
+                for index in 0..unscaled::Inner::from(Suit::COUNT) {
+                    let i = index as usize;
+                    let suit = Suit::ALL[i];
+
+                    let spec = ButtonSpec {
+                        id: AskSuit(suit),
+                        rect: Rect::xy_wh(
+                            suit_base_xy + ASKING_SUIT_WH.h * index,
+                            ASKING_SUIT_WH,
+                        ),
+                        text: Suit::TEXT[i],
+                    };
+
+                    if do_button(&mut group, spec) {
+                        question.suit = suit;
+                    }
+                }
             },
         }
     }
@@ -636,13 +659,15 @@ pub fn update_and_render(
             }
         },
         Menu::Asking(selected, _) => {
-            const GRID_W: usize = 1;
-            const GRID_H: usize = 3;
+            const GRID_W: usize = 2;
+            const GRID_H: usize = 5;
             const GRID_LEN: usize = GRID_W * GRID_H;
             const GRID: [ui::Id; GRID_LEN] = [
-                Cpu1,
-                Cpu2,
-                Cpu3,
+                Cpu1, AskSuit(Suit::ALL[0]),
+                Cpu2, AskSuit(Suit::ALL[1]),
+                Cpu3, AskSuit(Suit::ALL[2]),
+                Zero, AskSuit(Suit::ALL[3]),
+                Zero, AskSuit(Suit::ALL[4]),
             ];
 
             if input.pressed_this_frame(Button::B) {
@@ -653,35 +678,43 @@ pub fn update_and_render(
                     .position(|el| *el == old_id)
                     .unwrap_or_default();
 
-                let mut x = id_i % GRID_W;
-                let mut y = id_i / GRID_W;
+                let old_x = id_i % GRID_W;
+                let old_y = id_i / GRID_W;
 
-                // TODO skip over repeats in the same direction once we have those.
-                // Maybe skip `Zero` too.
-                match dir {
-                    Dir::Up => if y == 0 {
-                        y = GRID_H - 1;
-                    } else {
-                        y -= 1;
-                    },
-                    Dir::Down => if y >= GRID_H - 1 {
-                        y = 0;
-                    } else {
-                        y += 1;
-                    },
-                    Dir::Left => if x == 0 {
-                        x = GRID_W - 1;
-                    } else {
-                        x -= 1;
-                    },
-                    Dir::Right => if x >= GRID_W - 1 {
-                        x = 0;
-                    } else {
-                        x += 1;
-                    },
+                let mut x = old_x;
+                let mut y = old_y;
+
+                macro_rules! new_id { () => (GRID[y * GRID_W + x]) }
+
+                while new_id!() == old_id || new_id!() == Zero {
+                    match dir {
+                        Dir::Up => if y == 0 {
+                            y = GRID_H - 1;
+                        } else {
+                            y -= 1;
+                        },
+                        Dir::Down => if y >= GRID_H - 1 {
+                            y = 0;
+                        } else {
+                            y += 1;
+                        },
+                        Dir::Left => if x == 0 {
+                            x = GRID_W - 1;
+                        } else {
+                            x -= 1;
+                        },
+                        Dir::Right => if x >= GRID_W - 1 {
+                            x = 0;
+                        } else {
+                            x += 1;
+                        },
+                    }
+
+                    // Stop if we looped back to where started.
+                    if x == old_x && y == old_y { break }
                 }
 
-                state.ctx.set_next_hot(GRID[x * GRID_W + y]);
+                state.ctx.set_next_hot(new_id!());
             } else {
                 // do nothing
                 state.ctx.set_next_hot(state.ctx.hot);
@@ -744,3 +777,4 @@ const ASKING_TARGET_WH: unscaled::WH = unscaled::WH {
     h: H(ASKING_WINDOW.h.get() / 8),
 };
 
+const ASKING_SUIT_WH: unscaled::WH = ASKING_TARGET_WH;
