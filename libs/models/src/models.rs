@@ -73,6 +73,24 @@ pub mod ranks {
     // Worth 15 points {
     pub const CARD_SHARK: Rank = 12;
     // }
+
+    pub const COUNT: u8 = 13;
+
+    pub const TEXT: [&[u8]; COUNT as usize] = [
+        b"Barnacle",
+        b"Crab",
+        b"Dogfish",
+        b"Eel",
+        b"Flying Fish",
+        b"Hammerhead",
+        b"Jellyfish",
+        b"Shrimp",
+        b"Blowfish",
+        b"Clownfish",
+        b"Starfish",
+        b"Whale",
+        b"Card shark",
+    ];
 }
 
 pub fn get_rank(card: Card) -> Option<Rank> {

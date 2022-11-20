@@ -1,4 +1,4 @@
-use models::{Card, CardIndex, Hand, Suit, DECK_SIZE};
+use models::{Card, CardIndex, Hand, Suit, Rank, DECK_SIZE};
 use gfx::{Commands, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -133,6 +133,7 @@ pub enum AnimationAction {
     AddToHand(HandId)
 }
 
+#[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum HandId {
     Player,
@@ -157,6 +158,13 @@ impl HandId {
         HandId::Cpu2,
         HandId::Cpu3,
     ];
+
+    pub const TEXT: [&[u8]; Self::COUNT as usize] = [
+        b"Player",
+        b"Cpu 1",
+        b"Cpu 2",
+        b"Cpu 3",
+    ];
 }
 
 #[derive(Default)]
@@ -177,22 +185,57 @@ impl HandId {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct Question {
-    pub target: HandId,
-    pub suit: Suit,
-}
+mod question {
+    use super::*;
 
-impl Default for Question {
-    fn default() -> Self {
-        Self {
-            target: HandId::Cpu1,
-            suit: Suit::default(),
+    #[derive(Clone)]
+    pub struct Question {
+        pub target: HandId,
+        pub suit: Suit,
+        description: Vec<u8>,
+    }
+
+    impl Default for Question {
+        fn default() -> Self {
+            Self {
+                target: HandId::Cpu1,
+                suit: Suit::default(),
+                description: Vec::with_capacity(128),
+            }
+        }
+    }
+
+    impl Question {
+        pub fn fresh_description(&mut self, rank: Rank) -> &[u8] {
+            self.description.clear();
+
+            self.description.extend_from_slice(
+                HandId::TEXT[usize::from(self.target as u8)]
+            );
+
+            self.description.extend_from_slice(
+                b", do you have the "
+            );
+
+            self.description.extend_from_slice(
+                Suit::TEXT[usize::from(self.suit as u8)]
+            );
+
+            self.description.push(b' ');
+
+            self.description.extend_from_slice(
+                models::ranks::TEXT[usize::from(rank as u8)]
+            );
+
+            self.description.push(b'?');
+
+            &self.description
         }
     }
 }
+use question::Question;
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum Menu {
     Selecting(CardIndex),
     Asking(CardIndex, Question),
@@ -207,10 +250,10 @@ impl Default for Menu {
 impl Menu {
     // We assume there will probably be cases where there isn't a selected card.
     // We'll see.
-    pub fn selected(self) -> CardIndex {
+    pub fn selected(&self) -> CardIndex {
         match self {
             Self::Selecting(selected)
-            | Self::Asking(selected, ..) => selected,
+            | Self::Asking(selected, ..) => *selected,
         }
     }
 }
@@ -422,11 +465,11 @@ mod ui {
         id: Id,
     ) -> bool {
         let mut output = false;
-    
+
         if group.ctx.active == id {
             if group.input.released_this_frame(Button::A) {
                 output = group.ctx.hot == id;
-    
+
                 group.ctx.set_not_active();
             }
             group.ctx.set_next_hot(id);
@@ -437,7 +480,7 @@ mod ui {
             }
             group.ctx.set_next_hot(id);
         }
-    
+
         output
     }
 
@@ -447,9 +490,9 @@ mod ui {
     ) -> bool {
         use gfx::NineSlice as ns;
         let id = spec.id;
-    
+
         let result = button_press(group, id);
-    
+
         if group.ctx.active == id && group.input.gamepad.contains(Button::A) {
             group.commands.draw_nine_slice(ns::ButtonPressed, spec.rect);
         } else if group.ctx.hot == id {
@@ -457,19 +500,19 @@ mod ui {
         } else {
             group.commands.draw_nine_slice(ns::Button, spec.rect);
         }
-    
+
         let xy = gfx::center_line_in_rect(
-            spec.text.len() as _, 
+            spec.text.len() as _,
             spec.rect,
         );
-    
+
         //Long labels aren't great UX anyway, I think, so don't bother reflowing.
         group.commands.print_line(
             spec.text,
             xy,
             WHITE
         );
-    
+
         result
     }
 }
@@ -546,15 +589,24 @@ pub fn update_and_render(
         match state.menu {
             Menu::Selecting(_) => {},
             Menu::Asking(_, ref mut question) => {
+                let rank = models::get_rank(player_card)
+                    .expect("Asking selected index should always have a rank!");
+
                 commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
 
-                let card_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+                let base_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+
+                let card_xy = base_xy;
 
                 commands.draw_card(
                     player_card,
                     card_xy
                 );
 
+                // TODO Maybe all these buttons aren't the best UI here.
+                // For example, a list of options that you can scroll and
+                // then move away from, with a single submit button may be
+                // better becasue it involves fewer button presses.
                 let button_base_xy = card_xy + CARD_WIDTH;
 
                 let mut group = ui::Group {
@@ -623,6 +675,14 @@ pub fn update_and_render(
                         question.suit = suit;
                     }
                 }
+
+                // TODO center this
+                commands.print_line(
+                    question.fresh_description(rank),
+                    base_xy
+                    + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
+                    WHITE,
+                )
             },
         }
     }
@@ -729,12 +789,12 @@ fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
             if len == 0 {
                 return XY { x: min_edge, y };
             }
-        
+
             let span = CARD_WIDTH;
-        
+
             let full_width = max_edge.saturating_point_sub(min_edge);
             let usable_width = full_width.saturating_sub(span);
-        
+
             let offset = core::cmp::min(usable_width / len.into(), span);
 
             XY {
@@ -746,12 +806,12 @@ fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
             if len == 0 {
                 return XY { x, y: min_edge };
             }
-        
+
             let span = CARD_HEIGHT;
-        
+
             let full_width = max_edge.saturating_point_sub(min_edge);
             let usable_height = full_width.saturating_sub(span);
-        
+
             let offset = core::cmp::min(usable_height / len.into(), span);
 
             XY {
