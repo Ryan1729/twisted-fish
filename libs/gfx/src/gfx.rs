@@ -783,7 +783,7 @@ pub fn center_line_in_rect(
         y: y + (h / 2),
     };
 
-    xy -= (CHAR_W.get() / 2) * text_length;
+    xy -= (CHAR_ADVANCE_W * text_length).get() / 2;
     xy -= CHAR_H.get() / 2;
 
     xy

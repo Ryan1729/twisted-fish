@@ -676,11 +676,23 @@ pub fn update_and_render(
                     }
                 }
 
-                // TODO center this
+                let description_base_rect = unscaled::Rect::xy_wh(
+                    base_xy + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
+                    unscaled::WH {
+                        w: ASKING_WINDOW.w,
+                        h: ASKING_SUIT_WH.h,
+                    }
+                );
+
+                let description = question.fresh_description(rank);
+
+                let description_xy = gfx::center_line_in_rect(
+                    description.len() as _,
+                    description_base_rect,
+                );
                 commands.print_line(
-                    question.fresh_description(rank),
-                    base_xy
-                    + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
+                    description,
+                    description_xy,
                     WHITE,
                 )
             },
