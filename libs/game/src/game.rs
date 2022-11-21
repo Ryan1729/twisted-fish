@@ -424,6 +424,7 @@ mod ui {
         Cpu2,
         Cpu3,
         AskSuit(Suit),
+        AskSubmit,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -676,6 +677,25 @@ pub fn update_and_render(
                     }
                 }
 
+                let submit_base_xy = suit_base_xy + ASKING_TARGET_WH.w;
+
+                if do_button(
+                    &mut group,
+                    ButtonSpec {
+                        id: AskSubmit,
+                        rect: Rect::xy_wh(
+                            submit_base_xy,
+                            (
+                                ASKING_WINDOW.xy()
+                                + (ASKING_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
+                            ) - submit_base_xy,
+                        ),
+                        text: b"Submit",
+                    }
+                ) {
+                    dbg!("TODO: ask");
+                }
+
                 let description_base_rect = unscaled::Rect::xy_wh(
                     base_xy + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
                     unscaled::WH {
@@ -731,15 +751,15 @@ pub fn update_and_render(
             }
         },
         Menu::Asking(selected, _) => {
-            const GRID_W: usize = 2;
+            const GRID_W: usize = 3;
             const GRID_H: usize = 5;
             const GRID_LEN: usize = GRID_W * GRID_H;
             const GRID: [ui::Id; GRID_LEN] = [
-                Cpu1, AskSuit(Suit::ALL[0]),
-                Cpu2, AskSuit(Suit::ALL[1]),
-                Cpu3, AskSuit(Suit::ALL[2]),
-                Zero, AskSuit(Suit::ALL[3]),
-                Zero, AskSuit(Suit::ALL[4]),
+                Cpu1, AskSuit(Suit::ALL[0]), AskSubmit,
+                Cpu2, AskSuit(Suit::ALL[1]), AskSubmit,
+                Cpu3, AskSuit(Suit::ALL[2]), AskSubmit,
+                Zero, AskSuit(Suit::ALL[3]), AskSubmit,
+                Zero, AskSuit(Suit::ALL[4]), AskSubmit,
             ];
 
             if input.pressed_this_frame(Button::B) {

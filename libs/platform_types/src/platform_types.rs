@@ -298,6 +298,17 @@ pub mod unscaled {
         }
     }
 
+    impl core::ops::Sub for XY {
+        type Output = WH;
+
+        fn sub(self, other: XY) -> Self::Output {
+            WH {
+                w: W(self.x.0 - other.x.0),
+                h: H(self.y.0 - other.y.0),
+            }
+        }
+    }
+
     impl core::ops::MulAssign<Inner> for W {
         fn mul_assign(&mut self, inner: Inner) {
             self.0 *= inner;
@@ -382,6 +393,54 @@ pub mod unscaled {
         pub h: H,
     }
 
+    impl core::ops::AddAssign for WH {
+        fn add_assign(&mut self, other: WH) {
+            self.w += other.w;
+            self.h += other.h;
+        }
+    }
+
+    impl core::ops::Add for WH {
+        type Output = Self;
+
+        fn add(mut self, other: WH) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::SubAssign for WH {
+        fn sub_assign(&mut self, other: WH) {
+            self.w -= other.w;
+            self.h -= other.h;
+        }
+    }
+
+    impl core::ops::Sub for WH {
+        type Output = Self;
+
+        fn sub(mut self, other: WH) -> Self::Output {
+            self -= other;
+            self
+        }
+    }
+
+    impl core::ops::MulAssign<Inner> for WH {
+        fn mul_assign(&mut self, inner: Inner) {
+            self.w *= inner;
+            self.h *= inner;
+        }
+    }
+
+    impl core::ops::Mul<Inner> for WH {
+        type Output = Self;
+
+        fn mul(mut self, inner: Inner) -> Self::Output {
+            self *= inner;
+            self
+        }
+    }
+
     impl core::ops::AddAssign<WH> for XY {
         fn add_assign(&mut self, other: WH) {
             self.x += other.w;
@@ -398,7 +457,6 @@ pub mod unscaled {
         }
     }
 
-
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct Rect {
         pub x: X,
@@ -412,6 +470,13 @@ pub mod unscaled {
             XY {
                 x: self.x,
                 y: self.y,
+            }
+        }
+
+        pub fn wh(self) -> WH {
+            WH {
+                w: self.w,
+                h: self.h,
             }
         }
 
