@@ -168,14 +168,15 @@ impl HashCells {
 #[cfg(test)]
 mod reset_then_hash_commands_around_a_swap_produces_identical_current_and_prev_cells {
     use super::*;
-
+    const CELLS_W: u16 = 16;
+    const CELLS_H: u16 = 16;
     #[test]
     fn on_the_empty_slice() {
         let mut h_c = HashCells::default();
 
-        h_c.reset_then_hash_commands(&[], (CELLS_W.into(), CELLS_H.into()), 1);
+        h_c.reset_then_hash_commands(&[], (CELLS_W, CELLS_H));
         h_c.swap();
-        h_c.reset_then_hash_commands(&[], (CELLS_W.into(), CELLS_H.into()), 1);
+        h_c.reset_then_hash_commands(&[], (CELLS_W, CELLS_H));
 
         let (current, prev) = h_c.current_and_prev();
 
@@ -191,16 +192,16 @@ mod reset_then_hash_commands_around_a_swap_produces_identical_current_and_prev_c
             unscaled::Rect {
                 x: unscaled::X(0),
                 y: unscaled::Y(0),
-                w: unscaled::W(CELLS_W.into()),
-                h: unscaled::H(CELLS_H.into()),
+                w: unscaled::W(CELLS_W),
+                h: unscaled::H(CELLS_H),
             }
         );
 
         let commands = &[command];
 
-        h_c.reset_then_hash_commands(commands, (CELLS_W.into(), CELLS_H.into()), 1);
+        h_c.reset_then_hash_commands(commands, (CELLS_W, CELLS_H));
         h_c.swap();
-        h_c.reset_then_hash_commands(commands, (CELLS_W.into(), CELLS_H.into()), 1);
+        h_c.reset_then_hash_commands(commands, (CELLS_W, CELLS_H));
 
         let (current, prev) = h_c.current_and_prev();
 

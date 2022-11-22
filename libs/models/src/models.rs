@@ -2,7 +2,7 @@ use xs::Xs;
 
 macro_rules! compile_time_assert {
     ($assertion: expr) => (
-        #[allow(unknown_lints, eq_op)]
+        #[allow(unknown_lints, clippy::eq_op)]
         // Based on the const_assert macro from static_assertions;
         const _: [(); 0 - !{$assertion} as usize] = [];
     )
@@ -17,6 +17,27 @@ pub const DECK_SIZE: u8 = FISH_COUNT + ZINGER_COUNT;
 pub type CardInner = u8;
 
 pub type Card = CardInner;
+
+pub fn fish_card(rank: Rank, suit: Suit) -> Card {
+    suit as CardInner * RANK_COUNT + rank
+}
+
+#[test]
+fn get_rank_and_get_suit_then_fish_card_works() {
+    for card in 0..FISH_COUNT {
+        let rank = get_rank(card).unwrap();
+        let suit = get_suit(card).unwrap();
+
+        assert_eq!(
+            fish_card(
+                rank,
+                suit,
+            ),
+            card,
+            "expected {rank:?}, {suit:?} -> {card:?}"
+        );
+    }
+}
 
 pub fn gen_card(rng: &mut Xs) -> Card {
     xs::range(rng, 0..DECK_SIZE as _) as Card
@@ -268,5 +289,14 @@ impl Hand {
 
     pub fn get(&self, i: CardIndex) -> Option<Card> {
         self.0.get(usize::from(i)).and_then(|co| co.option())
+    }
+
+    pub fn remove(&mut self, index: CardIndex) -> Option<Card> {
+        let output = self.get(index);
+        let slice = self.0.as_mut_slice(); 
+        let i = usize::from(index);
+        slice.copy_within((i + 1).., i);
+        slice[slice.len() - 1] = CardOption::NONE;
+        output
     }
 }

@@ -103,9 +103,28 @@ impl Animations {
     pub fn iter(&self) -> impl Iterator<Item = &Animation> + '_ {
         self.0.iter().filter(|anim| !anim.is_done())
     }
+
+    pub fn push(&mut self, anim: Animation) {
+        let animations = &mut self.0;
+        for i in 0..animations.len() {
+            if animations[i].is_done() {
+                animations[i] = anim;
+
+                break;
+            }
+        }
+    }
 }
 
 pub type Frames = u8;
+
+#[derive(Clone, Copy, Default)]
+pub struct AnimationSpec {
+    pub delay: Frames,
+    pub card: Card,
+    pub at: XY,
+    pub action: AnimationAction,
+}
 
 #[derive(Clone, Copy, Default)]
 pub struct Animation {
@@ -259,13 +278,38 @@ impl Menu {
 }
 
 #[derive(Clone, Default)]
-pub struct State {
-    pub rng: Xs,
+pub struct Cards {
     pub deck: Hand,
     pub player: Hand,
     pub cpu1: Hand,
     pub cpu2: Hand,
     pub cpu3: Hand,
+}
+
+impl Cards {
+    pub fn hand(&self, id: HandId) -> &Hand {
+        match id {
+            HandId::Player => &self.player,
+            HandId::Cpu1 => &self.cpu1,
+            HandId::Cpu2 => &self.cpu2,
+            HandId::Cpu3 => &self.cpu3,
+        }
+    }
+
+    pub fn hand_mut(&mut self, id: HandId) -> &mut Hand {
+        match id {
+            HandId::Player => &mut self.player,
+            HandId::Cpu1 => &mut self.cpu1,
+            HandId::Cpu2 => &mut self.cpu2,
+            HandId::Cpu3 => &mut self.cpu3,
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct State {
+    pub rng: Xs,
+    pub cards: Cards,
     pub animations: Animations,
     pub menu: Menu,
     pub ctx: ui::Context,
@@ -277,41 +321,35 @@ impl State {
 
         let mut state = State {
             rng,
-            deck: Hand::fresh_deck(&mut rng),
+            cards: Cards {
+                deck: Hand::fresh_deck(&mut rng),
+                .. <_>::default()
+            },
             .. <_>::default()
         };
 
         for card_i in 0..INITIAL_HAND_SIZE {
             for (id_i, id) in HandId::ALL.into_iter().enumerate() {
-                let card = match state.deck.draw() {
+                let card = match state.cards.deck.draw() {
                     Some(card) => card,
                     None => continue,
                 };
-                let animations = &mut state.animations.0;
-                for i in 0..animations.len() {
-                    if animations[i].is_done() {
-                        let target = match id {
-                            // TODO different based on how many cards are in the
-                            // hand already? Maybe account for any hand sorting?
-                            HandId::Player => PLAYER_BASE_XY,
-                            HandId::Cpu1 => CPU1_BASE_XY,
-                            HandId::Cpu2 => CPU2_BASE_XY,
-                            HandId::Cpu3 => CPU3_BASE_XY,
-                        };
 
-                        animations[i] = Animation {
-                            card,
-                            at: DECK_XY,
-                            target,
-                            action: AnimationAction::AddToHand(id),
-                            delay: card_i
-                                .saturating_mul(HandId::ALL.len() as u8)
-                                .saturating_add(id_i as u8),
-                        };
+                
+                let target = get_card_insert_position(
+                    spread(id),
+                    card_i + 1,
+                );
 
-                        break;
-                    }
-                }
+                state.animations.push(Animation {
+                    card,
+                    at: DECK_XY,
+                    target,
+                    action: AnimationAction::AddToHand(id),
+                    delay: card_i
+                        .saturating_mul(HandId::ALL.len() as u8)
+                        .saturating_add(id_i as u8),
+                });
             }
         }
 
@@ -370,10 +408,10 @@ impl State {
                     AnimationAction::DoNothing => {},
                     AnimationAction::AddToHand(id) => {
                         let hand = match id {
-                            HandId::Player => &mut self.player,
-                            HandId::Cpu1 => &mut self.cpu1,
-                            HandId::Cpu2 => &mut self.cpu2,
-                            HandId::Cpu3 => &mut self.cpu3,
+                            HandId::Player => &mut self.cards.player,
+                            HandId::Cpu1 => &mut self.cards.cpu1,
+                            HandId::Cpu2 => &mut self.cards.cpu2,
+                            HandId::Cpu3 => &mut self.cards.cpu3,
                         };
 
                         hand.push(anim.card);
@@ -391,15 +429,6 @@ impl State {
                     }
                 }
             }
-        }
-    }
-
-    pub fn hand(&self, id: HandId) -> &Hand {
-        match id {
-            HandId::Player => &self.player,
-            HandId::Cpu1 => &self.cpu1,
-            HandId::Cpu2 => &self.cpu2,
-            HandId::Cpu3 => &self.cpu3,
         }
     }
 }
@@ -530,7 +559,7 @@ pub fn update_and_render(
 
     state.tick(speaker);
 
-    if !state.deck.is_empty() {
+    if !state.cards.deck.is_empty() {
         commands.draw_card_back(DECK_XY);
     }
 
@@ -540,10 +569,19 @@ pub fn update_and_render(
         }
     }
 
-    // Rev to put player cards on top.
     for id in HandId::CPUS.into_iter() {
-        let hand = state.hand(id);
+        let hand = state.cards.hand(id);
         let len = hand.len();
+
+        if cfg!(debug_assertions) {
+            for (i, card) in hand.enumerated_iter() {
+                commands.draw_card(
+                    card,
+                    get_card_position(spread(id), len, i)
+                );
+            }
+            continue
+        }
 
         for i in 0..len {
             commands.draw_card_back(
@@ -554,7 +592,7 @@ pub fn update_and_render(
 
     'player_hand: {
         let id = HandId::Player;
-        let hand = state.hand(id);
+        let hand = state.cards.hand(id);
         let len = hand.len();
 
         if len == 0 {
@@ -693,7 +731,46 @@ pub fn update_and_render(
                         text: b"Submit",
                     }
                 ) {
-                    dbg!("TODO: ask");
+                    let player_len = state.cards.player.len();
+                    let target_hand = state.cards.hand_mut(question.target);
+                    let target_card = models::fish_card(rank, question.suit);
+
+                    let mut found = false;
+                    // TODO randomize order here to make it harder to learn their
+                    // whole hand with glass bottom boat?
+                    for i in 0..target_hand.len() {
+                        found = target_hand.get(i)
+                            .map(|card| card == target_card)
+                            .unwrap_or_default();
+                        if found {
+                            let card = target_hand.remove(i).expect("We just looked at it!");
+                            
+                            let at = get_card_position(
+                                spread(question.target),
+                                target_hand.len(),
+                                i,
+                            );
+
+                            let target = get_card_insert_position(
+                                spread(HandId::Player),
+                                player_len
+                            );
+
+                            state.animations.push(Animation {
+                                card,
+                                at,
+                                target,
+                                action: AnimationAction::AddToHand(HandId::Player),
+                                delay: 0,
+                            });
+
+                            break
+                        }
+                    }
+
+                    if !found {
+                        // TODO go fish!
+                    }
                 }
 
                 let description_base_rect = unscaled::Rect::xy_wh(
@@ -731,14 +808,14 @@ pub fn update_and_render(
                 );
             } else if input.pressed_this_frame(Button::RIGHT) {
                 state.menu = Menu::Selecting(
-                    if selected < state.player.len().saturating_sub(1) {
+                    if selected < state.cards.player.len().saturating_sub(1) {
                         selected + 1
                     } else {
                         0
                     }
                 );
             } else if input.pressed_this_frame(Button::A) {
-                let player_card = state.player.get(selected)
+                let player_card = state.cards.player.get(selected)
                     .expect("selected index should always be valid");
                 if let Some(_zinger) = models::get_zinger(player_card) {
                     // TODO probably add specific menus for each zinger
@@ -813,6 +890,10 @@ pub fn update_and_render(
             }
         }
     }
+}
+
+fn get_card_insert_position(spread: Spread, len: u8) -> XY {
+    get_card_position(spread, len + 1, len)
 }
 
 fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
