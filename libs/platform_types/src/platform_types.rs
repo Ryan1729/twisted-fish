@@ -232,7 +232,7 @@ pub mod unscaled {
         }
     }
 
-    #[derive(Clone, Copy, Default, PartialEq, Eq)]
+    #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
     pub struct XY {
         pub x: X,
         pub y: Y,

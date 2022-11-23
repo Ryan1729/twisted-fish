@@ -219,14 +219,15 @@ mod question {
             Self {
                 target: HandId::Cpu1,
                 suit: Suit::default(),
-                description: Vec::with_capacity(128),
+                description: Vec::default(),
             }
         }
     }
 
     impl Question {
-        pub fn fresh_description(&mut self, rank: Rank) -> &[u8] {
+        pub fn fresh_ask_description(&mut self, rank: Rank) -> &[u8] {
             self.description.clear();
+            self.description.reserve(128);
 
             self.description.extend_from_slice(
                 HandId::TEXT[usize::from(self.target as u8)]
@@ -250,6 +251,50 @@ mod question {
 
             &self.description
         }
+
+        pub fn fresh_fished_description(
+            &mut self,
+            rank: Rank,
+            drew: Option<Card>
+        ) -> &[u8] {
+            self.description.clear();
+            self.description.reserve(128);
+
+            self.description.extend_from_slice(
+                b"You asked for the "
+            );
+
+            self.description.extend_from_slice(
+                Suit::TEXT[usize::from(self.suit as u8)]
+            );
+
+            self.description.push(b' ');
+
+            self.description.extend_from_slice(
+                models::ranks::TEXT[usize::from(rank as u8)]
+            );
+
+            self.description.push(b' ');
+
+            if let Some(card) = drew {
+                let target_card = models::fish_card(rank, self.suit);
+                if card == target_card {
+                    self.description.extend_from_slice(
+                        b"and you got what you asked for!"
+                    );
+                } else {
+                    self.description.extend_from_slice(
+                        b"but you didn't get it."
+                    );
+                }
+            } else {
+                self.description.extend_from_slice(
+                    b"but the fish pond was empty!"
+                );
+            }
+
+            &self.description
+        }
     }
 }
 use question::Question;
@@ -258,6 +303,7 @@ use question::Question;
 pub enum Menu {
     Selecting(CardIndex),
     Asking(CardIndex, Question),
+    Fished(CardIndex, Question, Option<Card>),
 }
 
 impl Default for Menu {
@@ -272,7 +318,8 @@ impl Menu {
     pub fn selected(&self) -> CardIndex {
         match self {
             Self::Selecting(selected)
-            | Self::Asking(selected, ..) => *selected,
+            | Self::Asking(selected, ..)
+            | Self::Fished(selected, ..) => *selected,
         }
     }
 }
@@ -335,7 +382,7 @@ impl State {
                     None => continue,
                 };
 
-                
+
                 let target = get_card_insert_position(
                     spread(id),
                     card_i + 1,
@@ -422,6 +469,7 @@ impl State {
                                     self.menu = Menu::Selecting(hand.len() - 1);
                                 },
                                 Menu::Asking(..) => {},
+                                Menu::Fished(..) => {},
                             }
                         }
 
@@ -715,6 +763,26 @@ pub fn update_and_render(
                     }
                 }
 
+                let description_base_rect = unscaled::Rect::xy_wh(
+                    base_xy + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
+                    unscaled::WH {
+                        w: ASKING_WINDOW.w,
+                        h: ASKING_SUIT_WH.h,
+                    }
+                );
+
+                let description = question.fresh_ask_description(rank);
+
+                let description_xy = gfx::center_line_in_rect(
+                    description.len() as _,
+                    description_base_rect,
+                );
+                group.commands.print_line(
+                    description,
+                    description_xy,
+                    WHITE,
+                );
+
                 let submit_base_xy = suit_base_xy + ASKING_TARGET_WH.w;
 
                 if do_button(
@@ -744,7 +812,7 @@ pub fn update_and_render(
                             .unwrap_or_default();
                         if found {
                             let card = target_hand.remove(i).expect("We just looked at it!");
-                            
+
                             let at = get_card_position(
                                 spread(question.target),
                                 target_hand.len(),
@@ -769,30 +837,92 @@ pub fn update_and_render(
                     }
 
                     if !found {
-                        // TODO go fish!
+                        let card_option = state.cards.deck.draw();
+
+                        state.menu = Menu::Fished(selected, core::mem::take(question), card_option);
+
+                        if let Some(card) = card_option {
+                            let at = DECK_XY;
+
+                            let target = get_card_insert_position(
+                                spread(HandId::Player),
+                                player_len
+                            );
+
+                            state.animations.push(Animation {
+                                card,
+                                at,
+                                target,
+                                action: AnimationAction::AddToHand(HandId::Player),
+                                delay: 0,
+                            });
+                        }
                     }
                 }
+            },
+            Menu::Fished(_, ref mut question, drew) => {
+                let rank = models::get_rank(player_card)
+                    .expect("Fished selected index should always have a rank!");
 
-                let description_base_rect = unscaled::Rect::xy_wh(
-                    base_xy + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
-                    unscaled::WH {
-                        w: ASKING_WINDOW.w,
-                        h: ASKING_SUIT_WH.h,
-                    }
+                commands.draw_nine_slice(gfx::NineSlice::Window, GO_FISH_WINDOW);
+
+                let base_xy = GO_FISH_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+
+                let target_card_xy = base_xy;
+
+                let target_card = models::fish_card(rank, question.suit);
+
+                commands.draw_card(
+                    target_card,
+                    target_card_xy
                 );
 
-                let description = question.fresh_description(rank);
+                let drew_card_xy = target_card_xy + CARD_WIDTH * 2;
+                let drew_card_xy = drew_card_xy - WINDOW_CONTENT_OFFSET.w * 2;
+
+                if let Some(card) = drew {
+                    commands.draw_card(
+                        card,
+                        drew_card_xy
+                    );
+                } else {
+                    commands.print_line(
+                        b"Nothin'",
+                        drew_card_xy,
+                        WHITE,
+                    );
+                }
+
+                let description_base_xy =
+                    target_card_xy
+                    + CARD_HEIGHT
+                    + WINDOW_CONTENT_OFFSET.h;
+
+                let description_base_rect = unscaled::Rect::xy_wh(
+                    description_base_xy,
+                    (
+                        GO_FISH_WINDOW.xy()
+                        + (GO_FISH_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
+                    ) - description_base_xy,
+                );
+
+                let description = question.fresh_fished_description(
+                    rank,
+                    drew
+                );
 
                 let description_xy = gfx::center_line_in_rect(
                     description.len() as _,
                     description_base_rect,
                 );
+
                 commands.print_line(
                     description,
                     description_xy,
                     WHITE,
-                )
-            },
+                );
+                // TODO Dorky sound effect?
+            }
         }
     }
 
@@ -815,13 +945,15 @@ pub fn update_and_render(
                     }
                 );
             } else if input.pressed_this_frame(Button::A) {
-                let player_card = state.cards.player.get(selected)
-                    .expect("selected index should always be valid");
-                if let Some(_zinger) = models::get_zinger(player_card) {
-                    // TODO probably add specific menus for each zinger
-                } else {
-                    state.menu = Menu::Asking(selected, Default::default());
-                    state.ctx.set_next_hot(Cpu1);
+                if !state.cards.player.is_empty() {
+                    let player_card = state.cards.player.get(selected)
+                        .expect("selected index should always be valid");
+                    if let Some(_zinger) = models::get_zinger(player_card) {
+                        // TODO probably add specific menus for each zinger
+                    } else {
+                        state.menu = Menu::Asking(selected, Default::default());
+                        state.ctx.set_next_hot(Cpu1);
+                    }
                 }
             } else {
                 // do nothing
@@ -888,6 +1020,15 @@ pub fn update_and_render(
                 // do nothing
                 state.ctx.set_next_hot(state.ctx.hot);
             }
+        },
+        Menu::Fished(..) => {
+            if input.pressed_this_frame(Button::A)
+            | input.pressed_this_frame(Button::B) {
+                // TODO Change whose turn it is if needed.
+                state.menu = Menu::Selecting(
+                    state.cards.player.len().saturating_sub(1)
+                );
+            }
         }
     }
 }
@@ -951,3 +1092,15 @@ const ASKING_TARGET_WH: unscaled::WH = unscaled::WH {
 };
 
 const ASKING_SUIT_WH: unscaled::WH = ASKING_TARGET_WH;
+
+const GO_FISH_WINDOW: unscaled::Rect = {
+    const WIN_W: unscaled::Inner = CARD_WIDTH.get() * 3;
+    const X_OFFSET: unscaled::Inner = (command::WIDTH - WIN_W) / 2;
+    const Y_OFFSET: unscaled::Inner = (command::HEIGHT - CARD_HEIGHT.get() * 2) / 2;
+    unscaled::Rect {
+        x: X(X_OFFSET),
+        y: Y(Y_OFFSET),
+        w: W(command::WIDTH - X_OFFSET * 2),
+        h: H(command::HEIGHT - Y_OFFSET * 2),
+    }
+};
