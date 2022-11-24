@@ -1,6 +1,6 @@
 use models::{Card, get_rank, get_suit, get_zinger, ranks, zingers};
 
-use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT};
+use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT, bytes_lines};
 
 const FONT_OFFSET: sprite::H = unscaled::h_const_mul(
     card::IMAGE_H.get(),
@@ -95,6 +95,18 @@ impl Commands {
         for &c in bytes.iter() {
             self.print_char(c, xy, colour);
             xy.x += CHAR_ADVANCE_W.get();
+        }
+    }
+
+    pub fn print(
+        &mut self,
+        bytes: &[u8],
+        mut xy : unscaled::XY,
+        colour: ARGB,
+    ) {
+        for line in bytes_lines(bytes) {
+            self.print_line(line, xy, colour);
+            xy.y += CHAR_ADVANCE_H.get();
         }
     }
 

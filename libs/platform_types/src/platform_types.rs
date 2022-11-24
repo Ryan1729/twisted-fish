@@ -46,8 +46,20 @@ pub mod unscaled {
         w.0 as usize
     }
 
+    impl From<W> for usize {
+        fn from(w: W) -> Self {
+            w_to_usize(w)
+        }
+    }
+
     pub const fn h_to_usize(h: H) -> usize {
         h.0 as usize
+    }
+
+    impl From<H> for usize {
+        fn from(h: H) -> Self {
+            h_to_usize(h)
+        }
     }
 
     pub const fn w_const_add(a: W, b: W) -> W {
@@ -1103,3 +1115,7 @@ pub const PALETTE: [ARGB; 8] = [
     WHITE,
     BLACK,
 ];
+
+pub fn bytes_lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
+    bytes.split(|&b| b == b'\n')
+}

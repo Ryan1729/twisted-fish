@@ -255,7 +255,8 @@ mod question {
         pub fn fresh_fished_description(
             &mut self,
             rank: Rank,
-            drew: Option<Card>
+            drew: Option<Card>,
+            width: W,
         ) -> &[u8] {
             self.description.clear();
             self.description.reserve(128);
@@ -292,6 +293,10 @@ mod question {
                     b"but the fish pond was empty!"
                 );
             }
+
+            let width_in_chars = usize::from(width / gfx::CHAR_ADVANCE_W.get().get());
+
+            text::bytes_reflow_in_place(&mut self.description, width_in_chars);
 
             &self.description
         }
@@ -908,15 +913,18 @@ pub fn update_and_render(
 
                 let description = question.fresh_fished_description(
                     rank,
-                    drew
+                    drew,
+                    description_base_rect.w,
                 );
 
+                let longest_line = text::longest_line_of(description);
+
                 let description_xy = gfx::center_line_in_rect(
-                    description.len() as _,
+                    longest_line.len() as _,
                     description_base_rect,
                 );
 
-                commands.print_line(
+                commands.print(
                     description,
                     description_xy,
                     WHITE,
@@ -1076,6 +1084,183 @@ fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
     }
 }
 
+mod text {
+    // NOTE This does not use a general purpose definition of whitespace.
+    // This should count a byte as whitespace iff it has all blank
+    // pixels in this game's font.
+    #[inline]
+    fn is_byte_whitespace(byte: u8) -> bool {
+        (byte <= b' ' && byte != b'\xED' && byte != b'\xE9')
+        || byte > b'~'
+    }
+
+    macro_rules! test_log {
+        //($($tokens: tt)*) => {dbg!(&$($tokens)*);}
+        ($($tokens: tt)*) => {}
+    }
+
+    pub fn bytes_reflow_in_place(bytes: &mut Vec<u8>, width_in_chars: usize) {
+        if width_in_chars == 0 || bytes.is_empty() {
+            test_log!("width_in_chars == 0 || bytes.is_empty()");
+            return;
+        }
+
+        test_log!("start");
+        test_log!((std::str::from_utf8(&bytes), width_in_chars));
+        let used_len = bytes.len();
+        let extra = bytes.len() / width_in_chars;
+
+        if extra == 0 {
+            test_log!("no extra");
+            return;
+        }
+        bytes.reserve(extra);
+
+        //fill with 0's to capacity
+        for _ in 0..extra {
+            bytes.push(0);
+        }
+
+        //shift used parts down to the end
+        {
+            let mut index = bytes.len() - 1;
+            test_log!(index);
+            test_log!(used_len);
+            test_log!((0..used_len).rev());
+            for i in (0..used_len).rev() {
+                test_log!(index);
+                test_log!(i);
+                bytes[index] = bytes[i];
+                index -= 1;
+            }
+        }
+
+        let mut index = 0;
+        {
+            //full length - used_len == (used_len + extra) - used_len == extra
+            let shifted_start = extra;
+            let mut next_i = shifted_start;
+            test_log!(std::str::from_utf8(&bytes));
+            test_log!(shifted_start);
+            //scan from the start of the (moved) used portion and copy it back to the front
+            //inserting newlines where appropiate.
+            let mut x = 0;
+            while let Some((w_i, len)) = bytes_next_word(bytes, &mut next_i) {
+                test_log!((w_i, len));
+                test_log!(std::str::from_utf8(&bytes[w_i..w_i + len]));
+                x += len;
+                test_log!(x);
+
+                if x == width_in_chars && x == len {
+                    for i in w_i..w_i + len {
+                        bytes[index] = bytes[i];
+                        index += 1;
+                    }
+                    continue;
+                }
+
+                if x >= width_in_chars {
+                    bytes[index] = b'\n';
+                    index += 1;
+
+                    x = len;
+                } else if x > len {
+                    bytes[index] = b' ';
+                    index += 1;
+
+                    x += 1;
+                }
+
+                for i in w_i..w_i + len {
+                    bytes[index] = bytes[i];
+                    index += 1;
+                }
+                test_log!(std::str::from_utf8(bytes));
+            }
+        }
+        test_log!("!");
+        test_log!(std::str::from_utf8(bytes));
+        test_log!(index);
+        bytes.truncate(index);
+    }
+
+    #[test]
+    fn bytes_reflow_in_place_reflows_this_found_example() {
+        let initial = b"You asked for the Red Shrimp but you didn't get it.";
+        assert_eq!(initial.len(), 51);
+        let mut actual = initial.to_vec();
+
+        bytes_reflow_in_place(&mut actual, 30);
+
+        assert_eq!(
+            &actual,
+            b"You asked for the Red Shrimp \nbut you didn't get it."
+        );
+    }
+
+    fn bytes_next_word(bytes: &[u8], in_i: &mut usize) -> Option<(usize, usize)> {
+        test_log!("next");
+        test_log!(std::str::from_utf8(&bytes));
+        let end = bytes.len();
+        test_log!(end);
+        test_log!(in_i);
+
+        for index in *in_i..end {
+            if !is_byte_whitespace(bytes[index]) {
+                let out_i = index;
+                let mut len = 0;
+
+                // The suggestion that includes `.take(end + 1)` changes the behaviour
+                // because `end == bytes.len()`, so it loops one less time.
+                #[allow(clippy::needless_range_loop)]
+                for i in index + 1..=end {
+                    *in_i = i;
+                    if i == end || is_byte_whitespace(bytes[i]) {
+                        len = i - out_i;
+                        break;
+                    }
+                }
+                if *in_i == end - 1 {
+                    *in_i = end;
+                }
+
+                return Some((out_i, len));
+            }
+        }
+        test_log!("None");
+        None
+    }
+
+    #[test]
+    fn bytes_next_word_works_on_this_found_example() {
+        let bytes = b"You asked for the Red Shrimp but you didn't get it.";
+        let expected = [
+            Some(( 0, 3)), // You
+            Some(( 4, 5)), // asked
+            Some((10, 3)), // for
+            Some((14, 3)), // the
+        ];
+        let mut i = 0;
+
+        for e in expected {
+            assert_eq!(
+                bytes_next_word(bytes, &mut i),
+                e,
+            );
+        }
+    }
+
+    pub fn longest_line_of(bytes: &[u8]) -> &[u8] {
+        let mut output: &[u8] = b"";
+        for line in platform_types::bytes_lines(bytes) {
+            if line.len() > output.len() {
+                output = line;
+            }
+        }
+        output
+    }
+}
+
 const ASKING_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 8;
     unscaled::Rect {
@@ -1096,7 +1281,10 @@ const ASKING_SUIT_WH: unscaled::WH = ASKING_TARGET_WH;
 const GO_FISH_WINDOW: unscaled::Rect = {
     const WIN_W: unscaled::Inner = CARD_WIDTH.get() * 3;
     const X_OFFSET: unscaled::Inner = (command::WIDTH - WIN_W) / 2;
-    const Y_OFFSET: unscaled::Inner = (command::HEIGHT - CARD_HEIGHT.get() * 2) / 2;
+    const Y_OFFSET: unscaled::Inner = (
+        command::HEIGHT
+        - (CARD_HEIGHT.get() * 3) / 2
+    ) / 2;
     unscaled::Rect {
         x: X(X_OFFSET),
         y: Y(Y_OFFSET),

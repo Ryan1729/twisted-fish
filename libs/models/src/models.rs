@@ -110,7 +110,7 @@ pub mod ranks {
         b"Clownfish",
         b"Starfish",
         b"Whale",
-        b"Card shark",
+        b"Card Shark",
     ];
 }
 
