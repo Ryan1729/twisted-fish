@@ -119,20 +119,13 @@ impl Animations {
 pub type Frames = u8;
 
 #[derive(Clone, Copy, Default)]
-pub struct AnimationSpec {
-    pub delay: Frames,
-    pub card: Card,
-    pub at: XY,
-    pub action: AnimationAction,
-}
-
-#[derive(Clone, Copy, Default)]
 pub struct Animation {
     pub delay: Frames,
     pub card: Card,
     pub at: XY,
     pub target: XY,
     pub action: AnimationAction,
+    pub shown: bool,
 }
 
 impl Animation {
@@ -401,6 +394,7 @@ impl State {
                     delay: card_i
                         .saturating_mul(HandId::ALL.len() as u8)
                         .saturating_add(id_i as u8),
+                    .. <_>::default()
                 });
             }
         }
@@ -618,7 +612,11 @@ pub fn update_and_render(
 
     for anim in state.animations.iter() {
         if anim.is_active() {
-            commands.draw_card_back(anim.at);
+            if anim.shown {
+                commands.draw_card(anim.card, anim.at);
+            } else {
+                commands.draw_card_back(anim.at);
+            }
         }
     }
 
@@ -808,40 +806,46 @@ pub fn update_and_render(
                     let target_hand = state.cards.hand_mut(question.target);
                     let target_card = models::fish_card(rank, question.suit);
 
-                    let mut found = false;
+                    let mut found = None;
                     // TODO randomize order here to make it harder to learn their
                     // whole hand with glass bottom boat?
                     for i in 0..target_hand.len() {
-                        found = target_hand.get(i)
+                        let was_found = target_hand.get(i)
                             .map(|card| card == target_card)
                             .unwrap_or_default();
-                        if found {
-                            let card = target_hand.remove(i).expect("We just looked at it!");
-
-                            let at = get_card_position(
-                                spread(question.target),
-                                target_hand.len(),
-                                i,
-                            );
-
-                            let target = get_card_insert_position(
-                                spread(HandId::Player),
-                                player_len
-                            );
-
-                            state.animations.push(Animation {
-                                card,
-                                at,
-                                target,
-                                action: AnimationAction::AddToHand(HandId::Player),
-                                delay: 0,
-                            });
+                        if was_found {
+                            found = Some((
+                                target_hand.remove(i).expect("We just looked at it!"),
+                                i
+                            ));
 
                             break
                         }
                     }
 
-                    if !found {
+                    if let Some((card, i)) = found {
+                        let at = get_card_position(
+                            spread(question.target),
+                            target_hand.len(),
+                            i,
+                        );
+
+                        let target = get_card_insert_position(
+                            spread(HandId::Player),
+                            player_len
+                        );
+
+                        state.animations.push(Animation {
+                            card,
+                            at,
+                            target,
+                            action: AnimationAction::AddToHand(HandId::Player),
+                            shown: true,
+                            .. <_>::default()
+                        });
+
+                        state.menu = Menu::Selecting(selected);
+                    } else {
                         let card_option = state.cards.deck.draw();
 
                         state.menu = Menu::Fished(selected, core::mem::take(question), card_option);
@@ -859,7 +863,7 @@ pub fn update_and_render(
                                 at,
                                 target,
                                 action: AnimationAction::AddToHand(HandId::Player),
-                                delay: 0,
+                                .. <_>::default()
                             });
                         }
                     }
