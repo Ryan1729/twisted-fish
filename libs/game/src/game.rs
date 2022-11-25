@@ -413,8 +413,8 @@ impl State {
                 continue
             }
 
-            let x_rate = 1;
-            let y_rate = 1;
+            let x_rate = 3;
+            let y_rate = 3;
             let d_x = match anim.at.x.cmp(&anim.target.x) {
                 Equal => 0,
                 Greater => {
