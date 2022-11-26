@@ -78,7 +78,7 @@ pub const CPU3_SPREAD: Spread = Spread::TTB(
     CPU3_BASE_XY.x
 );
 
-pub fn spread(id: HandId) -> Spread {
+pub const fn spread(id: HandId) -> Spread {
     match id {
         HandId::Player => PLAYER_SPREAD,
         HandId::Cpu1 => CPU1_SPREAD,
@@ -177,6 +177,15 @@ impl HandId {
         b"Cpu 2",
         b"Cpu 3",
     ];
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum CpuId {
+    #[default]
+    One,
+    Two,
+    Three,
 }
 
 #[derive(Default)]
@@ -299,27 +308,42 @@ use question::Question;
 
 #[derive(Clone)]
 pub enum Menu {
-    Selecting(CardIndex),
-    Asking(CardIndex, Question),
-    Fished(CardIndex, Question, Option<Card>),
+    PlayerTurn { selected: CardIndex, menu: PlayerMenu },
+    CpuTurn{ id: CpuId, menu: CpuMenu }
 }
 
 impl Default for Menu {
     fn default() -> Menu {
-        Menu::Selecting(CardIndex::default())
+        Menu::player(CardIndex::default())
     }
 }
 
 impl Menu {
-    // We assume there will probably be cases where there isn't a selected card.
-    // We'll see.
-    pub fn selected(&self) -> CardIndex {
-        match self {
-            Self::Selecting(selected)
-            | Self::Asking(selected, ..)
-            | Self::Fished(selected, ..) => *selected,
+    fn player(selected: CardIndex) -> Self {
+        Menu::PlayerTurn {
+            selected,
+            menu: PlayerMenu::Selecting,
         }
     }
+}
+
+#[derive(Clone)]
+pub enum PlayerMenu {
+    Selecting,
+    Asking(Question),
+    Fished(Question, Option<Card>),
+}
+
+impl Default for PlayerMenu {
+    fn default() -> PlayerMenu {
+        PlayerMenu::Selecting
+    }
+}
+
+#[derive(Clone, Default)]
+pub enum CpuMenu {
+    #[default]
+    Asking,
 }
 
 #[derive(Clone, Default)]
@@ -370,10 +394,13 @@ impl State {
                 deck: Hand::fresh_deck(&mut rng),
                 .. <_>::default()
             },
+            // TODO Randomize starting turn
             .. <_>::default()
         };
 
         for card_i in 0..INITIAL_HAND_SIZE {
+            // TODO Once starting turn is randomized, deal cards to first player
+            // first.
             for (id_i, id) in HandId::ALL.into_iter().enumerate() {
                 let card = match state.cards.deck.draw() {
                     Some(card) => card,
@@ -464,11 +491,13 @@ impl State {
 
                         if let HandId::Player = id {
                             match self.menu {
-                                Menu::Selecting(_) => {
-                                    self.menu = Menu::Selecting(hand.len() - 1);
+                                Menu::PlayerTurn {
+                                    ref mut selected,
+                                    menu: PlayerMenu::Selecting
+                                } => {
+                                    *selected = hand.len() - 1;
                                 },
-                                Menu::Asking(..) => {},
-                                Menu::Fished(..) => {},
+                                _ => {},
                             }
                         }
 
@@ -650,307 +679,325 @@ pub fn update_and_render(
             break 'player_hand
         }
 
-        let selected = state.menu.selected();
+        let selected = match state.menu {
+            Menu::PlayerTurn { selected, menu: PlayerMenu::Selecting } => Some(selected),
+            _ => None,
+        };
         for (i, card) in hand.enumerated_iter() {
-            if selected == i { continue }
+            if selected == Some(i) { continue }
 
             commands.draw_card(
                 card,
                 get_card_position(spread(id), len, i)
             );
         }
-
-        let player_card = hand.get(selected)
-            .expect("selected index should always be valid");
-
-        let selected_pos = get_card_position(
-            spread(id),
-            len,
-            selected
-        );
-
-        commands.draw_card(
-            player_card,
-            selected_pos
-        );
-
-        commands.draw_selectrum(selected_pos);
-
-        match state.menu {
-            Menu::Selecting(_) => {},
-            Menu::Asking(_, ref mut question) => {
-                let rank = models::get_rank(player_card)
-                    .expect("Asking selected index should always have a rank!");
-
-                commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
-
-                let base_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-
-                let card_xy = base_xy;
-
-                commands.draw_card(
-                    player_card,
-                    card_xy
-                );
-
-                // TODO Maybe all these buttons aren't the best UI here.
-                // For example, a list of options that you can scroll and
-                // then move away from, with a single submit button may be
-                // better becasue it involves fewer button presses.
-                let button_base_xy = card_xy + CARD_WIDTH;
-
-                let mut group = ui::Group {
-                    commands,
-                    ctx: &mut state.ctx,
-                    input,
-                    speaker,
-                };
-
-                for (hand_id, spec) in [
-                    (
-                        HandId::Cpu1,
-                        ButtonSpec {
-                            id: Cpu1,
-                            rect: Rect::xy_wh(
-                                button_base_xy,
-                                ASKING_TARGET_WH,
-                            ),
-                            text: b"CPU 1",
-                        }
-                    ),
-                    (
-                        HandId::Cpu2,
-                        ButtonSpec {
-                            id: Cpu2,
-                            rect: Rect::xy_wh(
-                                button_base_xy + ASKING_TARGET_WH.h,
-                                ASKING_TARGET_WH,
-                            ),
-                            text: b"CPU 2",
-                        },
-                    ),
-                    (
-                        HandId::Cpu3,
-                        ButtonSpec {
-                            id: Cpu3,
-                            rect: Rect::xy_wh(
-                                button_base_xy + ASKING_TARGET_WH.h * 2,
-                                ASKING_TARGET_WH,
-                            ),
-                            text: b"CPU 3",
-                        },
-                    ),
-                ] {
-                    if do_button(&mut group, spec) {
-                        question.target = hand_id;
-                    }
-                }
-
-                let suit_base_xy = button_base_xy + ASKING_TARGET_WH.w;
-
-                for index in 0..unscaled::Inner::from(Suit::COUNT) {
-                    let i = index as usize;
-                    let suit = Suit::ALL[i];
-
-                    let spec = ButtonSpec {
-                        id: AskSuit(suit),
-                        rect: Rect::xy_wh(
-                            suit_base_xy + ASKING_SUIT_WH.h * index,
-                            ASKING_SUIT_WH,
-                        ),
-                        text: Suit::TEXT[i],
-                    };
-
-                    if do_button(&mut group, spec) {
-                        question.suit = suit;
-                    }
-                }
-
-                let description_base_rect = unscaled::Rect::xy_wh(
-                    base_xy + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
-                    unscaled::WH {
-                        w: ASKING_WINDOW.w,
-                        h: ASKING_SUIT_WH.h,
-                    }
-                );
-
-                let description = question.fresh_ask_description(rank);
-
-                let description_xy = gfx::center_line_in_rect(
-                    description.len() as _,
-                    description_base_rect,
-                );
-                group.commands.print_line(
-                    description,
-                    description_xy,
-                    WHITE,
-                );
-
-                let submit_base_xy = suit_base_xy + ASKING_TARGET_WH.w;
-
-                if do_button(
-                    &mut group,
-                    ButtonSpec {
-                        id: AskSubmit,
-                        rect: Rect::xy_wh(
-                            submit_base_xy,
-                            (
-                                ASKING_WINDOW.xy()
-                                + (ASKING_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
-                            ) - submit_base_xy,
-                        ),
-                        text: b"Submit",
-                    }
-                ) {
-                    let player_len = state.cards.player.len();
-                    let target_hand = state.cards.hand_mut(question.target);
-                    let target_card = models::fish_card(rank, question.suit);
-
-                    let mut found = None;
-                    // TODO randomize order here to make it harder to learn their
-                    // whole hand with glass bottom boat?
-                    for i in 0..target_hand.len() {
-                        let was_found = target_hand.get(i)
-                            .map(|card| card == target_card)
-                            .unwrap_or_default();
-                        if was_found {
-                            found = Some((
-                                target_hand.remove(i).expect("We just looked at it!"),
-                                i
-                            ));
-
-                            break
-                        }
-                    }
-
-                    if let Some((card, i)) = found {
-                        let at = get_card_position(
-                            spread(question.target),
-                            target_hand.len(),
-                            i,
-                        );
-
-                        let target = get_card_insert_position(
-                            spread(HandId::Player),
-                            player_len
-                        );
-
-                        state.animations.push(Animation {
-                            card,
-                            at,
-                            target,
-                            action: AnimationAction::AddToHand(HandId::Player),
-                            shown: true,
-                            .. <_>::default()
-                        });
-
-                        state.menu = Menu::Selecting(selected);
-                    } else {
-                        let card_option = state.cards.deck.draw();
-
-                        state.menu = Menu::Fished(selected, core::mem::take(question), card_option);
-
-                        if let Some(card) = card_option {
-                            let at = DECK_XY;
-
-                            let target = get_card_insert_position(
-                                spread(HandId::Player),
-                                player_len
-                            );
-
-                            state.animations.push(Animation {
-                                card,
-                                at,
-                                target,
-                                action: AnimationAction::AddToHand(HandId::Player),
-                                .. <_>::default()
-                            });
-                        }
-                    }
-                }
-            },
-            Menu::Fished(_, ref mut question, drew) => {
-                let rank = models::get_rank(player_card)
-                    .expect("Fished selected index should always have a rank!");
-
-                commands.draw_nine_slice(gfx::NineSlice::Window, GO_FISH_WINDOW);
-
-                let base_xy = GO_FISH_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-
-                let target_card_xy = base_xy;
-
-                let target_card = models::fish_card(rank, question.suit);
-
-                commands.draw_card(
-                    target_card,
-                    target_card_xy
-                );
-
-                let drew_card_xy = target_card_xy + CARD_WIDTH * 2;
-                let drew_card_xy = drew_card_xy - WINDOW_CONTENT_OFFSET.w * 2;
-
-                if let Some(card) = drew {
-                    commands.draw_card(
-                        card,
-                        drew_card_xy
-                    );
-                } else {
-                    commands.print_line(
-                        b"Nothin'",
-                        drew_card_xy,
-                        WHITE,
-                    );
-                }
-
-                let description_base_xy =
-                    target_card_xy
-                    + CARD_HEIGHT
-                    + WINDOW_CONTENT_OFFSET.h;
-
-                let description_base_rect = unscaled::Rect::xy_wh(
-                    description_base_xy,
-                    (
-                        GO_FISH_WINDOW.xy()
-                        + (GO_FISH_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
-                    ) - description_base_xy,
-                );
-
-                let description = question.fresh_fished_description(
-                    rank,
-                    drew,
-                    description_base_rect.w,
-                );
-
-                let longest_line = text::longest_line_of(description);
-
-                let description_xy = gfx::center_line_in_rect(
-                    longest_line.len() as _,
-                    description_base_rect,
-                );
-
-                commands.print(
-                    description,
-                    description_xy,
-                    WHITE,
-                );
-                // TODO Dorky sound effect?
-            }
-        }
     }
 
     match state.menu {
-        Menu::Selecting(selected) => {
+        Menu::PlayerTurn {
+            selected,
+            ref mut menu,
+        } => {
+            let hand = &state.cards.player;
+            let len = hand.len();
+            if let Some(player_card) = hand.get(selected) {
+                let id = HandId::Player;
+                match menu {
+                    PlayerMenu::Selecting => {
+                        let selected_pos = get_card_position(
+                            spread(id),
+                            len,
+                            selected
+                        );
+
+                        commands.draw_card(
+                            player_card,
+                            selected_pos
+                        );
+
+                        commands.draw_selectrum(selected_pos);
+                    },
+                    PlayerMenu::Asking(ref mut question) => {
+                        let rank = models::get_rank(player_card)
+                            .expect("Asking selected index should always have a rank!");
+
+                        commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
+
+                        let base_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+
+                        let card_xy = base_xy;
+
+                        commands.draw_card(
+                            player_card,
+                            card_xy
+                        );
+
+                        // TODO Maybe all these buttons aren't the best UI here.
+                        // For example, a list of options that you can scroll and
+                        // then move away from, with a single submit button may be
+                        // better becasue it involves fewer button presses.
+                        let button_base_xy = card_xy + CARD_WIDTH;
+
+                        let mut group = ui::Group {
+                            commands,
+                            ctx: &mut state.ctx,
+                            input,
+                            speaker,
+                        };
+
+                        for (hand_id, spec) in [
+                            (
+                                HandId::Cpu1,
+                                ButtonSpec {
+                                    id: Cpu1,
+                                    rect: Rect::xy_wh(
+                                        button_base_xy,
+                                        ASKING_TARGET_WH,
+                                    ),
+                                    text: b"CPU 1",
+                                }
+                            ),
+                            (
+                                HandId::Cpu2,
+                                ButtonSpec {
+                                    id: Cpu2,
+                                    rect: Rect::xy_wh(
+                                        button_base_xy + ASKING_TARGET_WH.h,
+                                        ASKING_TARGET_WH,
+                                    ),
+                                    text: b"CPU 2",
+                                },
+                            ),
+                            (
+                                HandId::Cpu3,
+                                ButtonSpec {
+                                    id: Cpu3,
+                                    rect: Rect::xy_wh(
+                                        button_base_xy + ASKING_TARGET_WH.h * 2,
+                                        ASKING_TARGET_WH,
+                                    ),
+                                    text: b"CPU 3",
+                                },
+                            ),
+                        ] {
+                            if do_button(&mut group, spec) {
+                                question.target = hand_id;
+                            }
+                        }
+
+                        let suit_base_xy = button_base_xy + ASKING_TARGET_WH.w;
+
+                        for index in 0..unscaled::Inner::from(Suit::COUNT) {
+                            let i = index as usize;
+                            let suit = Suit::ALL[i];
+
+                            let spec = ButtonSpec {
+                                id: AskSuit(suit),
+                                rect: Rect::xy_wh(
+                                    suit_base_xy + ASKING_SUIT_WH.h * index,
+                                    ASKING_SUIT_WH,
+                                ),
+                                text: Suit::TEXT[i],
+                            };
+
+                            if do_button(&mut group, spec) {
+                                question.suit = suit;
+                            }
+                        }
+
+                        let description_base_rect = unscaled::Rect::xy_wh(
+                            base_xy + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
+                            unscaled::WH {
+                                w: ASKING_WINDOW.w,
+                                h: ASKING_SUIT_WH.h,
+                            }
+                        );
+
+                        let description = question.fresh_ask_description(rank);
+
+                        let description_xy = gfx::center_line_in_rect(
+                            description.len() as _,
+                            description_base_rect,
+                        );
+                        group.commands.print_line(
+                            description,
+                            description_xy,
+                            WHITE,
+                        );
+
+                        let submit_base_xy = suit_base_xy + ASKING_TARGET_WH.w;
+
+                        if do_button(
+                            &mut group,
+                            ButtonSpec {
+                                id: AskSubmit,
+                                rect: Rect::xy_wh(
+                                    submit_base_xy,
+                                    (
+                                        ASKING_WINDOW.xy()
+                                        + (ASKING_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
+                                    ) - submit_base_xy,
+                                ),
+                                text: b"Submit",
+                            }
+                        ) {
+                            let player_len = state.cards.player.len();
+                            let target_hand = state.cards.hand_mut(question.target);
+                            let target_card = models::fish_card(rank, question.suit);
+
+                            let mut found = None;
+                            // TODO randomize order here to make it harder to learn their
+                            // whole hand with glass bottom boat?
+                            for i in 0..target_hand.len() {
+                                let was_found = target_hand.get(i)
+                                    .map(|card| card == target_card)
+                                    .unwrap_or_default();
+                                if was_found {
+                                    found = Some((
+                                        target_hand.remove(i).expect("We just looked at it!"),
+                                        i
+                                    ));
+
+                                    break
+                                }
+                            }
+
+                            if let Some((card, i)) = found {
+                                let at = get_card_position(
+                                    spread(question.target),
+                                    target_hand.len(),
+                                    i,
+                                );
+
+                                let target = get_card_insert_position(
+                                    spread(HandId::Player),
+                                    player_len
+                                );
+
+                                state.animations.push(Animation {
+                                    card,
+                                    at,
+                                    target,
+                                    action: AnimationAction::AddToHand(HandId::Player),
+                                    shown: true,
+                                    .. <_>::default()
+                                });
+
+                                *menu = PlayerMenu::Selecting;
+                            } else {
+                                let card_option = state.cards.deck.draw();
+
+                                *menu = PlayerMenu::Fished(core::mem::take(question), card_option);
+
+                                if let Some(card) = card_option {
+                                    let at = DECK_XY;
+
+                                    let target = get_card_insert_position(
+                                        spread(HandId::Player),
+                                        player_len
+                                    );
+
+                                    state.animations.push(Animation {
+                                        card,
+                                        at,
+                                        target,
+                                        action: AnimationAction::AddToHand(HandId::Player),
+                                        .. <_>::default()
+                                    });
+                                }
+                            }
+                        }
+                    },
+                    PlayerMenu::Fished(ref mut question, drew) => {
+                        let rank = models::get_rank(player_card)
+                            .expect("Fished selected index should always have a rank!");
+
+                        commands.draw_nine_slice(gfx::NineSlice::Window, GO_FISH_WINDOW);
+
+                        let base_xy = GO_FISH_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+
+                        let target_card_xy = base_xy;
+
+                        let target_card = models::fish_card(rank, question.suit);
+
+                        commands.draw_card(
+                            target_card,
+                            target_card_xy
+                        );
+
+                        let drew_card_xy = target_card_xy + CARD_WIDTH * 2;
+                        let drew_card_xy = drew_card_xy - WINDOW_CONTENT_OFFSET.w * 2;
+
+                        if let Some(card) = drew {
+                            commands.draw_card(
+                                *card,
+                                drew_card_xy
+                            );
+                        } else {
+                            commands.print_line(
+                                b"Nothin'",
+                                drew_card_xy,
+                                WHITE,
+                            );
+                        }
+
+                        let description_base_xy =
+                            target_card_xy
+                            + CARD_HEIGHT
+                            + WINDOW_CONTENT_OFFSET.h;
+
+                        let description_base_rect = unscaled::Rect::xy_wh(
+                            description_base_xy,
+                            (
+                                GO_FISH_WINDOW.xy()
+                                + (GO_FISH_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
+                            ) - description_base_xy,
+                        );
+
+                        let description = question.fresh_fished_description(
+                            rank,
+                            *drew,
+                            description_base_rect.w,
+                        );
+
+                        let longest_line = text::longest_line_of(description);
+
+                        let description_xy = gfx::center_line_in_rect(
+                            longest_line.len() as _,
+                            description_base_rect,
+                        );
+
+                        commands.print(
+                            description,
+                            description_xy,
+                            WHITE,
+                        );
+                        // TODO Dorky sound effect?
+                    }
+                }
+            }
+        },
+        Menu::CpuTurn {
+            id,
+            ref menu,
+        } => {
+            // TODO draw current window so player can see what is asked, etc.
+        }
+    }
+
+    match &state.menu {
+        Menu::PlayerTurn { selected, menu: PlayerMenu::Selecting } => {
             if input.pressed_this_frame(Button::LEFT) {
-                state.menu = Menu::Selecting(
-                    if selected > 0 {
-                        selected - 1
+                state.menu = Menu::player(
+                    if *selected > 0 {
+                        *selected - 1
                     } else {
                         0
                     }
                 );
             } else if input.pressed_this_frame(Button::RIGHT) {
-                state.menu = Menu::Selecting(
-                    if selected < state.cards.player.len().saturating_sub(1) {
+                state.menu = Menu::player(
+                    if *selected < state.cards.player.len().saturating_sub(1) {
                         selected + 1
                     } else {
                         0
@@ -958,12 +1005,15 @@ pub fn update_and_render(
                 );
             } else if input.pressed_this_frame(Button::A) {
                 if !state.cards.player.is_empty() {
-                    let player_card = state.cards.player.get(selected)
+                    let player_card = state.cards.player.get(*selected)
                         .expect("selected index should always be valid");
                     if let Some(_zinger) = models::get_zinger(player_card) {
                         // TODO probably add specific menus for each zinger
                     } else {
-                        state.menu = Menu::Asking(selected, Default::default());
+                        state.menu = Menu::PlayerTurn {
+                            selected: *selected,
+                            menu: PlayerMenu::Asking(Default::default()),
+                        };
                         state.ctx.set_next_hot(Cpu1);
                     }
                 }
@@ -971,7 +1021,10 @@ pub fn update_and_render(
                 // do nothing
             }
         },
-        Menu::Asking(selected, _) => {
+        Menu::PlayerTurn {
+            selected,
+            menu: PlayerMenu::Asking(_),
+        } => {
             const GRID_W: usize = 3;
             const GRID_H: usize = 5;
             const GRID_LEN: usize = GRID_W * GRID_H;
@@ -984,7 +1037,10 @@ pub fn update_and_render(
             ];
 
             if input.pressed_this_frame(Button::B) {
-                state.menu = Menu::Selecting(selected);
+                state.menu = Menu::PlayerTurn {
+                    selected: *selected,
+                    menu: PlayerMenu::Selecting,
+                };
             } else if let Some(dir) = input.dir_pressed_this_frame() {
                 let old_id = state.ctx.hot;
                 let id_i = GRID.iter()
@@ -1033,11 +1089,38 @@ pub fn update_and_render(
                 state.ctx.set_next_hot(state.ctx.hot);
             }
         },
-        Menu::Fished(..) => {
+        Menu::PlayerTurn {
+            selected,
+            menu: PlayerMenu::Fished(question, drew),
+        } => {
             if input.pressed_this_frame(Button::A)
             | input.pressed_this_frame(Button::B) {
-                // TODO Change whose turn it is if needed.
-                state.menu = Menu::Selecting(
+                let player_card = state.cards.player.get(*selected)
+                    .expect("Fished selected index should always be valid!");
+
+                let rank = models::get_rank(player_card)
+                    .expect("Fished selected index should always have a rank!");
+
+                let target_card = models::fish_card(rank, question.suit);
+
+                state.menu = if let Some(true) = drew
+                    .map(|card| card == target_card) {
+                    Menu::player(
+                        state.cards.player.len().saturating_sub(1)
+                    )
+                } else {
+                    Menu::CpuTurn {
+                        id: <_>::default(),
+                        menu: <_>::default(),
+                    }
+                };
+            }
+        }
+        Menu::CpuTurn{ id: _, menu: _ } => {
+            if input.pressed_this_frame(Button::A)
+            | input.pressed_this_frame(Button::B) {
+                // TODO advance through cpu turn windows.
+                state.menu = Menu::player(
                     state.cards.player.len().saturating_sub(1)
                 );
             }
