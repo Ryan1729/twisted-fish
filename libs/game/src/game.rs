@@ -154,6 +154,16 @@ pub enum HandId {
     Cpu3,
 }
 
+impl From<CpuId> for HandId {
+    fn from(cpu_id: CpuId) -> Self {
+        match cpu_id {
+            CpuId::One => Self::Cpu1,
+            CpuId::Two => Self::Cpu2,
+            CpuId::Three => Self::Cpu3,
+        }
+    }
+}
+
 // TODO macro for this, I guess?
 impl HandId {
     pub const COUNT: u8 = 4;
@@ -177,6 +187,27 @@ impl HandId {
         b"Cpu 2",
         b"Cpu 3",
     ];
+
+    fn besides(self) -> [HandId; (Self::COUNT - 1) as usize] {
+        match self {
+            HandId::Player => Self::CPUS,
+            HandId::Cpu1 => [
+                HandId::Player,
+                HandId::Cpu1,
+                HandId::Cpu2,
+            ],
+            HandId::Cpu2 => [
+                HandId::Cpu3,
+                HandId::Player,
+                HandId::Cpu1,
+            ],
+            HandId::Cpu3 => [
+                HandId::Cpu2,
+                HandId::Cpu3,
+                HandId::Player,
+            ],
+        }
+    }
 }
 
 #[repr(u8)]
@@ -227,7 +258,10 @@ mod question {
     }
 
     impl Question {
-        pub fn fresh_ask_description(&mut self, rank: Rank) -> &[u8] {
+        pub fn fresh_ask_description(
+            &mut self,
+            rank: Rank
+        ) -> &[u8] {
             self.description.clear();
             self.description.reserve(128);
 
@@ -343,7 +377,9 @@ impl Default for PlayerMenu {
 #[derive(Clone, Default)]
 pub enum CpuMenu {
     #[default]
-    Asking,
+    Selecting,
+    Asking(HandId, Rank, Suit),
+    DeadInTheWater,
 }
 
 #[derive(Clone, Default)]
@@ -700,6 +736,7 @@ pub fn update_and_render(
         } => {
             let hand = &state.cards.player;
             let len = hand.len();
+            // TODO Handle player being "dead in the water" (None case).
             if let Some(player_card) = hand.get(selected) {
                 let id = HandId::Player;
                 match menu {
@@ -979,9 +1016,55 @@ pub fn update_and_render(
         },
         Menu::CpuTurn {
             id,
-            ref menu,
-        } => {
-            // TODO draw current window so player can see what is asked, etc.
+            ref mut menu,
+        } => match menu {
+            CpuMenu::Selecting => {
+                let id = HandId::from(id);
+                let hand = state.cards.hand(id);
+                if hand.is_empty() {
+                    *menu = CpuMenu::DeadInTheWater;
+                } else {
+                    for card in hand.iter() {
+                        if let Some(rank) = models::get_rank(card) {
+                            // TODO Decide whether to play this particular card or
+                            // not, based on some memory of what cards are where.
+
+                            let besides = HandId::besides(id);
+                            let target_id = besides[
+                                xs::range(&mut state.rng, 0..besides.len() as u32) as usize
+                            ];
+
+                            // TODO Decide what suit to ask for intelligently.
+                            let suit = Suit::from_rng(&mut state.rng);
+
+                            *menu = CpuMenu::Asking(
+                                target_id,
+                                rank,
+                                suit,
+                            );
+                            break
+                        } else {
+                            // TODO Play Zingers sometimes.
+                        }
+                    }
+
+                    if let CpuMenu::Selecting = *menu {
+                        *menu = CpuMenu::DeadInTheWater;
+                    }
+                }
+            },
+            CpuMenu::Asking(..) => {
+                commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
+
+                let base_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+                commands.print(
+                    b"TODO: Render asked question",
+                    base_xy,
+                    WHITE,
+                );
+            },
+            // Just wait until player acknowledges turn.
+            CpuMenu::DeadInTheWater => {},
         }
     }
 
@@ -1116,13 +1199,26 @@ pub fn update_and_render(
                 };
             }
         }
-        Menu::CpuTurn{ id: _, menu: _ } => {
+        Menu::CpuTurn{ id: _, menu } => {
             if input.pressed_this_frame(Button::A)
             | input.pressed_this_frame(Button::B) {
-                // TODO advance through cpu turn windows.
-                state.menu = Menu::player(
-                    state.cards.player.len().saturating_sub(1)
-                );
+                match menu {
+                    // The Cpu player is expected to select stuff themselves.
+                    CpuMenu::Selecting => {},
+                    CpuMenu::Asking(..) => {
+                        // TODO Perform ask, then depending on outcome,
+                        // advance to next cpu turn if any, OR go back to selecting.
+                        state.menu = Menu::player(
+                            state.cards.player.len().saturating_sub(1)
+                        );
+                    },
+                    CpuMenu::DeadInTheWater => {
+                        // TODO advance to next cpu turn if any.
+                        state.menu = Menu::player(
+                            state.cards.player.len().saturating_sub(1)
+                        );
+                    },
+                }
             }
         }
     }

@@ -151,6 +151,16 @@ impl Suit {
         b"Yellow",
         b"Purple",
     ];
+
+    pub fn from_rng(xs: &mut Xs) -> Suit {
+        match xs::range(xs, 0..Suit::COUNT as u32) {
+            1 => Self::ALL[1],
+            2 => Self::ALL[2],
+            3 => Self::ALL[3],
+            4 => Self::ALL[4],
+            _ => Self::ALL[0],
+        }
+    }
 }
 
 pub type SuitNumber = u8;
