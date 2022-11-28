@@ -288,6 +288,51 @@ mod question {
             &self.description
         }
 
+        pub fn fresh_cpu_ask_description(
+            &mut self,
+            rank: Rank,
+            me: HandId,
+            width: W,
+        ) -> &[u8] {
+            self.description.clear();
+            self.description.reserve(128);
+
+            self.description.extend_from_slice(
+                HandId::TEXT[usize::from(me as u8)]
+            );
+
+            self.description.extend_from_slice(
+                b" asks \""
+            );
+
+            self.description.extend_from_slice(
+                HandId::TEXT[usize::from(self.target as u8)]
+            );
+
+            self.description.extend_from_slice(
+                b", do you have the "
+            );
+
+            self.description.extend_from_slice(
+                Suit::TEXT[usize::from(self.suit as u8)]
+            );
+
+            self.description.push(b' ');
+
+            self.description.extend_from_slice(
+                models::ranks::TEXT[usize::from(rank as u8)]
+            );
+
+            self.description.push(b'?');
+            self.description.push(b'"');
+
+            let width_in_chars = usize::from(width / gfx::CHAR_ADVANCE_W.get().get());
+
+            text::bytes_reflow_in_place(&mut self.description, width_in_chars);
+
+            &self.description
+        }
+
         pub fn fresh_fished_description(
             &mut self,
             rank: Rank,
@@ -378,7 +423,7 @@ impl Default for PlayerMenu {
 pub enum CpuMenu {
     #[default]
     Selecting,
-    Asking(HandId, Rank, Suit),
+    Asking(Rank, Question),
     DeadInTheWater,
 }
 
@@ -1037,10 +1082,13 @@ pub fn update_and_render(
                             // TODO Decide what suit to ask for intelligently.
                             let suit = Suit::from_rng(&mut state.rng);
 
+                            let mut question = Question::default();
+                            question.target = target_id;
+                            question.suit = suit;
+
                             *menu = CpuMenu::Asking(
-                                target_id,
                                 rank,
-                                suit,
+                                question,
                             );
                             break
                         } else {
@@ -1053,13 +1101,37 @@ pub fn update_and_render(
                     }
                 }
             },
-            CpuMenu::Asking(..) => {
-                commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
+            CpuMenu::Asking(rank, ref mut question) => {
+                commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
 
-                let base_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+                let base_xy = CPU_ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+                
+                let description_base_xy = base_xy;
+
+                let description_base_rect = unscaled::Rect::xy_wh(
+                    description_base_xy,
+                    (
+                        CPU_ASKING_WINDOW.xy()
+                        + (CPU_ASKING_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
+                    ) - description_base_xy,
+                );
+
+                let description = question.fresh_cpu_ask_description(
+                    *rank,
+                    id.into(),
+                    description_base_rect.w,
+                );
+
+                let longest_line = text::longest_line_of(description);
+
+                let description_xy = gfx::center_line_in_rect(
+                    longest_line.len() as _,
+                    description_base_rect,
+                );
+
                 commands.print(
-                    b"TODO: Render asked question",
-                    base_xy,
+                    description,
+                    description_xy,
                     WHITE,
                 );
             },
@@ -1473,5 +1545,15 @@ const GO_FISH_WINDOW: unscaled::Rect = {
         y: Y(Y_OFFSET),
         w: W(command::WIDTH - X_OFFSET * 2),
         h: H(command::HEIGHT - Y_OFFSET * 2),
+    }
+};
+
+const CPU_ASKING_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 128 - 16;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
     }
 };
