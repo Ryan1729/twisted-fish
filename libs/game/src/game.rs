@@ -192,9 +192,9 @@ impl HandId {
         match self {
             HandId::Player => Self::CPUS,
             HandId::Cpu1 => [
-                HandId::Player,
-                HandId::Cpu1,
                 HandId::Cpu2,
+                HandId::Cpu3,
+                HandId::Player,
             ],
             HandId::Cpu2 => [
                 HandId::Cpu3,
@@ -202,9 +202,9 @@ impl HandId {
                 HandId::Cpu1,
             ],
             HandId::Cpu3 => [
-                HandId::Cpu2,
-                HandId::Cpu3,
                 HandId::Player,
+                HandId::Cpu1,
+                HandId::Cpu2,
             ],
         }
     }
@@ -217,6 +217,24 @@ pub enum CpuId {
     One,
     Two,
     Three,
+}
+
+impl Iterator for CpuId {
+    type Item = CpuId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match *self {
+            CpuId::One => {
+                *self = CpuId::Two;
+                Some(*self)
+            },
+            CpuId::Two => {
+                *self = CpuId::Three;
+                Some(*self)
+            },
+            CpuId::Three => None,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1271,7 +1289,7 @@ pub fn update_and_render(
                 };
             }
         }
-        Menu::CpuTurn{ id: _, menu } => {
+        Menu::CpuTurn{ id, menu } => {
             if input.pressed_this_frame(Button::A)
             | input.pressed_this_frame(Button::B) {
                 match menu {
@@ -1280,19 +1298,26 @@ pub fn update_and_render(
                     CpuMenu::Asking(..) => {
                         // TODO Perform ask, then depending on outcome,
                         // advance to next cpu turn if any, OR go back to selecting.
-                        state.menu = Menu::player(
-                            state.cards.player.len().saturating_sub(1)
-                        );
+                        state.menu = next_turn_menu(*id, &state.cards.player);
                     },
                     CpuMenu::DeadInTheWater => {
-                        // TODO advance to next cpu turn if any.
-                        state.menu = Menu::player(
-                            state.cards.player.len().saturating_sub(1)
-                        );
+                        state.menu = next_turn_menu(*id, &state.cards.player);
                     },
                 }
             }
         }
+    }
+}
+
+fn next_turn_menu(mut id: CpuId, player_hand: &Hand) -> Menu {
+    match id.next() {
+        Some(next_id) => Menu::CpuTurn{
+            id: next_id,
+            menu: CpuMenu::default(),
+        },
+        None => Menu::player(
+            player_hand.len().saturating_sub(1)
+        )
     }
 }
 
