@@ -1075,8 +1075,7 @@ pub fn update_and_render(
 
                         let description_base_xy =
                             target_card_xy
-                            + CARD_HEIGHT
-                            + WINDOW_CONTENT_OFFSET.h;
+                            + CARD_HEIGHT;
 
                         let description_base_rect = fit_to_rest_of_window(
                             description_base_xy,
@@ -1167,6 +1166,7 @@ pub fn update_and_render(
             },
             // Just wait until player acknowledges turn.
             CpuMenu::DeadInTheWater => {},
+            // TODO retain their target card for this message?
             CpuMenu::WaitingForSuccesfulAsk => {
                 commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_ASK_WINDOW);
 
@@ -1185,6 +1185,7 @@ pub fn update_and_render(
                     WHITE,
                 );
             },
+            // TODO retain their target card for this message?
             CpuMenu::WaitingWhenGotWhatWasFishingFor => {
                 commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_FISH_WINDOW);
 
@@ -1198,7 +1199,7 @@ pub fn update_and_render(
                 );
 
                 commands.print_centered(
-                    b"They got what they were asking for!",
+                    b"They got what they fished for!",
                     description_base_rect,
                     WHITE,
                 );
@@ -1697,7 +1698,7 @@ const GO_FISH_WINDOW: unscaled::Rect = {
     const X_OFFSET: unscaled::Inner = (command::WIDTH - WIN_W) / 2;
     const Y_OFFSET: unscaled::Inner = (
         command::HEIGHT
-        - (CARD_HEIGHT.get() * 3) / 2
+        - (CARD_HEIGHT.get() + gfx::CHAR_ADVANCE_H.get().get() * 4)
     ) / 2;
     unscaled::Rect {
         x: X(X_OFFSET),

@@ -120,10 +120,23 @@ impl Commands {
     ) {
         let longest_line = platform_types::longest_line_of(bytes);
 
-        let xy = center_line_in_rect(
-            longest_line.len() as _,
-            rect,
-        );
+        let unscaled::Rect { x, y, w, h } = rect;
+    
+        let mut xy = unscaled::XY {
+            x: x + (w / 2),
+            y: y + (h / 2),
+        };
+    
+        // TODO reduce duplication with `center_line_in_rect`?
+        xy -= (CHAR_ADVANCE_W * longest_line.len() as _).get() / 2;
+        let count = bytes_lines(bytes).count();
+        if count == 1 {
+            xy -= CHAR_H.get() / 2;
+        } else {
+            for _ in 0..count {
+                xy -= CHAR_ADVANCE_H.get() / 2;
+            }
+        }
 
         self.print(
             bytes,
