@@ -1066,9 +1066,12 @@ pub fn update_and_render(
                                 drew_card_xy
                             );
                         } else {
-                            commands.print_line(
+                            commands.print_centered(
                                 b"Nothin'",
-                                drew_card_xy,
+                                unscaled::Rect::xy_wh(
+                                    drew_card_xy,
+                                    unsclaed::WH { w: CARD_WIDTH, h: CARD_HEIGHT }
+                                ),
                                 WHITE,
                             );
                         }
@@ -1103,6 +1106,11 @@ pub fn update_and_render(
             ref mut menu,
         } => match menu {
             CpuMenu::Selecting => {
+                // Showing this avoids a flicker for the one frame the Cpu
+                // is selecting when they stop waiting.
+                // Maybe enforce that the Cpu windows must all be the same size?
+                commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SELECTING_WINDOW);
+
                 let id = HandId::from(id);
                 let hand = state.cards.hand(id);
                 if hand.is_empty() {
@@ -1214,7 +1222,7 @@ pub fn update_and_render(
                     if *selected > 0 {
                         *selected - 1
                     } else {
-                        0
+                        state.cards.player.len().saturating_sub(1)
                     }
                 );
             } else if input.pressed_this_frame(Button::RIGHT) {
@@ -1705,6 +1713,16 @@ const GO_FISH_WINDOW: unscaled::Rect = {
         y: Y(Y_OFFSET),
         w: W(command::WIDTH - X_OFFSET * 2),
         h: H(command::HEIGHT - Y_OFFSET * 2),
+    }
+};
+
+const CPU_SELECTING_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 128 - 16;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
     }
 };
 
