@@ -164,6 +164,12 @@ impl From<CpuId> for HandId {
     }
 }
 
+impl From<&CpuId> for HandId {
+    fn from(cpu_id: &CpuId) -> Self {
+        (*cpu_id).into()
+    }
+}
+
 // TODO macro for this, I guess?
 impl HandId {
     pub const COUNT: u8 = 4;
@@ -217,6 +223,19 @@ pub enum CpuId {
     One,
     Two,
     Three,
+}
+
+impl TryFrom<HandId> for CpuId {
+    type Error = ();
+
+    fn try_from(hand_id: HandId) -> Result<Self, Self::Error> {
+        match hand_id {
+            HandId::Player => Err(()),
+            HandId::Cpu1 => Ok(CpuId::One),
+            HandId::Cpu2 => Ok(CpuId::Two),
+            HandId::Cpu3 => Ok(CpuId::Three),
+        }
+    }
 }
 
 impl Iterator for CpuId {
@@ -443,6 +462,8 @@ pub enum CpuMenu {
     Selecting,
     Asking(Rank, Question),
     DeadInTheWater,
+    WaitingForSuccesfulAsk,
+    WaitingWhenGotWhatWasFishingFor,
 }
 
 #[derive(Clone, Default)]
@@ -588,8 +609,10 @@ impl State {
 
                         hand.push(anim.card);
 
-                        if let HandId::Player = id {
-                            match self.menu {
+                        speaker.request_sfx(SFX::CardPlace);
+
+                        match CpuId::try_from(id) {
+                            Err(_) => match self.menu {
                                 Menu::PlayerTurn {
                                     ref mut selected,
                                     menu: PlayerMenu::Selecting
@@ -597,10 +620,22 @@ impl State {
                                     *selected = hand.len() - 1;
                                 },
                                 _ => {},
+                            },
+                            Ok(cpu_id) => match self.menu {
+                                Menu::CpuTurn {
+                                    id,
+                                    ref mut menu,
+                                } if cpu_id == id 
+                                && matches!(
+                                    *menu, 
+                                    CpuMenu::WaitingForSuccesfulAsk
+                                    | CpuMenu::WaitingWhenGotWhatWasFishingFor
+                                ) => {
+                                    *menu = CpuMenu::Selecting;
+                                },
+                                _ => {},
                             }
                         }
-
-                        speaker.request_sfx(SFX::CardPlace);
                     }
                 }
             }
@@ -931,12 +966,9 @@ pub fn update_and_render(
                             &mut group,
                             ButtonSpec {
                                 id: AskSubmit,
-                                rect: Rect::xy_wh(
+                                rect: fit_to_rest_of_window(
                                     submit_base_xy,
-                                    (
-                                        ASKING_WINDOW.xy()
-                                        + (ASKING_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
-                                    ) - submit_base_xy,
+                                    ASKING_WINDOW,
                                 ),
                                 text: b"Submit",
                             }
@@ -954,7 +986,7 @@ pub fn update_and_render(
                                     .unwrap_or_default();
                                 if was_found {
                                     found = Some((
-                                        target_hand.remove(i).expect("We just looked at it!"),
+                                        target_hand.remove(i).expect("We just looked at it! (player)"),
                                         i
                                     ));
 
@@ -1046,12 +1078,9 @@ pub fn update_and_render(
                             + CARD_HEIGHT
                             + WINDOW_CONTENT_OFFSET.h;
 
-                        let description_base_rect = unscaled::Rect::xy_wh(
+                        let description_base_rect = fit_to_rest_of_window(
                             description_base_xy,
-                            (
-                                GO_FISH_WINDOW.xy()
-                                + (GO_FISH_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
-                            ) - description_base_xy,
+                            GO_FISH_WINDOW,
                         );
 
                         let description = question.fresh_fished_description(
@@ -1060,16 +1089,9 @@ pub fn update_and_render(
                             description_base_rect.w,
                         );
 
-                        let longest_line = text::longest_line_of(description);
-
-                        let description_xy = gfx::center_line_in_rect(
-                            longest_line.len() as _,
-                            description_base_rect,
-                        );
-
-                        commands.print(
+                        commands.print_centered(
                             description,
-                            description_xy,
+                            description_base_rect,
                             WHITE,
                         );
                         // TODO Dorky sound effect?
@@ -1126,12 +1148,9 @@ pub fn update_and_render(
                 
                 let description_base_xy = base_xy;
 
-                let description_base_rect = unscaled::Rect::xy_wh(
+                let description_base_rect = fit_to_rest_of_window(
                     description_base_xy,
-                    (
-                        CPU_ASKING_WINDOW.xy()
-                        + (CPU_ASKING_WINDOW.wh() - WINDOW_CONTENT_OFFSET)
-                    ) - description_base_xy,
+                    CPU_ASKING_WINDOW,
                 );
 
                 let description = question.fresh_cpu_ask_description(
@@ -1140,21 +1159,50 @@ pub fn update_and_render(
                     description_base_rect.w,
                 );
 
-                let longest_line = text::longest_line_of(description);
-
-                let description_xy = gfx::center_line_in_rect(
-                    longest_line.len() as _,
-                    description_base_rect,
-                );
-
-                commands.print(
+                commands.print_centered(
                     description,
-                    description_xy,
+                    description_base_rect,
                     WHITE,
                 );
             },
             // Just wait until player acknowledges turn.
             CpuMenu::DeadInTheWater => {},
+            CpuMenu::WaitingForSuccesfulAsk => {
+                commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_ASK_WINDOW);
+
+                let base_xy = CPU_SUCCESFUL_ASK_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+                
+                let description_base_xy = base_xy;
+
+                let description_base_rect = fit_to_rest_of_window(
+                    description_base_xy,
+                    CPU_SUCCESFUL_ASK_WINDOW,
+                );
+
+                commands.print_centered(
+                    b"They got what they were asking for!",
+                    description_base_rect,
+                    WHITE,
+                );
+            },
+            CpuMenu::WaitingWhenGotWhatWasFishingFor => {
+                commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_FISH_WINDOW);
+
+                let base_xy = CPU_SUCCESFUL_FISH_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+                
+                let description_base_xy = base_xy;
+
+                let description_base_rect = fit_to_rest_of_window(
+                    description_base_xy,
+                    CPU_SUCCESFUL_FISH_WINDOW,
+                );
+
+                commands.print_centered(
+                    b"They got what they were asking for!",
+                    description_base_rect,
+                    WHITE,
+                );
+            },
         }
     }
 
@@ -1292,16 +1340,99 @@ pub fn update_and_render(
         Menu::CpuTurn{ id, menu } => {
             if input.pressed_this_frame(Button::A)
             | input.pressed_this_frame(Button::B) {
+                let id = *id;
                 match menu {
                     // The Cpu player is expected to select stuff themselves.
                     CpuMenu::Selecting => {},
-                    CpuMenu::Asking(..) => {
-                        // TODO Perform ask, then depending on outcome,
-                        // advance to next cpu turn if any, OR go back to selecting.
-                        state.menu = next_turn_menu(*id, &state.cards.player);
+                    CpuMenu::Asking(rank, question) => {
+                        let target_card = models::fish_card(*rank, question.suit);
+
+                        let my_len = state.cards.hand(id.into()).len();
+
+                        let target_hand = state.cards.hand_mut(question.target);
+
+                        let mut found = None;
+                        // TODO randomize order here to make it harder to learn their
+                        // whole hand with glass bottom boat?
+                        for i in 0..target_hand.len() {
+                            let was_found = target_hand.get(i)
+                                .map(|card| card == target_card)
+                                .unwrap_or_default();
+                            if was_found {
+                                found = Some((
+                                    target_hand.remove(i)
+                                        .expect("We just looked at it! (cpu)"),
+                                    i
+                                ));
+
+                                break
+                            }
+                        }
+
+                        if let Some((card, i)) = found {
+                            let at = get_card_position(
+                                spread(question.target),
+                                target_hand.len(),
+                                i,
+                            );
+
+                            let target = get_card_insert_position(
+                                spread(id.into()),
+                                my_len
+                            );
+
+                            state.animations.push(Animation {
+                                card,
+                                at,
+                                target,
+                                action: AnimationAction::AddToHand(id.into()),
+                                shown: true,
+                                .. <_>::default()
+                            });
+
+                            state.menu = Menu::CpuTurn{
+                                id,
+                                menu: CpuMenu::WaitingForSuccesfulAsk,
+                            };
+                        } else {
+                            let card_option = state.cards.deck.draw();
+
+                            if let Some(card) = card_option {
+                                let at = DECK_XY;
+
+                                let target = get_card_insert_position(
+                                    spread(id.into()),
+                                    my_len
+                                );
+
+                                state.animations.push(Animation {
+                                    card,
+                                    at,
+                                    target,
+                                    action: AnimationAction::AddToHand(id.into()),
+                                    .. <_>::default()
+                                });
+
+                                if card == target_card {
+                                    state.menu = Menu::CpuTurn{
+                                        id,
+                                        menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
+                                    };
+                                } else {
+                                    state.menu = next_turn_menu(id, &state.cards.player);
+                                }
+                            } else {
+                                state.menu = next_turn_menu(id, &state.cards.player);
+                            }
+                        }
                     },
                     CpuMenu::DeadInTheWater => {
-                        state.menu = next_turn_menu(*id, &state.cards.player);
+                        state.menu = next_turn_menu(id, &state.cards.player);
+                    },
+                    CpuMenu::WaitingForSuccesfulAsk
+                    | CpuMenu::WaitingWhenGotWhatWasFishingFor => {
+                        // Wait until the animation finishes, so the card is in the
+                        // Cpu's hand.
                     },
                 }
             }
@@ -1529,16 +1660,19 @@ mod text {
             );
         }
     }
+}
 
-    pub fn longest_line_of(bytes: &[u8]) -> &[u8] {
-        let mut output: &[u8] = b"";
-        for line in platform_types::bytes_lines(bytes) {
-            if line.len() > output.len() {
-                output = line;
-            }
-        }
-        output
-    }
+fn fit_to_rest_of_window(
+    base_xy: unscaled::XY,
+    window: unscaled::Rect
+) -> unscaled::Rect {
+    unscaled::Rect::xy_wh(
+        base_xy,
+        (
+            window.xy()
+            + (window.wh() - WINDOW_CONTENT_OFFSET)
+        ) - base_xy,
+    )
 }
 
 const ASKING_WINDOW: unscaled::Rect = {
@@ -1574,6 +1708,26 @@ const GO_FISH_WINDOW: unscaled::Rect = {
 };
 
 const CPU_ASKING_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 128 - 16;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};
+
+const CPU_SUCCESFUL_ASK_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 128 - 16;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};
+
+const CPU_SUCCESFUL_FISH_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 128 - 16;
     unscaled::Rect {
         x: X(OFFSET),

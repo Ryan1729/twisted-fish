@@ -110,6 +110,28 @@ impl Commands {
         }
     }
 
+    /// As of this writing, this assumes that the bytes have already been arranged
+    /// such that they will fit in the passed rect.
+    pub fn print_centered(
+        &mut self,
+        bytes: &[u8],
+        rect : unscaled::Rect,
+        colour: ARGB,
+    ) {
+        let longest_line = platform_types::longest_line_of(bytes);
+
+        let xy = center_line_in_rect(
+            longest_line.len() as _,
+            rect,
+        );
+
+        self.print(
+            bytes,
+            xy,
+            colour,
+        );
+    }
+
     pub fn draw_card(
         &mut self,
         card: Card,

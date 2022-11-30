@@ -1119,3 +1119,13 @@ pub const PALETTE: [ARGB; 8] = [
 pub fn bytes_lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
     bytes.split(|&b| b == b'\n')
 }
+
+pub fn longest_line_of(bytes: &[u8]) -> &[u8] {
+    let mut output: &[u8] = b"";
+    for line in bytes_lines(bytes) {
+        if line.len() > output.len() {
+            output = line;
+        }
+    }
+    output
+}
