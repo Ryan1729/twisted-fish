@@ -1,8 +1,8 @@
-use models::{Card, CardIndex, Hand, Suit, Rank, DECK_SIZE};
+use models::{Card, CardIndex, Hand, Suit, Rank, DECK_SIZE, get_rank};
 use gfx::{Commands, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
-    unscaled::{self, X, Y, XY, W, H, Rect, x_const_add_w, w_const_sub},
+    unscaled::{self, X, Y, XY, W, H, WH, Rect, x_const_add_w, w_const_sub},
     Button,
     Dir,
     Input,
@@ -170,7 +170,7 @@ impl From<&CpuId> for HandId {
     }
 }
 
-// TODO macro for this, I guess?
+// TODO? macro for this, I guess?
 impl HandId {
     pub const COUNT: u8 = 4;
 
@@ -466,6 +466,10 @@ pub enum CpuMenu {
     WaitingWhenGotWhatWasFishingFor,
 }
 
+// TODO? Tighter representation that still allows representing Dead Scuba Diver
+// but doesn't allow non-matched cards?
+type Basket = [Card; Suit::COUNT as usize];
+
 #[derive(Clone, Default)]
 pub struct Cards {
     pub deck: Hand,
@@ -473,6 +477,10 @@ pub struct Cards {
     pub cpu1: Hand,
     pub cpu2: Hand,
     pub cpu3: Hand,
+    pub player_baskets: Hand,
+    pub cpu1_baskets: Hand,
+    pub cpu2_baskets: Hand,
+    pub cpu3_baskets: Hand,
 }
 
 impl Cards {
@@ -609,13 +617,77 @@ impl State {
 
                         hand.push(anim.card);
 
+                        let baskets = match id {
+                            HandId::Player => &mut self.cards.player_baskets,
+                            HandId::Cpu1 => &mut self.cards.cpu1_baskets,
+                            HandId::Cpu2 => &mut self.cards.cpu2_baskets,
+                            HandId::Cpu3 => &mut self.cards.cpu3_baskets,
+                        };
+
+                        fn remove_basket(hand: &mut Hand) -> Option<Basket> {
+                            let mut indexes = [None; Suit::COUNT as usize];
+
+                            // TODO? Do we care about this being O(n^2), given that
+                            // we know n is bounded by `DECK_SIZE`, and in fact
+                            // would be smaller in practice?
+                            'outer: for first_card in hand.iter() {
+                                let Some(rank) = get_rank(first_card) else {
+                                    continue
+                                };
+                                indexes = [None; Suit::COUNT as usize];
+                                for (card_i, card) in hand.enumerated_iter() {
+                                    match models::get_rank(card) {
+                                        Some(r) if rank == r => {
+                                            for i in 0..Suit::COUNT as usize {
+                                                if indexes[i].is_none() {
+                                                    indexes[i] = Some(card_i);
+                                                    if i >= Suit::COUNT as usize - 1 {
+                                                        break 'outer
+                                                    } else {
+                                                        break
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+
+                            match indexes {
+                                [Some(a), Some(b), Some(c), Some(d), Some(e)] => {
+                                    const MSG: &str = "remove_basket indexes should be valid!";
+                                    // We assume that the indexes are in ascending
+                                    // order, so removing in reverse order doesn't
+                                    // invalidate any indexes.
+                                    let c1 = hand.remove(e).expect(MSG);
+                                    let c2 = hand.remove(d).expect(MSG);
+                                    let c3 = hand.remove(c).expect(MSG);
+                                    let c4 = hand.remove(b).expect(MSG);
+                                    let c5 = hand.remove(a).expect(MSG);
+
+                                    Some([c1, c2, c3, c4, c5])
+                                }
+                                _ => None,
+                            }
+                        }
+
+                        while let Some(basket) = remove_basket(hand) {
+                            // TODO? animate gathering together and heading to a
+                            // separate pile? Or maybe poofing in an expolsion of
+                            // particles?
+                            for card in basket {
+                                baskets.push(card);
+                            }
+                        }
+
                         speaker.request_sfx(SFX::CardPlace);
 
                         match CpuId::try_from(id) {
                             Err(_) => match self.menu {
                                 Menu::PlayerTurn {
                                     ref mut selected,
-                                    menu: PlayerMenu::Selecting
+                                    menu: _
                                 } => {
                                     *selected = hand.len() - 1;
                                 },
@@ -625,9 +697,9 @@ impl State {
                                 Menu::CpuTurn {
                                     id,
                                     ref mut menu,
-                                } if cpu_id == id 
+                                } if cpu_id == id
                                 && matches!(
-                                    *menu, 
+                                    *menu,
                                     CpuMenu::WaitingForSuccesfulAsk
                                     | CpuMenu::WaitingWhenGotWhatWasFishingFor
                                 ) => {
@@ -978,7 +1050,7 @@ pub fn update_and_render(
                             let target_card = models::fish_card(rank, question.suit);
 
                             let mut found = None;
-                            // TODO randomize order here to make it harder to learn their
+                            // TODO? randomize order here to make it harder to learn their
                             // whole hand with glass bottom boat?
                             for i in 0..target_hand.len() {
                                 let was_found = target_hand.get(i)
@@ -1070,7 +1142,7 @@ pub fn update_and_render(
                                 b"Nothin'",
                                 unscaled::Rect::xy_wh(
                                     drew_card_xy,
-                                    unsclaed::WH { w: CARD_WIDTH, h: CARD_HEIGHT }
+                                    WH { w: CARD_WIDTH, h: CARD_HEIGHT }
                                 ),
                                 WHITE,
                             );
@@ -1096,7 +1168,7 @@ pub fn update_and_render(
                             description_base_rect,
                             WHITE,
                         );
-                        // TODO Dorky sound effect?
+                        // TODO? Dorky sound effect?
                     }
                 }
             }
@@ -1152,7 +1224,7 @@ pub fn update_and_render(
                 commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
 
                 let base_xy = CPU_ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-                
+
                 let description_base_xy = base_xy;
 
                 let description_base_rect = fit_to_rest_of_window(
@@ -1174,12 +1246,12 @@ pub fn update_and_render(
             },
             // Just wait until player acknowledges turn.
             CpuMenu::DeadInTheWater => {},
-            // TODO retain their target card for this message?
+            // TODO? retain their target card for this message
             CpuMenu::WaitingForSuccesfulAsk => {
                 commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_ASK_WINDOW);
 
                 let base_xy = CPU_SUCCESFUL_ASK_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-                
+
                 let description_base_xy = base_xy;
 
                 let description_base_rect = fit_to_rest_of_window(
@@ -1193,12 +1265,12 @@ pub fn update_and_render(
                     WHITE,
                 );
             },
-            // TODO retain their target card for this message?
+            // TODO? retain their target card for this message
             CpuMenu::WaitingWhenGotWhatWasFishingFor => {
                 commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_FISH_WINDOW);
 
                 let base_xy = CPU_SUCCESFUL_FISH_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-                
+
                 let description_base_xy = base_xy;
 
                 let description_base_rect = fit_to_rest_of_window(
@@ -1361,8 +1433,8 @@ pub fn update_and_render(
                         let target_hand = state.cards.hand_mut(question.target);
 
                         let mut found = None;
-                        // TODO randomize order here to make it harder to learn their
-                        // whole hand with glass bottom boat?
+                        // TODO? randomize order here to make it harder to learn their
+                        // whole hand with glass bottom boat
                         for i in 0..target_hand.len() {
                             let was_found = target_hand.get(i)
                                 .map(|card| card == target_card)
