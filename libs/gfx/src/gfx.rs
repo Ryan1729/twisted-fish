@@ -604,22 +604,25 @@ pub enum NineSlice {
 }
 
 impl NineSlice {
-    pub const WIDTH: unscaled::W = unscaled::W(8);
-    pub const HEIGHT: unscaled::H = unscaled::H(8);
+    pub const CELL_W: unscaled::W = unscaled::W(8);
+    pub const CELL_H: unscaled::H = unscaled::H(8);
+
+    pub const GRID_W: unscaled::W = unscaled::W(24);
+    pub const GRID_H: unscaled::H = unscaled::H(24);
+
+    const BASE: sprite::XY = sprite::XY {
+        x: sprite::X(FONT_WIDTH as _),
+        y: sprite::y_const_add_h(sprite::Y(0), FONT_OFFSET),
+    };
 
     fn top_left(self) -> sprite::XY {
-        const WIDTH: unscaled::W = NineSlice::WIDTH;
-
-        const BASE: sprite::XY = sprite::XY {
-            x: sprite::X(FONT_WIDTH as _),
-            y: sprite::y_const_add_h(sprite::Y(0), FONT_OFFSET),
-        };
-
-        match self {
-            NineSlice::Window => BASE,
-            NineSlice::Button => BASE + WIDTH * 3,
-            NineSlice::ButtonHot => BASE + WIDTH * 6,
-            NineSlice::ButtonPressed => BASE + WIDTH * 9,
+        NineSlice::BASE 
+        + NineSlice::GRID_W
+        * match self {
+            NineSlice::Window => 0,
+            NineSlice::Button => 1,
+            NineSlice::ButtonHot => 2,
+            NineSlice::ButtonPressed => 3,
         }
     }
 }
@@ -630,8 +633,8 @@ impl Commands {
         nine_slice: NineSlice,
         unscaled::Rect { x, y, w, h }: unscaled::Rect,
     ) {
-        const WIDTH: unscaled::W = NineSlice::WIDTH;
-        const HEIGHT: unscaled::H = NineSlice::HEIGHT;
+        const WIDTH: unscaled::W = NineSlice::CELL_W;
+        const HEIGHT: unscaled::H = NineSlice::CELL_H;
 
         macro_rules! r {
             ($x: ident, $y: ident $(,)?) => {
@@ -749,6 +752,61 @@ impl Commands {
         && command.rect.y_min != command.rect.y_max {
             self.commands.push(command);
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Highlighted {
+    No,
+    Yes,
+}
+
+#[derive(Clone, Copy)]
+pub enum ChevronDir {
+    Up,
+    Down,
+}
+
+pub const CHEVRON_BASE_X: sprite::X = NineSlice::BASE.x;
+pub const CHEVRON_Y: sprite::Y = sprite::y_const_add_h(
+    NineSlice::BASE.y,
+    NineSlice::GRID_H
+);
+pub const CHEVRON_W: unscaled::W = unscaled::W(24);
+pub const CHEVRON_H: unscaled::H = unscaled::H(12);
+pub const CHEVRON_WH: unscaled::WH = unscaled::WH {
+    w: CHEVRON_W,
+    h: CHEVRON_H,
+};
+
+impl Commands {
+    pub fn draw_chevron(
+        &mut self,
+        xy: unscaled::XY,
+        dir: ChevronDir,
+        highlighted: Highlighted,
+    ) {
+        use ChevronDir::*;
+        use Highlighted::*;
+
+        let x = CHEVRON_BASE_X
+            + CHEVRON_W * match (dir, highlighted) {
+                (Up, No) => 0,
+                (Down, No) => 1,
+                (Up, Yes) => 2,
+                (Down, Yes) => 3,
+            };
+
+        self.sspr(
+            sprite::XY {
+                x,
+                y: CHEVRON_Y
+            },
+            Rect::from_unscaled(unscaled::Rect::xy_wh(
+                xy,
+                CHEVRON_WH,
+            ))
+        );
     }
 }
 

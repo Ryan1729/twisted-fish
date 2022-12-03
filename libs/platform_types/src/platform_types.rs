@@ -469,6 +469,36 @@ pub mod unscaled {
         }
     }
 
+    impl core::ops::AddAssign<W> for WH {
+        fn add_assign(&mut self, other: W) {
+            self.w += other;
+        }
+    }
+
+    impl core::ops::Add<W> for WH {
+        type Output = Self;
+
+        fn add(mut self, other: W) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
+    impl core::ops::AddAssign<H> for WH {
+        fn add_assign(&mut self, other: H) {
+            self.h += other;
+        }
+    }
+
+    impl core::ops::Add<H> for WH {
+        type Output = Self;
+
+        fn add(mut self, other: H) -> Self::Output {
+            self += other;
+            self
+        }
+    }
+
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct Rect {
         pub x: X,

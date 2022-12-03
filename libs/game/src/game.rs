@@ -834,6 +834,43 @@ mod ui {
 
         result
     }
+
+    /// As a user of this `fn` you are expected to have drawn the separate states
+    /// that are selected between before calling this, in the given rect. 
+    pub(crate) fn draw_quick_select<'commands, 'ctx, 'speaker, 'text>(
+        group: &mut Group<'commands, 'ctx, 'speaker>,
+        rect: Rect,
+        ids: &[Id],
+    ) {
+        let mut highlighted = gfx::Highlighted::No;
+        for &id in ids {
+            if group.ctx.active == id
+            || group.ctx.hot == id {
+                group.ctx.set_next_hot(id);
+                highlighted = gfx::Highlighted::Yes;
+            }
+        }
+
+        let x = (rect.x + (rect.w / 2)) - (gfx::CHEVRON_W / 2);
+
+        group.commands.draw_chevron(
+            XY {
+                x,
+                y: rect.y,
+            },
+            gfx::ChevronDir::Up,
+            highlighted,
+        );
+
+        group.commands.draw_chevron(
+            XY {
+                x,
+                y: rect.y + rect.h - gfx::CHEVRON_H,
+            },
+            gfx::ChevronDir::Down,
+            highlighted,
+        );
+    }
 }
 
 use ui::{ButtonSpec, Id::*, do_button};
@@ -988,7 +1025,16 @@ pub fn update_and_render(
                             card_xy
                         );
 
-                        let button_base_xy = card_xy + CARD_WIDTH;
+                        let target_xy = card_xy + CARD_WIDTH;
+
+                        commands.print_centered(
+                            HandId::TEXT[question.target as u8 as usize],
+                            Rect::xy_wh(
+                                target_xy + ASKING_TARGET_WH.h,
+                                ASKING_TARGET_WH,
+                            ),
+                            WHITE,
+                        );
 
                         let mut group = ui::Group {
                             commands,
@@ -997,47 +1043,18 @@ pub fn update_and_render(
                             speaker,
                         };
 
-                        for (hand_id, spec) in [
-                            (
-                                HandId::Cpu1,
-                                ButtonSpec {
-                                    id: Cpu1,
-                                    rect: Rect::xy_wh(
-                                        button_base_xy,
-                                        ASKING_TARGET_WH,
-                                    ),
-                                    text: b"CPU 1",
-                                }
-                            ),
-                            (
-                                HandId::Cpu2,
-                                ButtonSpec {
-                                    id: Cpu2,
-                                    rect: Rect::xy_wh(
-                                        button_base_xy + ASKING_TARGET_WH.h,
-                                        ASKING_TARGET_WH,
-                                    ),
-                                    text: b"CPU 2",
-                                },
-                            ),
-                            (
-                                HandId::Cpu3,
-                                ButtonSpec {
-                                    id: Cpu3,
-                                    rect: Rect::xy_wh(
-                                        button_base_xy + ASKING_TARGET_WH.h * 2,
-                                        ASKING_TARGET_WH,
-                                    ),
-                                    text: b"CPU 3",
-                                },
-                            ),
-                        ] {
-                            if do_button(&mut group, spec) {
-                                question.target = hand_id;
-                            }
-                        }
+                        let target_quick_select_rect = Rect::xy_wh(
+                            target_xy,
+                            ASKING_TARGET_WH + (ASKING_TARGET_WH.h * 3),
+                        );
 
-                        let suit_base_xy = button_base_xy + ASKING_TARGET_WH.w;
+                        ui::draw_quick_select(
+                            &mut group,
+                            target_quick_select_rect,
+                            &[Cpu1, Cpu2, Cpu3]
+                        );
+
+                        let suit_base_xy = target_xy + ASKING_TARGET_WH.w;
 
                         for index in 0..unscaled::Inner::from(Suit::COUNT) {
                             let i = index as usize;
@@ -1076,17 +1093,6 @@ pub fn update_and_render(
                             description_xy,
                             WHITE,
                         );
-
-                        const GRID_W: usize = 3;
-                        const GRID_H: usize = 5;
-                        const GRID_LEN: usize = GRID_W * GRID_H;
-                        const GRID: [ui::Id; GRID_LEN] = [
-                            Cpu1, AskSuit(Suit::ALL[0]), AskSubmit,
-                            Cpu2, AskSuit(Suit::ALL[1]), AskSubmit,
-                            Cpu3, AskSuit(Suit::ALL[2]), AskSubmit,
-                            Zero, AskSuit(Suit::ALL[3]), AskSubmit,
-                            Zero, AskSuit(Suit::ALL[4]), AskSubmit,
-                        ];
 
                         let submit_base_xy = suit_base_xy + ASKING_TARGET_WH.w;
 
@@ -1176,6 +1182,17 @@ pub fn update_and_render(
                                 menu: PlayerMenu::Selecting,
                             };
                         } else if let Some(dir) = input.dir_pressed_this_frame() {
+                            const GRID_W: usize = 3;
+                            const GRID_H: usize = 5;
+                            const GRID_LEN: usize = GRID_W * GRID_H;
+                            const GRID: [ui::Id; GRID_LEN] = [
+                                Cpu1, AskSuit(Suit::ALL[0]), AskSubmit,
+                                Cpu2, AskSuit(Suit::ALL[1]), AskSubmit,
+                                Cpu3, AskSuit(Suit::ALL[2]), AskSubmit,
+                                Zero, AskSuit(Suit::ALL[3]), AskSubmit,
+                                Zero, AskSuit(Suit::ALL[4]), AskSubmit,
+                            ];
+
                             let old_id = state.ctx.hot;
                             let id_i = GRID.iter()
                                 .position(|el| *el == old_id)
@@ -1217,7 +1234,15 @@ pub fn update_and_render(
                                 if x == old_x && y == old_y { break }
                             }
 
-                            state.ctx.set_next_hot(new_id!());
+                            let id = new_id!();
+                            state.ctx.set_next_hot(id);
+
+                            match id {
+                                Cpu1 => { question.target = HandId::Cpu1; },
+                                Cpu2 => { question.target = HandId::Cpu2; },
+                                Cpu3 => { question.target = HandId::Cpu3; },
+                                _ => {}
+                            }
                         } else {
                             // do nothing
                         }
