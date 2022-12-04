@@ -1056,23 +1056,31 @@ pub fn update_and_render(
 
                         let suit_base_xy = target_xy + ASKING_TARGET_WH.w;
 
-                        for index in 0..unscaled::Inner::from(Suit::COUNT) {
-                            let i = index as usize;
-                            let suit = Suit::ALL[i];
+                        let suit_quick_select_rect = Rect::xy_wh(
+                            suit_base_xy,
+                            ASKING_TARGET_WH + (ASKING_SUIT_WH.h * 4),
+                        );
 
-                            let spec = ButtonSpec {
-                                id: AskSuit(suit),
-                                rect: Rect::xy_wh(
-                                    suit_base_xy + ASKING_SUIT_WH.h * index,
-                                    ASKING_SUIT_WH,
-                                ),
-                                text: Suit::TEXT[i],
-                            };
+                        group.commands.print_centered(
+                            Suit::TEXT[question.suit as u8 as usize],
+                            Rect::xy_wh(
+                                suit_base_xy + (ASKING_SUIT_WH.h * 2),
+                                ASKING_SUIT_WH,
+                            ),
+                            WHITE,
+                        );
 
-                            if do_button(&mut group, spec) {
-                                question.suit = suit;
-                            }
-                        }
+                        ui::draw_quick_select(
+                            &mut group,
+                            suit_quick_select_rect,
+                            &[
+                                AskSuit(Suit::ALL[0]),
+                                AskSuit(Suit::ALL[1]),
+                                AskSuit(Suit::ALL[2]),
+                                AskSuit(Suit::ALL[3]),
+                                AskSuit(Suit::ALL[4])
+                            ]
+                        );
 
                         let description_base_rect = unscaled::Rect::xy_wh(
                             base_xy + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
@@ -1241,6 +1249,7 @@ pub fn update_and_render(
                                 Cpu1 => { question.target = HandId::Cpu1; },
                                 Cpu2 => { question.target = HandId::Cpu2; },
                                 Cpu3 => { question.target = HandId::Cpu3; },
+                                AskSuit(suit) => { question.suit = suit; }
                                 _ => {}
                             }
                         } else {
