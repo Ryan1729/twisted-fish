@@ -1025,13 +1025,13 @@ pub fn update_and_render(
                             card_xy
                         );
 
-                        let target_xy = card_xy + CARD_WIDTH;
+                        let target_xy = card_xy + CARD_WIDTH + (ASKING_WINDOW.h / 5);
 
                         commands.print_centered(
                             HandId::TEXT[question.target as u8 as usize],
                             Rect::xy_wh(
-                                target_xy + ASKING_TARGET_WH.h,
-                                ASKING_TARGET_WH,
+                                target_xy + ASKING_TARGET_TEXT_OFFSET,
+                                ASKING_TARGET_TEXT_WH,
                             ),
                             WHITE,
                         );
@@ -1045,7 +1045,7 @@ pub fn update_and_render(
 
                         let target_quick_select_rect = Rect::xy_wh(
                             target_xy,
-                            ASKING_TARGET_WH + (ASKING_TARGET_WH.h * 3),
+                            ASKING_TARGET_WH,
                         );
 
                         ui::draw_quick_select(
@@ -1058,14 +1058,15 @@ pub fn update_and_render(
 
                         let suit_quick_select_rect = Rect::xy_wh(
                             suit_base_xy,
-                            ASKING_TARGET_WH + (ASKING_SUIT_WH.h * 4),
+                            ASKING_SUIT_WH,
                         );
 
+                        // TODO? Display the target card instead of text?
                         group.commands.print_centered(
                             Suit::TEXT[question.suit as u8 as usize],
                             Rect::xy_wh(
-                                suit_base_xy + (ASKING_SUIT_WH.h * 2),
-                                ASKING_SUIT_WH,
+                                suit_base_xy + ASKING_SUIT_TEXT_OFFSET,
+                                ASKING_SUIT_TEXT_WH,
                             ),
                             WHITE,
                         );
@@ -1083,10 +1084,14 @@ pub fn update_and_render(
                         );
 
                         let description_base_rect = unscaled::Rect::xy_wh(
-                            base_xy + ASKING_SUIT_WH.h * unscaled::Inner::from(Suit::COUNT),
+                            unscaled::XY {
+                                x: base_xy.x,
+                                y: suit_base_xy.y + ASKING_SUIT_WH.h,
+                            },
                             unscaled::WH {
                                 w: ASKING_WINDOW.w,
-                                h: ASKING_SUIT_WH.h,
+                                h: (base_xy.y + ASKING_WINDOW.h)
+                                - (suit_base_xy.y + ASKING_SUIT_WH.h),
                             }
                         );
 
@@ -1102,7 +1107,10 @@ pub fn update_and_render(
                             WHITE,
                         );
 
-                        let submit_base_xy = suit_base_xy + ASKING_TARGET_WH.w;
+                        let submit_base_xy = unscaled::XY {
+                            x: suit_base_xy.x + ASKING_SUIT_WH.w,
+                            y: base_xy.y
+                        };
 
                         if do_button(
                             &mut group,
@@ -1780,20 +1788,47 @@ fn fit_to_rest_of_window(
 
 const ASKING_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 8;
+
+    const WIN_H: unscaled::Inner = CARD_HEIGHT.get()
+    + WINDOW_CONTENT_OFFSET.h.get() * 2;
+
     unscaled::Rect {
         x: X(OFFSET),
-        y: Y(OFFSET),
+        y: Y((command::HEIGHT - WIN_H) / 2),
         w: W(command::WIDTH - OFFSET * 2),
-        h: H(command::HEIGHT - OFFSET * 2),
+        h: H(WIN_H),
     }
+};
+
+const ASKING_TARGET_TEXT_OFFSET: unscaled::WH = unscaled::WH {
+    w: W(0),
+    h: H(
+        gfx::CHEVRON_H.get()
+        + (gfx::CHAR_SPACING as unscaled::Inner / 2)
+    ),
 };
 
 const ASKING_TARGET_WH: unscaled::WH = unscaled::WH {
     w: W(ASKING_WINDOW.w.get() / 3),
-    h: H(ASKING_WINDOW.h.get() / 8),
+    h: H(
+        gfx::CHEVRON_H.get()
+        + gfx::CHAR_SPACING as unscaled::Inner
+        + gfx::CHAR_ADVANCE_H.get().get() 
+        + gfx::CHAR_SPACING as unscaled::Inner
+        + gfx::CHEVRON_H.get()
+    ),
 };
 
+const ASKING_TARGET_TEXT_WH: unscaled::WH = unscaled::WH {
+    w: ASKING_TARGET_WH.w,
+    h: ASKING_TARGET_TEXT_OFFSET.h,
+};
+
+const ASKING_SUIT_TEXT_OFFSET: unscaled::WH = ASKING_TARGET_TEXT_OFFSET;
+
 const ASKING_SUIT_WH: unscaled::WH = ASKING_TARGET_WH;
+
+const ASKING_SUIT_TEXT_WH: unscaled::WH = ASKING_TARGET_TEXT_WH;
 
 const GO_FISH_WINDOW: unscaled::Rect = {
     const WIN_W: unscaled::Inner = CARD_WIDTH.get() * 3;
