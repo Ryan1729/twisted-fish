@@ -836,7 +836,7 @@ mod ui {
     }
 
     /// As a user of this `fn` you are expected to have drawn the separate states
-    /// that are selected between before calling this, in the given rect. 
+    /// that are selected between before calling this, in the given rect.
     pub(crate) fn draw_quick_select<'commands, 'ctx, 'speaker, 'text>(
         group: &mut Group<'commands, 'ctx, 'speaker>,
         rect: Rect,
@@ -1329,9 +1329,6 @@ pub fn update_and_render(
 
                         if input.pressed_this_frame(Button::A)
                         | input.pressed_this_frame(Button::B) {
-                            let rank = models::get_rank(player_card)
-                                .expect("Fished selected index should always have a rank!");
-
                             let target_card = models::fish_card(rank, question.suit);
 
                             state.menu = if let Some(true) = drew
@@ -1421,60 +1418,38 @@ pub fn update_and_render(
                     WHITE,
                 );
 
-                let target_card = models::fish_card(*rank, question.suit);
+                if input.pressed_this_frame(Button::A)
+                | input.pressed_this_frame(Button::B) {
+                    let target_card = models::fish_card(*rank, question.suit);
 
-                let my_len = state.cards.hand(id.into()).len();
+                    let my_len = state.cards.hand(id.into()).len();
 
-                let target_hand = state.cards.hand_mut(question.target);
+                    let target_hand = state.cards.hand_mut(question.target);
 
-                let mut found = None;
-                // TODO? randomize order here to make it harder to learn their
-                // whole hand with glass bottom boat
-                for i in 0..target_hand.len() {
-                    let was_found = target_hand.get(i)
-                        .map(|card| card == target_card)
-                        .unwrap_or_default();
-                    if was_found {
-                        found = Some((
-                            target_hand.remove(i)
-                                .expect("We just looked at it! (cpu)"),
-                            i
-                        ));
+                    let mut found = None;
+                    // TODO? randomize order here to make it harder to learn their
+                    // whole hand with glass bottom boat
+                    for i in 0..target_hand.len() {
+                        let was_found = target_hand.get(i)
+                            .map(|card| card == target_card)
+                            .unwrap_or_default();
+                        if was_found {
+                            found = Some((
+                                target_hand.remove(i)
+                                    .expect("We just looked at it! (cpu)"),
+                                i
+                            ));
 
-                        break
+                            break
+                        }
                     }
-                }
 
-                if let Some((card, i)) = found {
-                    let at = get_card_position(
-                        spread(question.target),
-                        target_hand.len(),
-                        i,
-                    );
-
-                    let target = get_card_insert_position(
-                        spread(id.into()),
-                        my_len
-                    );
-
-                    state.animations.push(Animation {
-                        card,
-                        at,
-                        target,
-                        action: AnimationAction::AddToHand(id.into()),
-                        shown: true,
-                        .. <_>::default()
-                    });
-
-                    state.menu = Menu::CpuTurn{
-                        id,
-                        menu: CpuMenu::WaitingForSuccesfulAsk,
-                    };
-                } else {
-                    let card_option = state.cards.deck.draw();
-
-                    if let Some(card) = card_option {
-                        let at = DECK_XY;
+                    if let Some((card, i)) = found {
+                        let at = get_card_position(
+                            spread(question.target),
+                            target_hand.len(),
+                            i,
+                        );
 
                         let target = get_card_insert_position(
                             spread(id.into()),
@@ -1486,19 +1461,44 @@ pub fn update_and_render(
                             at,
                             target,
                             action: AnimationAction::AddToHand(id.into()),
+                            shown: true,
                             .. <_>::default()
                         });
 
-                        if card == target_card {
-                            state.menu = Menu::CpuTurn{
-                                id,
-                                menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
-                            };
+                        state.menu = Menu::CpuTurn{
+                            id,
+                            menu: CpuMenu::WaitingForSuccesfulAsk,
+                        };
+                    } else {
+                        let card_option = state.cards.deck.draw();
+
+                        if let Some(card) = card_option {
+                            let at = DECK_XY;
+
+                            let target = get_card_insert_position(
+                                spread(id.into()),
+                                my_len
+                            );
+
+                            state.animations.push(Animation {
+                                card,
+                                at,
+                                target,
+                                action: AnimationAction::AddToHand(id.into()),
+                                .. <_>::default()
+                            });
+
+                            if card == target_card {
+                                state.menu = Menu::CpuTurn{
+                                    id,
+                                    menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
+                                };
+                            } else {
+                                state.menu = next_turn_menu(id, &state.cards.player);
+                            }
                         } else {
                             state.menu = next_turn_menu(id, &state.cards.player);
                         }
-                    } else {
-                        state.menu = next_turn_menu(id, &state.cards.player);
                     }
                 }
             },
@@ -1813,7 +1813,7 @@ const ASKING_TARGET_WH: unscaled::WH = unscaled::WH {
     h: H(
         gfx::CHEVRON_H.get()
         + gfx::CHAR_SPACING as unscaled::Inner
-        + gfx::CHAR_ADVANCE_H.get().get() 
+        + gfx::CHAR_ADVANCE_H.get().get()
         + gfx::CHAR_SPACING as unscaled::Inner
         + gfx::CHEVRON_H.get()
     ),
