@@ -517,6 +517,7 @@ pub struct State {
     pub animations: Animations,
     pub menu: Menu,
     pub ctx: ui::Context,
+    pub has_started: bool,
 }
 
 impl State {
@@ -541,7 +542,6 @@ impl State {
                     Some(card) => card,
                     None => continue,
                 };
-
 
                 let target = get_card_insert_position(
                     spread(id),
@@ -950,8 +950,9 @@ pub fn update_and_render(
         } => {
             let hand = &state.cards.player;
             let len = hand.len();
-            // TODO Handle player being "dead in the water" (None case).
+
             if let Some(player_card) = hand.get(selected) {
+                state.has_started = true;
                 let id = HandId::Player;
                 match menu {
                     PlayerMenu::Selecting => {
@@ -1345,6 +1346,41 @@ pub fn update_and_render(
                         }
                     }
                 }
+            } else {
+                if state.has_started {
+                    draw_dead_in_the_water(commands);
+    
+                    if input.pressed_this_frame(Button::A)
+                    || input.pressed_this_frame(Button::B) {
+                        let drew = state.cards.deck.draw();
+    
+                        state.menu = Menu::CpuTurn {
+                            id: <_>::default(),
+                            menu: <_>::default(),
+                        };
+    
+                        if let Some(card) = drew {
+                            let at = DECK_XY;
+    
+                            let target = get_card_insert_position(
+                                spread(HandId::Player),
+                                state.cards.player.len(),
+                            );
+    
+                            state.animations.push(Animation {
+                                card,
+                                at,
+                                target,
+                                action: AnimationAction::AddToHand(HandId::Player),
+                                .. <_>::default()
+                            });
+                        }                    
+                    }
+                } else {
+                    // Wait until the initial animations have completed, putting
+                    // a card in the player's hand, which means we won't come back 
+                    // here.
+                }
             }
         },
         Menu::CpuTurn {
@@ -1503,10 +1539,33 @@ pub fn update_and_render(
                 }
             },
             CpuMenu::DeadInTheWater => {
+                draw_dead_in_the_water(commands);
+
                 // Just wait until player acknowledges turn.
                 if input.pressed_this_frame(Button::A)
                 | input.pressed_this_frame(Button::B) {
+                    let drew = state.cards.deck.draw();
+                    let hand_id = id.into();
+                    let len = state.cards.hand(hand_id).len();
+
                     state.menu = next_turn_menu(id, &state.cards.player);
+
+                    if let Some(card) = drew {
+                        let at = DECK_XY;
+
+                        let target = get_card_insert_position(
+                            spread(hand_id),
+                            len
+                        );
+
+                        state.animations.push(Animation {
+                            card,
+                            at,
+                            target,
+                            action: AnimationAction::AddToHand(hand_id),
+                            .. <_>::default()
+                        });
+                    }
                 }
             },
             // TODO? retain their target card for this message
@@ -1549,6 +1608,28 @@ pub fn update_and_render(
             },
         }
     }
+}
+
+fn draw_dead_in_the_water(commands: &mut Commands) {
+    commands.draw_nine_slice(
+        gfx::NineSlice::Window,
+        DEAD_IN_THE_WATER_WINDOW
+    );
+
+    let base_xy = DEAD_IN_THE_WATER_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+
+    let description_base_xy = base_xy;
+
+    let description_base_rect = fit_to_rest_of_window(
+        description_base_xy,
+        DEAD_IN_THE_WATER_WINDOW,
+    );
+
+    commands.print_centered(
+        b"\"I am dead in the water.\"",
+        description_base_rect,
+        WHITE,
+    );
 }
 
 fn next_turn_menu(mut id: CpuId, player_hand: &Hand) -> Menu {
@@ -1884,3 +1965,14 @@ const CPU_SUCCESFUL_FISH_WINDOW: unscaled::Rect = {
         h: H(command::HEIGHT - OFFSET * 2),
     }
 };
+
+const DEAD_IN_THE_WATER_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 128 - 16;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};
+
