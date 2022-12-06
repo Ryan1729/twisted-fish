@@ -161,6 +161,26 @@ impl Suit {
             _ => Self::ALL[0],
         }
     }
+
+    pub fn wrapping_dec(self) -> Suit {
+        match self {
+            Suit::Red => Suit::Purple,
+            Suit::Green => Suit::Red,
+            Suit::Blue => Suit::Green,
+            Suit::Yellow => Suit::Blue,
+            Suit::Purple => Suit::Yellow,
+        }
+    }
+
+    pub fn wrapping_inc(self) -> Suit {
+        match self {
+            Suit::Red => Suit::Green,
+            Suit::Green => Suit::Blue,
+            Suit::Blue => Suit::Yellow,
+            Suit::Yellow => Suit::Purple,
+            Suit::Purple => Suit::Red,
+        }
+    }
 }
 
 pub type SuitNumber = u8;

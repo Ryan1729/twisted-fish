@@ -1199,68 +1199,77 @@ pub fn update_and_render(
                                 menu: PlayerMenu::Selecting,
                             };
                         } else if let Some(dir) = input.dir_pressed_this_frame() {
-                            const GRID_W: usize = 3;
-                            const GRID_H: usize = 5;
-                            const GRID_LEN: usize = GRID_W * GRID_H;
-                            const GRID: [ui::Id; GRID_LEN] = [
-                                Cpu1, AskSuit(Suit::ALL[0]), AskSubmit,
-                                Cpu2, AskSuit(Suit::ALL[1]), AskSubmit,
-                                Cpu3, AskSuit(Suit::ALL[2]), AskSubmit,
-                                Zero, AskSuit(Suit::ALL[3]), AskSubmit,
-                                Zero, AskSuit(Suit::ALL[4]), AskSubmit,
+                            const GRID_LEN: usize = 3;
+
+                            #[derive(Clone, Copy, PartialEq, Eq)]
+                            enum Section {
+                                Target,
+                                Suit,
+                                Submit,
+                            }
+
+                            const GRID: [Section; GRID_LEN] = [
+                                Section::Target, Section::Suit, Section::Submit,
                             ];
 
-                            let old_id = state.ctx.hot;
-                            let id_i = GRID.iter()
-                                .position(|el| *el == old_id)
+                            let old_el = match state.ctx.hot {
+                                Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
+                                AskSuit(_) => Some(Section::Suit),
+                                AskSubmit => Some(Section::Submit),
+                                _ => None,
+                            };
+                            let mut el_i = GRID.iter()
+                                .position(|el| Some(*el) == old_el)
                                 .unwrap_or_default();
 
-                            let old_x = id_i % GRID_W;
-                            let old_y = id_i / GRID_W;
-
-                            let mut x = old_x;
-                            let mut y = old_y;
-
-                            macro_rules! new_id { () => (GRID[y * GRID_W + x]) }
-
-                            while new_id!() == old_id || new_id!() == Zero {
-                                match dir {
-                                    Dir::Up => if y == 0 {
-                                        y = GRID_H - 1;
-                                    } else {
-                                        y -= 1;
+                            match dir {
+                                Dir::Up => match GRID[el_i] {
+                                    Section::Target => match question.target {
+                                        HandId::Cpu1 => { question.target = HandId::Cpu3; },
+                                        HandId::Cpu2 => { question.target = HandId::Cpu1; },
+                                        HandId::Cpu3 => { question.target = HandId::Cpu2; },
+                                        HandId::Player => {
+                                            // Player cannot ask the player.
+                                            debug_assert!(false);
+                                        }
                                     },
-                                    Dir::Down => if y >= GRID_H - 1 {
-                                        y = 0;
-                                    } else {
-                                        y += 1;
+                                    Section::Suit => {
+                                        question.suit = question.suit.wrapping_dec()
                                     },
-                                    Dir::Left => if x == 0 {
-                                        x = GRID_W - 1;
-                                    } else {
-                                        x -= 1;
+                                    Section::Submit => {}
+                                },
+                                Dir::Down => match GRID[el_i] {
+                                    Section::Target => match question.target {
+                                        HandId::Cpu1 => { question.target = HandId::Cpu2; },
+                                        HandId::Cpu2 => { question.target = HandId::Cpu3; },
+                                        HandId::Cpu3 => { question.target = HandId::Cpu1; },
+                                        HandId::Player => {
+                                            // Player cannot ask the player.
+                                            debug_assert!(false);
+                                        }
                                     },
-                                    Dir::Right => if x >= GRID_W - 1 {
-                                        x = 0;
-                                    } else {
-                                        x += 1;
+                                    Section::Suit => {
+                                        question.suit = question.suit.wrapping_inc()
                                     },
-                                }
-
-                                // Stop if we looped back to where started.
-                                if x == old_x && y == old_y { break }
+                                    Section::Submit => {}
+                                },
+                                Dir::Left => if el_i == 0 {
+                                    el_i = GRID_LEN - 1;
+                                } else {
+                                    el_i -= 1;
+                                },
+                                Dir::Right => if el_i >= GRID_LEN - 1 {
+                                    el_i = 0;
+                                } else {
+                                    el_i += 1;
+                                },
                             }
-
-                            let id = new_id!();
-                            state.ctx.set_next_hot(id);
-
-                            match id {
-                                Cpu1 => { question.target = HandId::Cpu1; },
-                                Cpu2 => { question.target = HandId::Cpu2; },
-                                Cpu3 => { question.target = HandId::Cpu3; },
-                                AskSuit(suit) => { question.suit = suit; }
-                                _ => {}
-                            }
+                            state.ctx.set_next_hot(match GRID[el_i] {
+                                // TODO? remove now unueeded ui::Id varaints.
+                                Section::Target => Cpu1,
+                                Section::Suit => AskSuit(Suit::ALL[0]),
+                                Section::Submit => AskSubmit,
+                            });
                         } else {
                             // do nothing
                         }
