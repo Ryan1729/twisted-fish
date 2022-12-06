@@ -1225,21 +1225,6 @@ pub fn update_and_render(
                             match dir {
                                 Dir::Up => match GRID[el_i] {
                                     Section::Target => match question.target {
-                                        HandId::Cpu1 => { question.target = HandId::Cpu3; },
-                                        HandId::Cpu2 => { question.target = HandId::Cpu1; },
-                                        HandId::Cpu3 => { question.target = HandId::Cpu2; },
-                                        HandId::Player => {
-                                            // Player cannot ask the player.
-                                            debug_assert!(false);
-                                        }
-                                    },
-                                    Section::Suit => {
-                                        question.suit = question.suit.wrapping_dec()
-                                    },
-                                    Section::Submit => {}
-                                },
-                                Dir::Down => match GRID[el_i] {
-                                    Section::Target => match question.target {
                                         HandId::Cpu1 => { question.target = HandId::Cpu2; },
                                         HandId::Cpu2 => { question.target = HandId::Cpu3; },
                                         HandId::Cpu3 => { question.target = HandId::Cpu1; },
@@ -1250,6 +1235,21 @@ pub fn update_and_render(
                                     },
                                     Section::Suit => {
                                         question.suit = question.suit.wrapping_inc()
+                                    },
+                                    Section::Submit => {}
+                                },
+                                Dir::Down => match GRID[el_i] {
+                                    Section::Target => match question.target {
+                                        HandId::Cpu1 => { question.target = HandId::Cpu3; },
+                                        HandId::Cpu2 => { question.target = HandId::Cpu1; },
+                                        HandId::Cpu3 => { question.target = HandId::Cpu2; },
+                                        HandId::Player => {
+                                            // Player cannot ask the player.
+                                            debug_assert!(false);
+                                        }
+                                    },
+                                    Section::Suit => {
+                                        question.suit = question.suit.wrapping_dec()
                                     },
                                     Section::Submit => {}
                                 },
