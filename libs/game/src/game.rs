@@ -256,6 +256,16 @@ impl Iterator for CpuId {
     }
 }
 
+impl CpuId {
+    pub const COUNT: u8 = 3;
+
+    pub const ALL: [Self; Self::COUNT as usize] = [
+        Self::One,
+        Self::Two,
+        Self::Three,
+    ];
+}
+
 #[derive(Default)]
 pub enum Facing {
     #[default]
@@ -511,12 +521,85 @@ impl Cards {
 }
 
 #[derive(Clone, Default)]
+pub struct Memory {
+}
+
+impl Memory {
+    fn question_for_known_card_with_rank(&self, rank: Rank) -> Option<Question> {
+        if cfg!(debug_assertions) { todo!() }
+        None
+    }
+
+    fn question_for_likely_card_with_rank(&self, rank: Rank) -> Option<Question> {
+        if cfg!(debug_assertions) { todo!() }
+        None
+    }
+
+    fn asked_for(&mut self, hand_id: HandId, card: Card) {
+        todo!();
+    }
+
+    fn found(&mut self, hand_id: HandId, card: Card) {
+        todo!();
+    }
+
+    fn fished_for(&mut self, hand_id: HandId, card: Card) {
+        todo!();
+    }
+
+}
+
+#[derive(Clone, Default)]
+pub struct Memories {
+    pub cpu1: Memory,
+    pub cpu2: Memory,
+    pub cpu3: Memory,
+}
+
+impl Memories {
+    fn memory(&self, id: CpuId) -> &Memory {
+        match id {
+            CpuId::One => &self.cpu1,
+            CpuId::Two => &self.cpu2,
+            CpuId::Three => &self.cpu3,
+        }
+    }
+
+    fn memory_mut(&mut self, id: CpuId) -> &mut Memory {
+        match id {
+            CpuId::One => &mut self.cpu1,
+            CpuId::Two => &mut self.cpu2,
+            CpuId::Three => &mut self.cpu3,
+        }
+    }
+
+    fn asked_for(&mut self, hand_id: HandId, card: Card) {
+        for cpu_id in CpuId::ALL {
+            self.memory_mut(cpu_id).asked_for(hand_id, card);
+        }
+    }
+
+    fn found(&mut self, hand_id: HandId, card: Card) {
+        for cpu_id in CpuId::ALL {
+            self.memory_mut(cpu_id).found(hand_id, card);
+        }
+    }
+
+    fn fished_for(&mut self, hand_id: HandId, card: Card) {
+        for cpu_id in CpuId::ALL {
+            self.memory_mut(cpu_id).fished_for(hand_id, card);
+        }
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct State {
     pub rng: Xs,
     pub cards: Cards,
     pub animations: Animations,
     pub menu: Menu,
     pub ctx: ui::Context,
+    pub memories: Memories,
     pub has_started: bool,
 }
 
@@ -1128,6 +1211,8 @@ pub fn update_and_render(
                             let target_hand = state.cards.hand_mut(question.target);
                             let target_card = models::fish_card(rank, question.suit);
 
+                            state.memories.asked_for(HandId::Player, target_card);
+
                             let mut found = None;
                             // TODO? randomize order here to make it harder to learn their
                             // whole hand with glass bottom boat?
@@ -1146,6 +1231,7 @@ pub fn update_and_render(
                             }
 
                             if let Some((card, i)) = found {
+                                state.memories.found(HandId::Player, card);
                                 let at = get_card_position(
                                     spread(question.target),
                                     target_hand.len(),
@@ -1338,11 +1424,13 @@ pub fn update_and_render(
                         // TODO? Dorky sound effect?
 
                         if input.pressed_this_frame(Button::A)
-                        | input.pressed_this_frame(Button::B) {
+                        || input.pressed_this_frame(Button::B) {
                             let target_card = models::fish_card(rank, question.suit);
+                            
 
                             state.menu = if let Some(true) = drew
                                 .map(|card| card == target_card) {
+                                state.memories.fished_for(HandId::Player, target_card);
                                 Menu::player(
                                     state.cards.player.len().saturating_sub(1)
                                 )
@@ -1358,24 +1446,24 @@ pub fn update_and_render(
             } else {
                 if state.has_started {
                     draw_dead_in_the_water(commands);
-    
+
                     if input.pressed_this_frame(Button::A)
                     || input.pressed_this_frame(Button::B) {
                         let drew = state.cards.deck.draw();
-    
+
                         state.menu = Menu::CpuTurn {
                             id: <_>::default(),
                             menu: <_>::default(),
                         };
-    
+
                         if let Some(card) = drew {
                             let at = DECK_XY;
-    
+
                             let target = get_card_insert_position(
                                 spread(HandId::Player),
                                 state.cards.player.len(),
                             );
-    
+
                             state.animations.push(Animation {
                                 card,
                                 at,
@@ -1383,11 +1471,11 @@ pub fn update_and_render(
                                 action: AnimationAction::AddToHand(HandId::Player),
                                 .. <_>::default()
                             });
-                        }                    
+                        }
                     }
                 } else {
                     // Wait until the initial animations have completed, putting
-                    // a card in the player's hand, which means we won't come back 
+                    // a card in the player's hand, which means we won't come back
                     // here.
                 }
             }
@@ -1402,40 +1490,73 @@ pub fn update_and_render(
                 // Maybe enforce that the Cpu windows must all be the same size?
                 commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SELECTING_WINDOW);
 
-                let id = HandId::from(id);
-                let hand = state.cards.hand(id);
+                let hand_id = HandId::from(id);
+                let hand = state.cards.hand(hand_id);
                 if hand.is_empty() {
                     *menu = CpuMenu::DeadInTheWater;
                 } else {
+                    // TODO? maybe prioritize questions which
+                    // are known to result in full baskets?
                     for card in hand.iter() {
                         if let Some(rank) = models::get_rank(card) {
-                            // TODO Decide whether to play this particular card or
-                            // not, based on some memory of what cards are where.
+                            if let Some(question) = state.memories.memory(id)
+                                .question_for_known_card_with_rank(rank) {
+                                *menu = CpuMenu::Asking(
+                                    rank,
+                                    question,
+                                );
+                                break
+                            }
+                        }
+                    }
 
-                            let besides = HandId::besides(id);
-                            let target_id = besides[
-                                xs::range(&mut state.rng, 0..besides.len() as u32) as usize
-                            ];
-
-                            // TODO Decide what suit to ask for intelligently.
-                            let suit = Suit::from_rng(&mut state.rng);
-
-                            let mut question = Question::default();
-                            question.target = target_id;
-                            question.suit = suit;
-
-                            *menu = CpuMenu::Asking(
-                                rank,
-                                question,
-                            );
-                            break
+                    for card in hand.iter() {
+                        if let Some(rank) = models::get_rank(card) {
+                            if let Some(question) = state.memories.memory(id)
+                                .question_for_likely_card_with_rank(rank) {
+                                *menu = CpuMenu::Asking(
+                                    rank,
+                                    question,
+                                );
+                                break
+                            }
                         } else {
                             // TODO Play Zingers sometimes.
                         }
                     }
 
                     if let CpuMenu::Selecting = *menu {
-                        *menu = CpuMenu::DeadInTheWater;
+                        // TODO? randomize order through the cards here to make Cpu
+                        // player less predictable?
+                        for card in hand.iter() {
+                            if let Some(rank) = models::get_rank(card) {
+                                let besides = HandId::besides(hand_id);
+                                let target_id = besides[
+                                    xs::range(&mut state.rng, 0..besides.len() as u32) as usize
+                                ];
+
+                                // TODO? Decide what suit to ask for intelligently
+                                // in this case? Does it matter given that asking
+                                // for a card you have as a distraction is viable?
+                                // Maybe only ask for a card you have when your
+                                // have 4 in your hand already?
+                                let suit = Suit::from_rng(&mut state.rng);
+
+                                let mut question = Question::default();
+                                question.target = target_id;
+                                question.suit = suit;
+
+                                *menu = CpuMenu::Asking(
+                                    rank,
+                                    question,
+                                );
+                                break
+                            }
+                        }
+
+                        if let CpuMenu::Selecting = *menu {
+                            *menu = CpuMenu::DeadInTheWater;
+                        }
                     }
                 }
             },
@@ -1467,6 +1588,8 @@ pub fn update_and_render(
                 | input.pressed_this_frame(Button::B) {
                     let target_card = models::fish_card(*rank, question.suit);
 
+                    state.memories.asked_for(id.into(), target_card);
+
                     let my_len = state.cards.hand(id.into()).len();
 
                     let target_hand = state.cards.hand_mut(question.target);
@@ -1490,6 +1613,8 @@ pub fn update_and_render(
                     }
 
                     if let Some((card, i)) = found {
+                        state.memories.found(id.into(), target_card);
+
                         let at = get_card_position(
                             spread(question.target),
                             target_hand.len(),
@@ -1534,6 +1659,8 @@ pub fn update_and_render(
                             });
 
                             if card == target_card {
+                                state.memories.fished_for(id.into(), target_card);
+
                                 state.menu = Menu::CpuTurn{
                                     id,
                                     menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
