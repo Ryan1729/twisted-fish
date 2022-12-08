@@ -597,22 +597,61 @@ impl Memory {
 
     fn asked_for(&mut self, hand_id: HandId, rank: Rank, _asked_suit: Suit) {
         // TODO? Should we treat the card that was asked for differently?
-        // The thing is one can ask for a card that one has to trip people up. 
+        // The thing is one can ask for a card that one has to trip people up.
         // Maybe another Location variant is needed for that case?
         for suit in Suit::ALL {
-            self.locations[models::fish_card(rank, suit) as usize] = 
+            self.locations[models::fish_card(rank, suit) as usize] =
                 Location::Likely(hand_id);
         }
     }
 
     fn found(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
-        self.locations[models::fish_card(rank, suit) as usize] = 
+        self.locations[models::fish_card(rank, suit) as usize] =
             Location::Known(hand_id);
     }
 
     fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
-        self.locations[models::fish_card(rank, suit) as usize] = 
+        self.locations[models::fish_card(rank, suit) as usize] =
             Location::Known(hand_id);
+    }
+
+    fn informed_question(
+        &self,
+        my_hand: &Hand,
+        my_hand_id: HandId
+    ) -> Option<(Rank, Question)> {
+        // TODO? maybe prioritize questions which
+        // are known to result in full baskets?
+        // TODO Avoid asking for cards you just successfully got from
+        // another player's hand, but still ask for cards you have
+        // sometimes, to throw others off.
+        for card in my_hand.iter() {
+            if let Some(rank) = models::get_rank(card) {
+                let question = self.question_for_known_card_with_rank(
+                    rank,
+                    my_hand_id,
+                );
+
+                if question.is_some() {
+                    return question.map(|q| (rank, q))
+                }
+            }
+        }
+
+        for card in my_hand.iter() {
+            if let Some(rank) = models::get_rank(card) {
+                let question = self.question_for_likely_card_with_rank(
+                    rank,
+                    my_hand_id,
+                );
+
+                if question.is_some() {
+                    return question.map(|q| (rank, q))
+                }
+            }
+        }
+
+        None
     }
 }
 
@@ -1502,7 +1541,7 @@ pub fn update_and_render(
                         if input.pressed_this_frame(Button::A)
                         || input.pressed_this_frame(Button::B) {
                             let target_card = models::fish_card(rank, question.suit);
-                            
+
 
                             state.menu = if let Some(true) = drew
                                 .map(|card| card == target_card) {
@@ -1568,53 +1607,25 @@ pub fn update_and_render(
                 // Showing this avoids a flicker for the one frame the Cpu
                 // is selecting when they stop waiting.
                 // Maybe enforce that the Cpu windows must all be the same size?
-                commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SELECTING_WINDOW);
+                commands.draw_nine_slice(
+                    gfx::NineSlice::Window,
+                    CPU_SELECTING_WINDOW
+                );
 
                 let hand_id = HandId::from(id);
                 let hand = state.cards.hand(hand_id);
                 if hand.is_empty() {
                     *menu = CpuMenu::DeadInTheWater;
                 } else {
-                    // TODO? maybe prioritize questions which
-                    // are known to result in full baskets?
-                    // TODO Avoid asking for cards you just successfully got from 
-                    // another player's hand, but still ask for cards you have 
-                    // sometimes, to throw others off.
-                    for card in hand.iter() {
-                        if let Some(rank) = models::get_rank(card) {
-                            if let Some(question) = state.memories.memory(id)
-                                .question_for_known_card_with_rank(
-                                    rank,
-                                    hand_id,
-                                ) {
-                                dbg!(rank, question.suit, question.target);
-                                *menu = CpuMenu::Asking(
-                                    rank,
-                                    question,
-                                );
-                                break
-                            }
-                        }
+                    if let Some((rank, question)) = state.memories.memory(id)
+                        .informed_question(hand, hand_id) {
+                        *menu = CpuMenu::Asking(
+                            rank,
+                            question,
+                        );
                     }
 
-                    for card in hand.iter() {
-                        if let Some(rank) = models::get_rank(card) {
-                            if let Some(question) = state.memories.memory(id)
-                                .question_for_likely_card_with_rank(
-                                    rank,
-                                    hand_id
-                                ) {
-                                dbg!(rank, question.suit, question.target);
-                                *menu = CpuMenu::Asking(
-                                    rank,
-                                    question,
-                                );
-                                break
-                            }
-                        } else {
-                            // TODO Play Zingers sometimes.
-                        }
-                    }
+                    // TODO Play Zingers sometimes.
 
                     if let CpuMenu::Selecting = *menu {
                         // TODO? randomize order through the cards here to make Cpu
