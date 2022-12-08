@@ -146,7 +146,7 @@ pub enum AnimationAction {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HandId {
     Player,
     Cpu1,
@@ -520,33 +520,100 @@ impl Cards {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Copy, Clone, Debug, Default)]
+enum Location {
+    #[default]
+    Unknown,
+    Likely(HandId),
+    Known(HandId),
+    /// discard pile or in a full basket.
+    KnownGone,
+}
+
+#[derive(Clone)]
 pub struct Memory {
+    locations: [Location; models::DECK_SIZE as _],
+}
+
+impl Default for Memory {
+    fn default() -> Self {
+        Self {
+            locations: [Location::default(); models::DECK_SIZE as _],
+        }
+    }
 }
 
 impl Memory {
-    fn question_for_known_card_with_rank(&self, rank: Rank) -> Option<Question> {
-        if cfg!(debug_assertions) { todo!() }
+    fn question_for_known_card_with_rank(
+        &self,
+        rank: Rank,
+        my_id: HandId
+    ) -> Option<Question> {
+        // TODO? randomize order of suits? Prioritize them somehow?
+        for suit in Suit::ALL {
+            let location = self.locations[models::fish_card(rank, suit) as usize];
+            match location {
+                Location::Known(id) if id != my_id => {
+                    dbg!(self.locations, rank, suit);
+                    let mut question = Question::default();
+                    question.suit = suit;
+                    question.target = id;
+                    return Some(question);
+                },
+                Location::Unknown
+                | Location::Likely(_)
+                | Location::Known(_)
+                | Location::KnownGone => {},
+            }
+        }
+
         None
     }
 
-    fn question_for_likely_card_with_rank(&self, rank: Rank) -> Option<Question> {
-        if cfg!(debug_assertions) { todo!() }
+    fn question_for_likely_card_with_rank(
+        &self,
+        rank: Rank,
+        my_id: HandId
+    ) -> Option<Question> {
+        // TODO? randomize order of suits? Prioritize them somehow?
+        for suit in Suit::ALL {
+            let location = self.locations[models::fish_card(rank, suit) as usize];
+            match location {
+                Location::Likely(id) if id != my_id => {
+                    let mut question = Question::default();
+                    question.suit = suit;
+                    question.target = id;
+                    return Some(question);
+                },
+                Location::Unknown
+                | Location::Likely(_)
+                | Location::Known(_)
+                | Location::KnownGone => {},
+            }
+        }
+
         None
     }
 
-    fn asked_for(&mut self, hand_id: HandId, card: Card) {
-        todo!();
+    fn asked_for(&mut self, hand_id: HandId, rank: Rank, _asked_suit: Suit) {
+        // TODO? Should we treat the card that was asked for differently?
+        // The thing is one can ask for a card that one has to trip people up. 
+        // Maybe another Location variant is needed for that case?
+        for suit in Suit::ALL {
+            self.locations[models::fish_card(rank, suit) as usize] = 
+                Location::Likely(hand_id);
+        }
     }
 
-    fn found(&mut self, hand_id: HandId, card: Card) {
-        todo!();
+    fn found(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
+        self.locations[models::fish_card(rank, suit) as usize] = 
+            Location::Known(hand_id);
     }
 
-    fn fished_for(&mut self, hand_id: HandId, card: Card) {
-        todo!();
+    fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
+        self.locations[models::fish_card(rank, suit) as usize] = 
+            Location::Known(hand_id);
     }
-
 }
 
 #[derive(Clone, Default)]
@@ -573,21 +640,21 @@ impl Memories {
         }
     }
 
-    fn asked_for(&mut self, hand_id: HandId, card: Card) {
+    fn asked_for(&mut self, hand_id: HandId, rank: Rank, asked_suit: Suit) {
         for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).asked_for(hand_id, card);
+            self.memory_mut(cpu_id).asked_for(hand_id, rank, asked_suit);
         }
     }
 
-    fn found(&mut self, hand_id: HandId, card: Card) {
+    fn found(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
         for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).found(hand_id, card);
+            self.memory_mut(cpu_id).found(hand_id, rank, suit);
         }
     }
 
-    fn fished_for(&mut self, hand_id: HandId, card: Card) {
+    fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
         for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).fished_for(hand_id, card);
+            self.memory_mut(cpu_id).fished_for(hand_id, rank, suit);
         }
     }
 }
@@ -1209,9 +1276,14 @@ pub fn update_and_render(
                         ) {
                             let player_len = state.cards.player.len();
                             let target_hand = state.cards.hand_mut(question.target);
-                            let target_card = models::fish_card(rank, question.suit);
 
-                            state.memories.asked_for(HandId::Player, target_card);
+                            state.memories.asked_for(
+                                HandId::Player,
+                                rank,
+                                question.suit
+                            );
+
+                            let target_card = models::fish_card(rank, question.suit);
 
                             let mut found = None;
                             // TODO? randomize order here to make it harder to learn their
@@ -1231,7 +1303,11 @@ pub fn update_and_render(
                             }
 
                             if let Some((card, i)) = found {
-                                state.memories.found(HandId::Player, card);
+                                state.memories.found(
+                                    HandId::Player,
+                                    rank,
+                                    question.suit
+                                );
                                 let at = get_card_position(
                                     spread(question.target),
                                     target_hand.len(),
@@ -1430,7 +1506,11 @@ pub fn update_and_render(
 
                             state.menu = if let Some(true) = drew
                                 .map(|card| card == target_card) {
-                                state.memories.fished_for(HandId::Player, target_card);
+                                state.memories.fished_for(
+                                    HandId::Player,
+                                    rank,
+                                    question.suit
+                                );
                                 Menu::player(
                                     state.cards.player.len().saturating_sub(1)
                                 )
@@ -1497,10 +1577,17 @@ pub fn update_and_render(
                 } else {
                     // TODO? maybe prioritize questions which
                     // are known to result in full baskets?
+                    // TODO Avoid asking for cards you just successfully got from 
+                    // another player's hand, but still ask for cards you have 
+                    // sometimes, to throw others off.
                     for card in hand.iter() {
                         if let Some(rank) = models::get_rank(card) {
                             if let Some(question) = state.memories.memory(id)
-                                .question_for_known_card_with_rank(rank) {
+                                .question_for_known_card_with_rank(
+                                    rank,
+                                    hand_id,
+                                ) {
+                                dbg!(rank, question.suit, question.target);
                                 *menu = CpuMenu::Asking(
                                     rank,
                                     question,
@@ -1513,7 +1600,11 @@ pub fn update_and_render(
                     for card in hand.iter() {
                         if let Some(rank) = models::get_rank(card) {
                             if let Some(question) = state.memories.memory(id)
-                                .question_for_likely_card_with_rank(rank) {
+                                .question_for_likely_card_with_rank(
+                                    rank,
+                                    hand_id
+                                ) {
+                                dbg!(rank, question.suit, question.target);
                                 *menu = CpuMenu::Asking(
                                     rank,
                                     question,
@@ -1586,10 +1677,10 @@ pub fn update_and_render(
 
                 if input.pressed_this_frame(Button::A)
                 | input.pressed_this_frame(Button::B) {
-                    let target_card = models::fish_card(*rank, question.suit);
+                    let rank = *rank;
+                    state.memories.asked_for(id.into(), rank, question.suit);
 
-                    state.memories.asked_for(id.into(), target_card);
-
+                    let target_card = models::fish_card(rank, question.suit);
                     let my_len = state.cards.hand(id.into()).len();
 
                     let target_hand = state.cards.hand_mut(question.target);
@@ -1613,7 +1704,7 @@ pub fn update_and_render(
                     }
 
                     if let Some((card, i)) = found {
-                        state.memories.found(id.into(), target_card);
+                        state.memories.found(id.into(), rank, question.suit);
 
                         let at = get_card_position(
                             spread(question.target),
@@ -1659,7 +1750,7 @@ pub fn update_and_render(
                             });
 
                             if card == target_card {
-                                state.memories.fished_for(id.into(), target_card);
+                                state.memories.fished_for(id.into(), rank, question.suit);
 
                                 state.menu = Menu::CpuTurn{
                                     id,
