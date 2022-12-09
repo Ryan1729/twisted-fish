@@ -70,6 +70,10 @@ impl CardOption {
     }
 }
 
+// TODO? Tighter representation that still allows representing Dead Scuba Diver
+// but doesn't allow non-matched cards?
+pub type Basket = [Card; Suit::COUNT as usize];
+
 pub type Rank = u8;
 
 pub mod ranks {

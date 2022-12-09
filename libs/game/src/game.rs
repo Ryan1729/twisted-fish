@@ -1,4 +1,4 @@
-use models::{Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, DECK_SIZE, get_rank};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, DECK_SIZE, get_rank};
 use gfx::{Commands, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -344,10 +344,6 @@ pub enum CpuMenu {
     WaitingWhenGotWhatWasFishingFor,
 }
 
-// TODO? Tighter representation that still allows representing Dead Scuba Diver
-// but doesn't allow non-matched cards?
-type Basket = [Card; Suit::COUNT as usize];
-
 #[derive(Clone, Default)]
 pub struct Cards {
     pub deck: Hand,
@@ -476,7 +472,13 @@ impl Memory {
             Location::Known(hand_id);
     }
 
-    fn informed_question(
+    fn basket_removed(&mut self, basket: Basket) {
+        for card in basket {
+            self.locations[card as usize] = Location::KnownGone;
+        }
+    }
+
+    pub fn informed_question(
         &self,
         my_hand: &Hand,
         my_hand_id: HandId
@@ -555,6 +557,12 @@ impl Memories {
     fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).fished_for(hand_id, rank, suit);
+        }
+    }
+
+    fn basket_removed(&mut self, basket: Basket) {
+        for cpu_id in CpuId::ALL {
+            self.memory_mut(cpu_id).basket_removed(basket);
         }
     }
 }
@@ -730,6 +738,7 @@ impl State {
                         }
 
                         while let Some(basket) = remove_basket(hand) {
+                            self.memories.basket_removed(basket);
                             // TODO? animate gathering together and heading to a
                             // separate pile? Or maybe poofing in an expolsion of
                             // particles?
