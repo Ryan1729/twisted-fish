@@ -946,7 +946,7 @@ mod wide {
 
 #[cfg(test)]
 mod wide_tests {
-    use super::{wide::*, *};
+    use super::wide::*;
 
     /// Thses names chosen to be the same length as `0`.
     const A: i32 = 0xAAAA_AAAAu32 as i32;

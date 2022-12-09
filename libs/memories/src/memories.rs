@@ -135,6 +135,31 @@ impl Memory {
     }
 }
 
+#[cfg(test)]
+mod informed_question_returns_the_expected_result {
+    use super::*;
+
+    const R: Rank = models::ranks::BARNACLE;
+
+    #[test]
+    fn on_this_one_found_red_example() {
+        let mut my_hand = Hand::default();
+        my_hand.push(models::fish_card(R, Suit::Green));
+
+        let my_id = HandId::Cpu1;
+        let other_id = HandId::Cpu2;
+
+        let mut mem = Memory::default();
+
+        mem.found(other_id, R, Suit::Red);
+
+        assert_eq!(
+            mem.informed_question(&my_hand, my_id),
+            Some((R, Suit::Red, other_id))
+        );
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Memories {
     cpu1: Memory,
@@ -183,5 +208,3 @@ impl Memories {
         }
     }
 }
-
-
