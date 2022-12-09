@@ -10,6 +10,9 @@ path = "src/game.rs"
 [dependencies.gfx]
 path = "../gfx"
 
+[dependencies.memories]
+path = "../memories"
+
 [dependencies.models]
 path = "../models"
 

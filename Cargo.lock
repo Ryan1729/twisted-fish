@@ -447,6 +447,7 @@ name = "game"
 version = "0.1.0"
 dependencies = [
  "gfx",
+ "memories",
  "models",
  "platform_types",
  "xs",
@@ -647,6 +648,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "memories"
+version = "0.1.0"
+dependencies = [
+ "models",
 ]
 
 [[package]]
