@@ -4,10 +4,14 @@ use models::{Basket, CpuId, Hand, HandId, Suit, Rank, DECK_SIZE};
 enum Location {
     #[default]
     Unknown,
+    // TODO store likelyhood value that increases every time a player asks for a
+    // card of the given rank but a different suit, and use most likey first.
     Likely(HandId),
     Known(HandId),
     /// discard pile or in a full basket.
     KnownGone,
+    // TODO Allow marking that a player was asked for something and didn't have it.
+    // Will need to have a way to clear that as well, once they've drawn a card.
 }
 
 #[derive(Clone)]
@@ -73,8 +77,15 @@ impl Memory {
         // The thing is one can ask for a card that one has to trip people up.
         // Maybe another Location variant is needed for that case?
         for suit in Suit::ALL {
-            self.locations[models::fish_card(rank, suit) as usize] =
-                Location::Likely(hand_id);
+            let loc = &mut self.locations[models::fish_card(rank, suit) as usize];
+            match *loc {
+                Location::Known(_) => {},
+                Location::Unknown
+                | Location::Likely(_)
+                | Location::KnownGone => {
+                    *loc = Location::Likely(hand_id);
+                },
+            }
         }
     }
 
@@ -139,6 +150,7 @@ mod informed_question_returns_the_expected_result {
     use super::*;
 
     const R: Rank = models::ranks::BARNACLE;
+    const R2: Rank = models::ranks::CRAB;
 
     #[test]
     fn on_this_one_found_red_example() {
@@ -151,6 +163,27 @@ mod informed_question_returns_the_expected_result {
         let mut mem = Memory::default();
 
         mem.found(other_id, R, Suit::Red);
+
+        assert_eq!(
+            mem.informed_question(&my_hand, my_id),
+            Some((R, Suit::Red, other_id))
+        );
+    }
+
+    #[test]
+    fn on_this_one_found_then_asked_example() {
+        let mut my_hand = Hand::default();
+        my_hand.push(models::fish_card(R, Suit::Green));
+
+        let my_id = HandId::Cpu1;
+        let other_id = HandId::Cpu2;
+        let other_id_2 = HandId::Cpu3;
+
+        let mut mem = Memory::default();
+
+        mem.found(other_id, R, Suit::Red);
+        // This previously caused `other_id_2` to be asked instead of `other_id`!
+        mem.asked_for(other_id_2, R, Suit::Red);
 
         assert_eq!(
             mem.informed_question(&my_hand, my_id),
@@ -184,18 +217,21 @@ impl Memories {
     }
 
     pub fn asked_for(&mut self, hand_id: HandId, rank: Rank, asked_suit: Suit) {
+        dbg!(hand_id, rank, asked_suit);
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).asked_for(hand_id, rank, asked_suit);
         }
     }
 
     pub fn found(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
+        dbg!(hand_id, rank, suit);
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).found(hand_id, rank, suit);
         }
     }
 
     pub fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
+        dbg!(hand_id, rank, suit);
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).fished_for(hand_id, rank, suit);
         }
