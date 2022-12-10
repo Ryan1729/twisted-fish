@@ -1721,7 +1721,7 @@ mod text {
 
         assert_eq!(
             &actual,
-            b"You asked for the Red Shrimp \nbut you didn't get it."
+            b"You asked for the Red Shrimp\nbut you didn't get it."
         );
     }
 
