@@ -34,7 +34,6 @@ impl Memory {
             let location = self.locations[models::fish_card(rank, suit) as usize];
             match location {
                 Location::Known(id) if id != my_id => {
-                    dbg!(self.locations, rank, suit);
                     return Some((suit, id));
                 },
                 Location::Unknown
