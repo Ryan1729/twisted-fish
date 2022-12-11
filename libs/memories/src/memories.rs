@@ -1,17 +1,56 @@
 use models::{Basket, CpuId, Hand, HandId, Suit, Rank, DECK_SIZE};
 
+/// It seems intuitive that counting an amount of asks larger than the amount of
+/// suits would not be needed, but I don't have an explicitly worked out reason for
+/// that.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum AskCount {
+    One,
+    Two,
+    Three,
+    Four,
+    FivePlus,
+}
+
+impl AskCount {
+    fn saturating_inc(self) -> Self {
+        use AskCount::*;
+        match self {
+            One => Two,
+            Two => Three,
+            Three => Four,
+            Four | FivePlus => FivePlus,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default)]
-enum Location {
+enum Evidence {
     #[default]
     Unknown,
-    // TODO store likelyhood value that increases every time a player asks for a
-    // card of the given rank but a different suit, and use most likey first.
-    Likely(HandId),
+    AskedForSimilar(AskCount),
+    // TODO Allow marking that a player was asked for something and didn't have it.
+    // Will need to have a way to clear that as well, once they've drawn a card.
+    // TODO? Is it worth tracking how many cards they drew since they didn't have it?
+    DidNotHave
+}
+
+// TODO? Avoid storing an extra one for this player's own hand id? Or does the
+// simpler indexing logic end up being a win overall?
+type Incomplete = [Evidence; HandId::COUNT as _];
+
+#[derive(Copy, Clone, Debug)]
+enum Location {
+    Incomplete(Incomplete),
     Known(HandId),
     /// discard pile or in a full basket.
     KnownGone,
-    // TODO Allow marking that a player was asked for something and didn't have it.
-    // Will need to have a way to clear that as well, once they've drawn a card.
+}
+
+impl Default for Location {
+    fn default() -> Self {
+        Self::Incomplete(Incomplete::default())
+    }
 }
 
 #[derive(Clone)]
@@ -40,8 +79,7 @@ impl Memory {
                 Location::Known(id) if id != my_id => {
                     return Some((suit, id));
                 },
-                Location::Unknown
-                | Location::Likely(_)
+                Location::Incomplete(_)
                 | Location::Known(_)
                 | Location::KnownGone => {},
             }
@@ -55,21 +93,36 @@ impl Memory {
         rank: Rank,
         my_id: HandId
     ) -> Option<(Suit, HandId)> {
+        let mut best = None;
         // TODO? randomize order of suits? Prioritize them somehow?
         for suit in Suit::ALL {
             let location = self.locations[models::fish_card(rank, suit) as usize];
             match location {
-                Location::Likely(id) if id != my_id => {
-                    return Some((suit, id));
+                Location::Incomplete(incomplete) => {
+                    let my_index = my_id as _;
+                    for (i, evidence) in incomplete.iter().enumerate() {
+                        if i == my_index { continue }
+
+                        match (*evidence, best) {
+                            (Evidence::AskedForSimilar(count), None) => {
+                                best = Some((count, (suit, HandId::ALL[i])));
+                            },
+                            (Evidence::AskedForSimilar(count), Some((prev_count, _))) => {
+                                if count > prev_count {
+                                    best = Some((count, (suit, HandId::ALL[i])));
+                                }
+                            }
+                            (Evidence::Unknown | Evidence::DidNotHave, _) => {}
+                        }
+
+                    }
                 },
-                Location::Unknown
-                | Location::Likely(_)
                 | Location::Known(_)
                 | Location::KnownGone => {},
             }
         }
 
-        None
+        best.map(|(_, out)| out)
     }
 
     fn asked_for(&mut self, hand_id: HandId, rank: Rank, _asked_suit: Suit) {
@@ -79,11 +132,19 @@ impl Memory {
         for suit in Suit::ALL {
             let loc = &mut self.locations[models::fish_card(rank, suit) as usize];
             match *loc {
-                Location::Known(_) => {},
-                Location::Unknown
-                | Location::Likely(_)
-                | Location::KnownGone => {
-                    *loc = Location::Likely(hand_id);
+                Location::Known(_)
+                | Location::KnownGone => {},
+                Location::Incomplete(mut incomplete) => {
+                    let i = hand_id as usize;
+                    incomplete[i] = match incomplete[i] {
+                        Evidence::Unknown
+                        | Evidence::DidNotHave => Evidence::AskedForSimilar(AskCount::One),
+                        Evidence::AskedForSimilar(count) => {
+                            Evidence::AskedForSimilar(count.saturating_inc())
+                        }
+                    };
+
+                    *loc = Location::Incomplete(incomplete);
                 },
             }
         }
@@ -217,21 +278,18 @@ impl Memories {
     }
 
     pub fn asked_for(&mut self, hand_id: HandId, rank: Rank, asked_suit: Suit) {
-        dbg!(hand_id, rank, asked_suit);
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).asked_for(hand_id, rank, asked_suit);
         }
     }
 
     pub fn found(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
-        dbg!(hand_id, rank, suit);
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).found(hand_id, rank, suit);
         }
     }
 
     pub fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
-        dbg!(hand_id, rank, suit);
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).fished_for(hand_id, rank, suit);
         }
