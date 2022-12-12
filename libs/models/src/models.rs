@@ -214,27 +214,40 @@ pub fn get_suit(card: Card) -> Option<Suit> {
     }
 }
 
-pub type Zinger = u8;
-
-pub mod zingers {
-    use super::*;
-
-    pub const DEAD_SCUBA_DIVER: Zinger = 0;
-    pub const DIVINE_INTERVENTION: Zinger = 1;
-    pub const GLASS_BOTTOM_BOAT: Zinger = 2;
-    pub const NO_FISHING: Zinger = 3;
-    pub const THE_GAME_WARDEN: Zinger = 4;
-    pub const THE_LURE: Zinger = 5;
-    pub const THE_NET: Zinger = 6;
-    pub const TWO_FISTED_FISHERMAN: Zinger = 7;
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Zinger {
+    DeadScubaDiver,
+    DivineIntervention,
+    GlassBottomBoat,
+    NoFishing,
+    TheGameWarden,
+    TheLure,
+    TheNet,
+    TwoFistedFisherman,
 }
 
 pub fn get_zinger(card: Card) -> Option<Zinger> {
     if (FISH_COUNT..DECK_SIZE).contains(&card) {
-        Some(card - FISH_COUNT)
+        use Zinger::*;
+        Some(match card - FISH_COUNT {
+            0 => DeadScubaDiver,
+            1 => DivineIntervention,
+            2 => GlassBottomBoat,
+            3 => NoFishing,
+            4 => TheGameWarden,
+            5 => TheLure,
+            6 => TheNet,
+            7 => TwoFistedFisherman,
+            _ => return None,
+        })
     } else {
         None
     }
+}
+
+pub fn zinger_card(zinger: Zinger) -> Card {
+    zinger as Card + FISH_COUNT
 }
 
 pub type HandLen = u8;
@@ -453,5 +466,11 @@ impl CpuId {
         Self::One,
         Self::Two,
         Self::Three,
+    ];
+
+    pub const TEXT: [&[u8]; Self::COUNT as usize] = [
+        HandId::TEXT[1],
+        HandId::TEXT[2],
+        HandId::TEXT[3],
     ];
 }

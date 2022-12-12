@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, DECK_SIZE, get_rank};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, zinger_card};
 use gfx::{Commands, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -297,7 +297,11 @@ use question::Question;
 #[derive(Clone)]
 pub enum Menu {
     PlayerTurn { selected: CardIndex, menu: PlayerMenu },
-    CpuTurn{ id: CpuId, menu: CpuMenu }
+    CpuTurn{ id: CpuId, menu: CpuMenu },
+    BetweenTurns {
+        next_id: HandId,
+        player_declined: bool,
+    },
 }
 
 impl Default for Menu {
@@ -311,6 +315,13 @@ impl Menu {
         Menu::PlayerTurn {
             selected,
             menu: PlayerMenu::Selecting,
+        }
+    }
+
+    fn between_turns(next_id: HandId) -> Self {
+        Menu::BetweenTurns {
+            next_id,
+            player_declined: false,
         }
     }
 }
@@ -745,6 +756,70 @@ mod ui {
 
 use ui::{ButtonSpec, Id::*, do_button};
 
+enum AvailablePlayAnytime {
+    GameWarden(CardIndex),
+    GlassBottomBoat(CardIndex),
+    Both(CardIndex, CardIndex),
+}
+
+impl AvailablePlayAnytime {
+    fn in_hand(hand: &Hand) -> Option<AvailablePlayAnytime> {
+        use AvailablePlayAnytime::*;
+        let mut output = None;
+
+        let game_warden = zinger_card(Zinger::TheGameWarden);
+        let glass_bottom_boat = zinger_card(Zinger::GlassBottomBoat);
+        for (i, card) in hand.enumerated_iter() {
+            if card == game_warden {
+                match output {
+                    None => {
+                        output = Some(GameWarden(i));
+                    },
+                    Some(GlassBottomBoat(boat_i)) => {
+                        output = Some(Both(i, boat_i));
+                    },
+                    Some(GameWarden(_)) | Some(Both(_, _)) => {
+                        debug_assert!(false, "multiple copies of TheGameWarden");
+                    }
+                }
+            }
+
+            if card == glass_bottom_boat {
+                match output {
+                    None => {
+                        output = Some(GlassBottomBoat(i));
+                    },
+                    Some(GameWarden(warden_i)) => {
+                        output = Some(Both(warden_i, i));
+                    },
+                    Some(GlassBottomBoat(_)) | Some(Both(_, _)) => {
+                        debug_assert!(false, "multiple copies of GlassBottomBoat");
+                    }
+                }
+            }
+        }
+
+        output
+    }
+}
+
+enum AnytimeCard {
+    GameWarden,
+    GlassBottomBoat,
+}
+
+struct AnytimePlay {
+    // Arguably we don't actually want to be able to represent a player targeting 
+    // themselves. But maybe we won't make those errors in practice.
+    source: CpuId,
+    target: HandId,
+    card: AnytimeCard,
+}
+
+fn anytime_play() -> Option<AnytimePlay> {
+    todo!("anytime_play")
+}
+
 pub fn update_and_render(
     commands: &mut Commands,
     state: &mut State,
@@ -814,6 +889,99 @@ pub fn update_and_render(
     }
 
     match state.menu {
+        Menu::BetweenTurns {
+            next_id,
+            player_declined
+        } => {
+            if let (Some(available), false) = (
+                AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
+                player_declined
+            ) {
+                use AvailablePlayAnytime::*;
+
+                commands.draw_nine_slice(
+                    gfx::NineSlice::Window,
+                    PLAYER_PLAY_ANYTIME_WINDOW
+                );
+
+                let base_xy = PLAYER_PLAY_ANYTIME_WINDOW.xy()
+                + WINDOW_CONTENT_OFFSET;
+
+                let card_xy = base_xy;
+
+                match available {
+                    GameWarden(_) => {
+                        commands.draw_card(
+                            zinger_card(Zinger::TheGameWarden),
+                            card_xy,
+                        );
+                    },
+                    GlassBottomBoat(_) => { 
+                        // TODO suport playing the GlassBottomBoat.
+                        // Probably delete this once we do {
+                        state.menu = match next_id {
+                            HandId::Player => Menu::player(CardIndex::default()),
+                            HandId::Cpu1 => Menu::CpuTurn {
+                                id: CpuId::One,
+                                menu: <_>::default(),
+                            },
+                            HandId::Cpu2 => Menu::CpuTurn {
+                                id: CpuId::Two,
+                                menu: <_>::default(),
+                            },
+                            HandId::Cpu3 => Menu::CpuTurn {
+                                id: CpuId::Three,
+                                menu: <_>::default(),
+                            },
+                        };
+                        // }
+                    }
+                    Both(_, _) => { 
+                        // TODO add quickselect between cards.
+                        commands.draw_card(
+                            zinger_card(Zinger::TheGameWarden),
+                            card_xy,
+                        );
+                        // TODO suport playing the GlassBottomBoat.
+                    }
+                }
+
+                let mut group = ui::Group {
+                    commands,
+                    ctx: &mut state.ctx,
+                    input,
+                    speaker,
+                };
+
+                let target_xy = card_xy + CARD_WIDTH;
+
+                draw_cpu_id_quick_select(
+                    &mut group,
+                    // TODO store this somewhere so we can mutate it.
+                    CpuId::One,
+                    target_xy,
+                );
+            } else if let Some(AnytimePlay{ .. }) 
+            = anytime_play() {
+                todo!("perform play");
+            } else {
+                state.menu = match next_id {
+                    HandId::Player => Menu::player(CardIndex::default()),
+                    HandId::Cpu1 => Menu::CpuTurn {
+                        id: CpuId::One,
+                        menu: <_>::default(),
+                    },
+                    HandId::Cpu2 => Menu::CpuTurn {
+                        id: CpuId::Two,
+                        menu: <_>::default(),
+                    },
+                    HandId::Cpu3 => Menu::CpuTurn {
+                        id: CpuId::Three,
+                        menu: <_>::default(),
+                    },
+                };
+            }
+        },
         Menu::PlayerTurn {
             selected,
             ref mut menu,
@@ -898,15 +1066,6 @@ pub fn update_and_render(
 
                         let target_xy = card_xy + CARD_WIDTH + (ASKING_WINDOW.h / 5);
 
-                        commands.print_centered(
-                            HandId::TEXT[question.target as u8 as usize],
-                            Rect::xy_wh(
-                                target_xy + ASKING_TARGET_TEXT_OFFSET,
-                                ASKING_TARGET_TEXT_WH,
-                            ),
-                            WHITE,
-                        );
-
                         let mut group = ui::Group {
                             commands,
                             ctx: &mut state.ctx,
@@ -914,18 +1073,13 @@ pub fn update_and_render(
                             speaker,
                         };
 
-                        let target_quick_select_rect = Rect::xy_wh(
-                            target_xy,
-                            ASKING_TARGET_WH,
-                        );
-
-                        ui::draw_quick_select(
+                        draw_cpu_id_quick_select(
                             &mut group,
-                            target_quick_select_rect,
-                            &[Cpu1, Cpu2, Cpu3]
+                            question.target.try_into().unwrap_or(CpuId::One),
+                            target_xy
                         );
 
-                        let suit_base_xy = target_xy + ASKING_TARGET_WH.w;
+                        let suit_base_xy = target_xy + CPU_ID_SELECT_WH.w;
 
                         let suit_quick_select_rect = Rect::xy_wh(
                             suit_base_xy,
@@ -1223,7 +1377,6 @@ pub fn update_and_render(
                         || input.pressed_this_frame(Button::B) {
                             let target_card = models::fish_card(rank, question.suit);
 
-
                             state.menu = if let Some(true) = drew
                                 .map(|card| card == target_card) {
                                 state.memories.fished_for(
@@ -1235,10 +1388,9 @@ pub fn update_and_render(
                                     state.cards.player.len().saturating_sub(1)
                                 )
                             } else {
-                                Menu::CpuTurn {
-                                    id: <_>::default(),
-                                    menu: <_>::default(),
-                                }
+                                Menu::between_turns(
+                                    HandId::Cpu1
+                                )
                             };
                         }
                     }
@@ -1251,10 +1403,9 @@ pub fn update_and_render(
                     || input.pressed_this_frame(Button::B) {
                         let drew = state.cards.deck.draw();
 
-                        state.menu = Menu::CpuTurn {
-                            id: <_>::default(),
-                            menu: <_>::default(),
-                        };
+                        state.menu = Menu::between_turns(
+                            HandId::Cpu1
+                        );
 
                         if let Some(card) = drew {
                             let at = DECK_XY;
@@ -1558,12 +1709,11 @@ fn draw_dead_in_the_water(commands: &mut Commands) {
 
 fn next_turn_menu(mut id: CpuId, player_hand: &Hand) -> Menu {
     match id.next() {
-        Some(next_id) => Menu::CpuTurn{
-            id: next_id,
-            menu: CpuMenu::default(),
-        },
-        None => Menu::player(
-            player_hand.len().saturating_sub(1)
+        Some(next_id) => Menu::between_turns(
+            next_id.into()
+        ),
+        None => Menu::between_turns(
+            HandId::Player
         )
     }
 }
@@ -1791,6 +1941,30 @@ fn fit_to_rest_of_window(
     )
 }
 
+fn draw_cpu_id_quick_select(
+    group: &mut ui::Group,
+    current: CpuId,
+    xy: XY,
+) {
+    group.commands.print_centered(
+        CpuId::TEXT[current as u8 as usize],
+        Rect::xy_wh(
+            xy + CPU_ID_SELECT_TEXT_OFFSET,
+            CPU_ID_SELECT_TEXT_WH,
+        ),
+        WHITE,
+    );
+
+    ui::draw_quick_select(
+        group,
+        Rect::xy_wh(
+            xy,
+            CPU_ID_SELECT_WH,
+        ),
+        &[Cpu1, Cpu2, Cpu3]
+    );
+}
+
 const ASKING_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 8;
 
@@ -1805,7 +1979,7 @@ const ASKING_WINDOW: unscaled::Rect = {
     }
 };
 
-const ASKING_TARGET_TEXT_OFFSET: unscaled::WH = unscaled::WH {
+const CPU_ID_SELECT_TEXT_OFFSET: unscaled::WH = unscaled::WH {
     w: W(0),
     h: H(
         gfx::CHEVRON_H.get()
@@ -1813,7 +1987,7 @@ const ASKING_TARGET_TEXT_OFFSET: unscaled::WH = unscaled::WH {
     ),
 };
 
-const ASKING_TARGET_WH: unscaled::WH = unscaled::WH {
+const CPU_ID_SELECT_WH: unscaled::WH = unscaled::WH {
     w: W(ASKING_WINDOW.w.get() / 3),
     h: H(
         gfx::CHEVRON_H.get()
@@ -1824,16 +1998,16 @@ const ASKING_TARGET_WH: unscaled::WH = unscaled::WH {
     ),
 };
 
-const ASKING_TARGET_TEXT_WH: unscaled::WH = unscaled::WH {
-    w: ASKING_TARGET_WH.w,
-    h: ASKING_TARGET_TEXT_OFFSET.h,
+const CPU_ID_SELECT_TEXT_WH: unscaled::WH = unscaled::WH {
+    w: CPU_ID_SELECT_WH.w,
+    h: CPU_ID_SELECT_TEXT_OFFSET.h,
 };
 
-const ASKING_SUIT_TEXT_OFFSET: unscaled::WH = ASKING_TARGET_TEXT_OFFSET;
+const ASKING_SUIT_TEXT_OFFSET: unscaled::WH = CPU_ID_SELECT_TEXT_OFFSET;
 
-const ASKING_SUIT_WH: unscaled::WH = ASKING_TARGET_WH;
+const ASKING_SUIT_WH: unscaled::WH = CPU_ID_SELECT_WH;
 
-const ASKING_SUIT_TEXT_WH: unscaled::WH = ASKING_TARGET_TEXT_WH;
+const ASKING_SUIT_TEXT_WH: unscaled::WH = CPU_ID_SELECT_TEXT_WH;
 
 const GO_FISH_WINDOW: unscaled::Rect = {
     const WIN_W: unscaled::Inner = CARD_WIDTH.get() * 3;
@@ -1900,3 +2074,12 @@ const DEAD_IN_THE_WATER_WINDOW: unscaled::Rect = {
     }
 };
 
+const PLAYER_PLAY_ANYTIME_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 128 - 16;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};

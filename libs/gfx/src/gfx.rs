@@ -1,4 +1,4 @@
-use models::{Card, get_rank, get_suit, get_zinger, ranks, zingers};
+use models::{Card, get_rank, get_suit, get_zinger, ranks, Zinger};
 
 use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT, bytes_lines};
 
@@ -186,7 +186,7 @@ impl Commands {
                 * card::IMAGE_H.get(),
             None => match zinger_opt {
                 Some(zinger) => card::IMAGE_BASE_Y
-                + unscaled::Inner::from(zinger)
+                + unscaled::Inner::from(zinger as u8)
                 * card::IMAGE_H.get(),
                 None => {
                     debug_assert!(false, "No suit or zinger for card: {card}");
@@ -469,35 +469,35 @@ impl Commands {
                 b"Purple    ",
                 b"Card Shark",
             ),
-            (None, None, Some(zingers::DEAD_SCUBA_DIVER)) => (
+            (None, None, Some(Zinger::DeadScubaDiver)) => (
                 b"Dead Scuba",
                 b"Diver     ",
             ),
-            (None, None, Some(zingers::DIVINE_INTERVENTION)) => (
+            (None, None, Some(Zinger::DivineIntervention)) => (
                 b"Divine In-",
                 b"tervention",
             ),
-            (None, None, Some(zingers::GLASS_BOTTOM_BOAT)) => (
+            (None, None, Some(Zinger::GlassBottomBoat)) => (
                 b"Glass Bot-",
                 b"tom boat  ",
             ),
-            (None, None, Some(zingers::NO_FISHING)) => (
+            (None, None, Some(Zinger::NoFishing)) => (
                 b"No        ",
                 b"Fishing   ",
             ),
-            (None, None, Some(zingers::THE_GAME_WARDEN)) => (
+            (None, None, Some(Zinger::TheGameWarden)) => (
                 b"The Game  ",
                 b"Warden    ",
             ),
-            (None, None, Some(zingers::THE_LURE)) => (
+            (None, None, Some(Zinger::TheLure)) => (
                 b"The       ",
                 b"Lure      ",
             ),
-            (None, None, Some(zingers::THE_NET)) => (
+            (None, None, Some(Zinger::TheNet)) => (
                 b"The       ",
                 b"Net       ",
             ),
-            (None, None, Some(zingers::TWO_FISTED_FISHERMAN)) => (
+            (None, None, Some(Zinger::TwoFistedFisherman)) => (
                 b"2-fisted  ",
                 b"fisherman ",
             ),
