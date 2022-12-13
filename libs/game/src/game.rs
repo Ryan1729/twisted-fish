@@ -294,13 +294,20 @@ mod question {
 }
 use question::Question;
 
+#[derive(Copy, Clone)]
+pub struct PlayerSelection {
+    target: CpuId,
+    card: AnytimeCard,
+    declined: bool,
+}
+
 #[derive(Clone)]
 pub enum Menu {
     PlayerTurn { selected: CardIndex, menu: PlayerMenu },
     CpuTurn{ id: CpuId, menu: CpuMenu },
     BetweenTurns {
         next_id: HandId,
-        player_declined: bool,
+        player_selection: PlayerSelection,
     },
 }
 
@@ -321,7 +328,11 @@ impl Menu {
     fn between_turns(next_id: HandId) -> Self {
         Menu::BetweenTurns {
             next_id,
-            player_declined: false,
+            player_selection: PlayerSelection {
+                target: CpuId::default(),
+                card: AnytimeCard::default(),
+                declined: bool::default(),
+            },
         }
     }
 }
@@ -402,6 +413,8 @@ pub struct State {
 
 impl State {
     pub fn new(seed: Seed) -> State {
+        // For debugging; gives player multiple zingers.
+        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
         let mut rng = xs::from_seed(seed);
 
         let mut state = State {
@@ -624,6 +637,8 @@ mod ui {
         Cpu3,
         AskSuit(Suit),
         AskSubmit,
+        AnytimeCard,
+        AnytimeSubmit,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -803,13 +818,32 @@ impl AvailablePlayAnytime {
     }
 }
 
+#[derive(Copy, Clone, Default)]
 enum AnytimeCard {
+    #[default]
     GameWarden,
     GlassBottomBoat,
 }
 
+impl AnytimeCard {
+    fn wrapping_inc(self) -> Self {
+        match self {
+            AnytimeCard::GameWarden => AnytimeCard::GlassBottomBoat,
+            AnytimeCard::GlassBottomBoat => AnytimeCard::GameWarden,
+        }
+    }
+
+    fn wrapping_dec(self) -> Self {
+        match self {
+            AnytimeCard::GameWarden => AnytimeCard::GlassBottomBoat,
+            AnytimeCard::GlassBottomBoat => AnytimeCard::GameWarden,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 struct AnytimePlay {
-    // Arguably we don't actually want to be able to represent a player targeting 
+    // Arguably we don't actually want to be able to represent a player targeting
     // themselves. But maybe we won't make those errors in practice.
     source: CpuId,
     target: HandId,
@@ -817,7 +851,7 @@ struct AnytimePlay {
 }
 
 fn anytime_play() -> Option<AnytimePlay> {
-    todo!("anytime_play")
+    None
 }
 
 pub fn update_and_render(
@@ -891,11 +925,11 @@ pub fn update_and_render(
     match state.menu {
         Menu::BetweenTurns {
             next_id,
-            player_declined
+            ref mut player_selection,
         } => {
             if let (Some(available), false) = (
                 AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
-                player_declined
+                player_selection.declined
             ) {
                 use AvailablePlayAnytime::*;
 
@@ -911,32 +945,17 @@ pub fn update_and_render(
 
                 match available {
                     GameWarden(_) => {
+                        player_selection.card = AnytimeCard::GameWarden;
                         commands.draw_card(
                             zinger_card(Zinger::TheGameWarden),
                             card_xy,
                         );
                     },
-                    GlassBottomBoat(_) => { 
+                    GlassBottomBoat(_) => {
+                        player_selection.card = AnytimeCard::GlassBottomBoat;
                         // TODO suport playing the GlassBottomBoat.
-                        // Probably delete this once we do {
-                        state.menu = match next_id {
-                            HandId::Player => Menu::player(CardIndex::default()),
-                            HandId::Cpu1 => Menu::CpuTurn {
-                                id: CpuId::One,
-                                menu: <_>::default(),
-                            },
-                            HandId::Cpu2 => Menu::CpuTurn {
-                                id: CpuId::Two,
-                                menu: <_>::default(),
-                            },
-                            HandId::Cpu3 => Menu::CpuTurn {
-                                id: CpuId::Three,
-                                menu: <_>::default(),
-                            },
-                        };
-                        // }
                     }
-                    Both(_, _) => { 
+                    Both(_, _) => {
                         // TODO add quickselect between cards.
                         commands.draw_card(
                             zinger_card(Zinger::TheGameWarden),
@@ -957,11 +976,110 @@ pub fn update_and_render(
 
                 draw_cpu_id_quick_select(
                     &mut group,
-                    // TODO store this somewhere so we can mutate it.
-                    CpuId::One,
+                    player_selection.target,
                     target_xy,
                 );
-            } else if let Some(AnytimePlay{ .. }) 
+
+                let submit_base_xy = target_xy + CPU_ID_SELECT_WH.w;
+
+                if do_button(
+                    &mut group,
+                    ButtonSpec {
+                        id: AnytimeSubmit,
+                        rect: fit_to_rest_of_window(
+                            submit_base_xy,
+                            PLAYER_PLAY_ANYTIME_WINDOW,
+                        ),
+                        text: b"Submit",
+                    }
+                ) {
+                    match player_selection.card {
+                        AnytimeCard::GameWarden => {
+                            // TODO perform play
+                        },
+                        AnytimeCard::GlassBottomBoat => {
+                            // TODO switch to a state where the player gets to
+                            // see the card before confirming
+                        },
+                    }
+                } else if input.pressed_this_frame(Button::B) {
+                    // TODO? Separate decline button?
+                    player_selection.declined = true;
+                } else if let Some(dir) = input.dir_pressed_this_frame() {
+                    const GRID_LEN: usize = 3;
+
+                    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+                    enum Section {
+                        Card,
+                        Target,
+                        Submit,
+                    }
+
+                    const GRID: [Section; GRID_LEN] = [
+                        Section::Card, Section::Target, Section::Submit,
+                    ];
+
+                    let old_el = match state.ctx.hot {
+                        AnytimeCard => Some(Section::Card),
+                        Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
+                        AnytimeSubmit => Some(Section::Submit),
+                        _ => None,
+                    };
+
+                    let mut el_i = GRID.iter()
+                        .position(|el| Some(*el) == old_el)
+                        .unwrap_or_default();
+
+                    match dir {
+                        Dir::Up => match GRID[el_i] {
+                            Section::Card => {
+                                player_selection.card
+                                    = player_selection.card.wrapping_inc();
+                            },
+                            Section::Target => {
+                                player_selection.target
+                                    = player_selection.target.wrapping_inc();
+                            },
+                            Section::Submit => {}
+                        },
+                        Dir::Down => match GRID[el_i] {
+                            Section::Card => {
+                                player_selection.card
+                                    = player_selection.card.wrapping_dec();
+                            },
+                            Section::Target => {
+                                player_selection.target
+                                    = player_selection.target.wrapping_dec();
+                            },
+                            Section::Submit => {}
+                        },
+                        Dir::Left => if el_i == 0 {
+                            el_i = GRID_LEN - 1;
+                        } else {
+                            el_i -= 1;
+                            if el_i == 0 && !matches!(available, Both(..)) {
+                                el_i = GRID_LEN - 1;
+                            }
+                        },
+                        Dir::Right => if el_i >= GRID_LEN - 1 {
+                            if matches!(available, Both(..)) {
+                                el_i = 0;
+                            } else {
+                                el_i = 1;
+                            }
+                        } else {
+                            el_i += 1;
+                        },
+                    }
+                    state.ctx.set_next_hot(match GRID[el_i] {
+                        Section::Card => AnytimeCard,
+                        Section::Target => Cpu1,
+                        Section::Submit => AnytimeSubmit,
+                    });
+                } else {
+                    // do nothing
+                }
+            } else if let Some(AnytimePlay{ .. })
             = anytime_play() {
                 todo!("perform play");
             } else {
@@ -1160,8 +1278,6 @@ pub fn update_and_render(
                             let target_card = models::fish_card(rank, question.suit);
 
                             let mut found = None;
-                            // TODO? randomize order here to make it harder to learn their
-                            // whole hand with glass bottom boat?
                             for i in 0..target_hand.len() {
                                 let was_found = target_hand.get(i)
                                     .map(|card| card == target_card)
@@ -2075,7 +2191,7 @@ const DEAD_IN_THE_WATER_WINDOW: unscaled::Rect = {
 };
 
 const PLAYER_PLAY_ANYTIME_WINDOW: unscaled::Rect = {
-    const OFFSET: unscaled::Inner = 128 - 16;
+    const OFFSET: unscaled::Inner = 128 - 32;
     unscaled::Rect {
         x: X(OFFSET),
         y: Y(OFFSET),

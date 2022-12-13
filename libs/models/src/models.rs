@@ -473,4 +473,20 @@ impl CpuId {
         HandId::TEXT[2],
         HandId::TEXT[3],
     ];
+
+    pub fn wrapping_inc(self) -> Self {
+        match self {
+            CpuId::One => CpuId::Two,
+            CpuId::Two => CpuId::Three,
+            CpuId::Three => CpuId::One,
+        }
+    }
+
+    pub fn wrapping_dec(self) -> Self {
+        match self {
+            CpuId::One => CpuId::Three,
+            CpuId::Two => CpuId::One,
+            CpuId::Three => CpuId::Two,
+        }
+    }
 }
