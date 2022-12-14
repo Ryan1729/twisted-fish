@@ -20,6 +20,11 @@ const DECK_XY: XY = XY {
     y: Y((command::HEIGHT - CARD_HEIGHT.get()) / 2),
 };
 
+const DISCARD_XY: XY = XY {
+    x: X((command::WIDTH - (CARD_WIDTH.get() * 2)) / 2),
+    y: Y((command::HEIGHT - CARD_HEIGHT.get()) / 2),
+};
+
 const PLAYER_BASE_XY: XY = XY {
     x: X(CARD_WIDTH.get() * 5 / 4),
     y: Y(command::HEIGHT - CARD_HEIGHT.get()),
@@ -143,7 +148,10 @@ impl Animation {
 pub enum AnimationAction {
     #[default]
     DoNothing,
-    AddToHand(HandId)
+    AddToHand(HandId),
+    PerformGameWarden {
+        holder: HandId,
+    },
 }
 
 mod question {
@@ -460,6 +468,7 @@ impl State {
     pub fn tick(&mut self, speaker: &mut Speaker) {
         use core::cmp::{min, Ordering::*};
 
+        let mut push_after = Vec::new();
         for anim in self.animations.0.iter_mut() {
             if anim.is_done() { continue }
 
@@ -609,9 +618,53 @@ impl State {
                                 _ => {},
                             }
                         }
+                    },
+                    AnimationAction::PerformGameWarden {
+                        holder,
+                    } => {
+                        // TODO Animate all cards in deck moving to random targets
+                        // away from, then back to DECK_XY.
+
+                        self.cards.deck.push(anim.card);
+                        self.cards.deck.shuffle(&mut self.rng);
+
+                        let game_warden_card = zinger_card(Zinger::TheGameWarden);
+                        
+                        let mut remove_at = None;
+                        for (i, current_card) in self.cards.hand(holder).enumerated_iter() {
+                            if current_card == game_warden_card {
+                                remove_at = Some(i);
+                                break
+                            }
+                        }
+
+                        if let Some(i) = remove_at {
+                            let hand = self.cards.hand_mut(holder);
+                            if let Some(card) = hand.remove(i) {
+                                let at = get_card_position(
+                                    spread(holder),
+                                    hand.len(),
+                                    i,
+                                );
+
+                                push_after.push(Animation {
+                                    card,
+                                    at,
+                                    target: DISCARD_XY,
+                                    action: AnimationAction::DoNothing,
+                                    shown: true,
+                                    .. <_>::default()
+                                });
+                            }
+                        } else {
+                            debug_assert!(false, "Didn't find game warden!");
+                        }
                     }
                 }
             }
+        }
+        for anim in push_after {
+            self.animations.push(anim);
         }
     }
 }
@@ -927,6 +980,26 @@ pub fn update_and_render(
             next_id,
             ref mut player_selection,
         } => {
+            macro_rules! start_next_turn {
+                () => {
+                    state.menu = match next_id {
+                        HandId::Player => Menu::player(CardIndex::default()),
+                        HandId::Cpu1 => Menu::CpuTurn {
+                            id: CpuId::One,
+                            menu: <_>::default(),
+                        },
+                        HandId::Cpu2 => Menu::CpuTurn {
+                            id: CpuId::Two,
+                            menu: <_>::default(),
+                        },
+                        HandId::Cpu3 => Menu::CpuTurn {
+                            id: CpuId::Three,
+                            menu: <_>::default(),
+                        },
+                    };
+                }
+            }
+
             if let (Some(available), false) = (
                 AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
                 player_selection.declined
@@ -982,7 +1055,10 @@ pub fn update_and_render(
 
                 let submit_base_xy = target_xy + CPU_ID_SELECT_WH.w;
 
-                if do_button(
+                if !state.cards
+                    .hand(player_selection.target.into())
+                    .is_empty()
+                && do_button(
                     &mut group,
                     ButtonSpec {
                         id: AnytimeSubmit,
@@ -995,7 +1071,20 @@ pub fn update_and_render(
                 ) {
                     match player_selection.card {
                         AnytimeCard::GameWarden => {
-                            // TODO perform play
+                            
+                            if let Some(()) = perform_game_warden(
+                                &mut state.cards,
+                                &mut state.animations,
+                                &mut state.rng,
+                                Targeting {
+                                    source: HandId::Player,
+                                    target: player_selection.target.into(),
+                                },
+                            ) {
+                                start_next_turn!();
+                            } else {
+                                debug_assert!(false, "perform_game_warden failed");
+                            }
                         },
                         AnytimeCard::GlassBottomBoat => {
                             // TODO switch to a state where the player gets to
@@ -1083,21 +1172,7 @@ pub fn update_and_render(
             = anytime_play() {
                 todo!("perform play");
             } else {
-                state.menu = match next_id {
-                    HandId::Player => Menu::player(CardIndex::default()),
-                    HandId::Cpu1 => Menu::CpuTurn {
-                        id: CpuId::One,
-                        menu: <_>::default(),
-                    },
-                    HandId::Cpu2 => Menu::CpuTurn {
-                        id: CpuId::Two,
-                        menu: <_>::default(),
-                    },
-                    HandId::Cpu3 => Menu::CpuTurn {
-                        id: CpuId::Three,
-                        menu: <_>::default(),
-                    },
-                };
+                start_next_turn!();
             }
         },
         Menu::PlayerTurn {
@@ -1875,6 +1950,49 @@ fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
             }
         },
     }
+}
+
+struct Targeting {
+    source: HandId,
+    target: HandId,
+}
+
+fn perform_game_warden(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    rng: &mut Xs,
+    Targeting {
+        source,
+        target,
+    }: Targeting,
+) -> Option<()> {
+    let hand = cards.hand_mut(target);
+
+    if hand.is_empty() {
+        return None;
+    }
+
+    let i = xs::range(rng, 0..hand.len() as u32) as CardIndex;
+
+    let at = get_card_position(
+        spread(target),
+        hand.len(),
+        i,
+    );
+
+    hand
+        .remove(i)
+        .map(|card| {
+            animations.push(Animation {
+                card,
+                at,
+                target: DECK_XY,
+                action: AnimationAction::PerformGameWarden {
+                    holder: source,
+                },
+                .. <_>::default()
+            })
+        })
 }
 
 mod text {

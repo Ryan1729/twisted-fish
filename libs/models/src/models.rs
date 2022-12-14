@@ -320,6 +320,10 @@ impl Hand {
     pub fn iter(&self) -> impl Iterator<Item = Card> + '_ {
         self.0.iter().filter_map(|co| co.option())
     }
+
+    pub fn shuffle(&mut self, rng: &mut Xs) {
+        xs::shuffle(rng, &mut self.0);
+    }
 }
 
 pub type CardIndex = u8;
