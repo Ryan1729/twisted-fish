@@ -629,7 +629,7 @@ impl State {
                         self.cards.deck.shuffle(&mut self.rng);
 
                         let game_warden_card = zinger_card(Zinger::TheGameWarden);
-                        
+
                         let mut remove_at = None;
                         for (i, current_card) in self.cards.hand(holder).enumerated_iter() {
                             if current_card == game_warden_card {
@@ -1014,7 +1014,9 @@ pub fn update_and_render(
                 let base_xy = PLAYER_PLAY_ANYTIME_WINDOW.xy()
                 + WINDOW_CONTENT_OFFSET;
 
-                let card_xy = base_xy;
+                let card_xy = base_xy
+                    - WINDOW_CONTENT_OFFSET.h
+                    + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CARD_HEIGHT)/ 2);
 
                 match available {
                     GameWarden(_) => {
@@ -1045,7 +1047,8 @@ pub fn update_and_render(
                     speaker,
                 };
 
-                let target_xy = card_xy + CARD_WIDTH;
+                let target_xy = base_xy + CARD_WIDTH
+                    + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
 
                 draw_cpu_id_quick_select(
                     &mut group,
@@ -1053,7 +1056,7 @@ pub fn update_and_render(
                     target_xy,
                 );
 
-                let submit_base_xy = target_xy + CPU_ID_SELECT_WH.w;
+                let submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
 
                 if !state.cards
                     .hand(player_selection.target.into())
@@ -1071,7 +1074,7 @@ pub fn update_and_render(
                 ) {
                     match player_selection.card {
                         AnytimeCard::GameWarden => {
-                            
+
                             if let Some(()) = perform_game_warden(
                                 &mut state.cards,
                                 &mut state.animations,
