@@ -346,7 +346,9 @@ impl Hand {
     }
 
     pub fn shuffle(&mut self, rng: &mut Xs) {
-        xs::shuffle(rng, &mut self.0);
+        if let Some(i) = self.len().checked_sub(1) {
+            xs::shuffle(rng, &mut self.0[0..i as _]);
+        }
     }
 }
 

@@ -663,7 +663,6 @@ impl State {
                     }
                     AnimationAction::AddToDiscard => {
                         self.cards.discard.push(anim.card);
-                        dbg!(self.cards.discard.len());
 
                         speaker.request_sfx(SFX::CardPlace);
                     }
@@ -989,12 +988,9 @@ pub fn update_and_render(
 
     if !state.cards.deck.is_empty() {
         commands.draw_card_back(DECK_XY);
-    } else {
-        //dbg!(state.cards.deck.len(), state.cards.discard.len());
     }
 
     if let Some(last) = state.cards.discard.last() {
-        dbg!(last == zingers::THE_GAME_WARDEN, state.cards.discard.len());
         commands.draw_card(last, DISCARD_XY);
     }
 
