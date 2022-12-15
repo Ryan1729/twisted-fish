@@ -425,7 +425,11 @@ impl State {
     pub fn new(seed: Seed) -> State {
         // For debugging; gives player multiple zingers.
         //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
-        let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
+        // Gives Cpu1 the game warden
+        //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
+        // Gives player glass bottom boat.
+        let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
+
         let mut rng = xs::from_seed(seed);
 
         let mut state = State {
