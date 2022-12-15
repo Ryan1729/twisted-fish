@@ -246,7 +246,21 @@ pub fn get_zinger(card: Card) -> Option<Zinger> {
     }
 }
 
-pub fn zinger_card(zinger: Zinger) -> Card {
+pub mod zingers {
+    use super::*;
+
+    pub const DEAD_SCUBA_DIVER: Card = zinger_card(Zinger::DeadScubaDiver);
+    pub const DIVINE_INTERVENTION: Card = zinger_card(Zinger::DivineIntervention);
+    pub const GLASS_BOTTOM_BOAT: Card = zinger_card(Zinger::GlassBottomBoat);
+    pub const NO_FISHING: Card = zinger_card(Zinger::NoFishing);
+    pub const THE_GAME_WARDEN: Card = zinger_card(Zinger::TheGameWarden);
+    pub const THE_LURE: Card = zinger_card(Zinger::TheLure);
+    pub const THE_NET: Card = zinger_card(Zinger::TheNet);
+    pub const TWO_FISTED_FISHERMAN: Card = zinger_card(Zinger::TwoFistedFisherman);
+    
+}
+
+pub const fn zinger_card(zinger: Zinger) -> Card {
     zinger as Card + FISH_COUNT
 }
 
@@ -287,6 +301,16 @@ impl Hand {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn last(&self) -> Option<Card> {
+        self.len()
+            .checked_sub(1)
+            .and_then(|i| {
+                self.0
+                    .get(i as usize)
+                    .and_then(|o: &CardOption| o.option())
+            })
     }
 
     pub fn push(&mut self, card: Card) {

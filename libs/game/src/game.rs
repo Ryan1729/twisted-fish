@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, zinger_card};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, zingers};
 use gfx::{Commands, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -21,7 +21,7 @@ const DECK_XY: XY = XY {
 };
 
 const DISCARD_XY: XY = XY {
-    x: X((command::WIDTH - (CARD_WIDTH.get() * 2)) / 2),
+    x: X((command::WIDTH - (CARD_WIDTH.get() * 3)) / 2),
     y: Y((command::HEIGHT - CARD_HEIGHT.get()) / 2),
 };
 
@@ -152,6 +152,7 @@ pub enum AnimationAction {
     PerformGameWarden {
         holder: HandId,
     },
+    AddToDiscard,
 }
 
 mod question {
@@ -386,6 +387,7 @@ pub struct Cards {
     pub cpu1_baskets: Hand,
     pub cpu2_baskets: Hand,
     pub cpu3_baskets: Hand,
+    pub discard: Hand,
 }
 
 impl Cards {
@@ -422,7 +424,8 @@ pub struct State {
 impl State {
     pub fn new(seed: Seed) -> State {
         // For debugging; gives player multiple zingers.
-        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
         let mut rng = xs::from_seed(seed);
 
         let mut state = State {
@@ -628,11 +631,9 @@ impl State {
                         self.cards.deck.push(anim.card);
                         self.cards.deck.shuffle(&mut self.rng);
 
-                        let game_warden_card = zinger_card(Zinger::TheGameWarden);
-
                         let mut remove_at = None;
                         for (i, current_card) in self.cards.hand(holder).enumerated_iter() {
-                            if current_card == game_warden_card {
+                            if current_card == zingers::THE_GAME_WARDEN {
                                 remove_at = Some(i);
                                 break
                             }
@@ -651,7 +652,7 @@ impl State {
                                     card,
                                     at,
                                     target: DISCARD_XY,
-                                    action: AnimationAction::DoNothing,
+                                    action: AnimationAction::AddToDiscard,
                                     shown: true,
                                     .. <_>::default()
                                 });
@@ -659,6 +660,12 @@ impl State {
                         } else {
                             debug_assert!(false, "Didn't find game warden!");
                         }
+                    }
+                    AnimationAction::AddToDiscard => {
+                        self.cards.discard.push(anim.card);
+                        dbg!(self.cards.discard.len());
+
+                        speaker.request_sfx(SFX::CardPlace);
                     }
                 }
             }
@@ -835,10 +842,8 @@ impl AvailablePlayAnytime {
         use AvailablePlayAnytime::*;
         let mut output = None;
 
-        let game_warden = zinger_card(Zinger::TheGameWarden);
-        let glass_bottom_boat = zinger_card(Zinger::GlassBottomBoat);
         for (i, card) in hand.enumerated_iter() {
-            if card == game_warden {
+            if card == zingers::THE_GAME_WARDEN {
                 match output {
                     None => {
                         output = Some(GameWarden(i));
@@ -852,7 +857,7 @@ impl AvailablePlayAnytime {
                 }
             }
 
-            if card == glass_bottom_boat {
+            if card == zingers::GLASS_BOTTOM_BOAT {
                 match output {
                     None => {
                         output = Some(GlassBottomBoat(i));
@@ -903,7 +908,72 @@ struct AnytimePlay {
     card: AnytimeCard,
 }
 
-fn anytime_play() -> Option<AnytimePlay> {
+fn anytime_play(
+    rng: &mut Xs,
+    cards: &Cards,
+    memories: &Memories,
+    next_id: HandId,
+) -> Option<AnytimePlay> {
+    let mut cpu_ids = CpuId::ALL;
+
+    xs::shuffle(rng, &mut cpu_ids);
+
+    for cpu_id in cpu_ids {
+        let hand_id = cpu_id.into();
+        let hand = cards.hand(hand_id);
+
+        for card in hand.iter() {
+            if card == zingers::THE_GAME_WARDEN {
+                let mut card_count = hand.len();
+                
+                let mut others = hand_id.besides();
+                xs::shuffle(rng, &mut others);
+
+                for target in others {
+                    // Note: It's not fair to look at other's cards besides counting
+                    // how many of them there are.
+                    let len = cards.hand(target).len();
+                    card_count += len;
+                    if len == 1 {
+                        return Some(AnytimePlay {
+                            source: cpu_id,
+                            target,
+                            card: AnytimeCard::GameWarden
+                        });
+                    }
+                }
+                card_count += cards.deck.len();
+                if card_count <= 10 {
+                    for target in others {
+                        // Note: It's not fair to look at other's cards besides counting
+                        // how many of them there are.
+                        if !cards.hand(target).is_empty() {
+                            return Some(AnytimePlay {
+                                source: cpu_id,
+                                target,
+                                card: AnytimeCard::GameWarden
+                            });
+                        }
+                    }
+                }
+
+                if next_id != hand_id {
+                    if let Some(_) = memories
+                        .memory(cpu_id)
+                        .likely_to_fill_basket_soon(next_id) {
+                        return Some(AnytimePlay {
+                            source: cpu_id,
+                            target: next_id,
+                            card: AnytimeCard::GameWarden
+                        });
+                    }
+                }
+            }
+
+            // TODO play AnytimeCard::GlassBottomBoat sometimes.
+        }
+    }
+
     None
 }
 
@@ -919,6 +989,13 @@ pub fn update_and_render(
 
     if !state.cards.deck.is_empty() {
         commands.draw_card_back(DECK_XY);
+    } else {
+        //dbg!(state.cards.deck.len(), state.cards.discard.len());
+    }
+
+    if let Some(last) = state.cards.discard.last() {
+        dbg!(last == zingers::THE_GAME_WARDEN, state.cards.discard.len());
+        commands.draw_card(last, DISCARD_XY);
     }
 
     for anim in state.animations.iter() {
@@ -1022,7 +1099,7 @@ pub fn update_and_render(
                     GameWarden(_) => {
                         player_selection.card = AnytimeCard::GameWarden;
                         commands.draw_card(
-                            zinger_card(Zinger::TheGameWarden),
+                            zingers::THE_GAME_WARDEN,
                             card_xy,
                         );
                     },
@@ -1033,7 +1110,7 @@ pub fn update_and_render(
                     Both(_, _) => {
                         // TODO add quickselect between cards.
                         commands.draw_card(
-                            zinger_card(Zinger::TheGameWarden),
+                            zingers::THE_GAME_WARDEN,
                             card_xy,
                         );
                         // TODO suport playing the GlassBottomBoat.
@@ -1074,7 +1151,6 @@ pub fn update_and_render(
                 ) {
                     match player_selection.card {
                         AnytimeCard::GameWarden => {
-
                             if let Some(()) = perform_game_warden(
                                 &mut state.cards,
                                 &mut state.animations,
@@ -1171,9 +1247,33 @@ pub fn update_and_render(
                 } else {
                     // do nothing
                 }
-            } else if let Some(AnytimePlay{ .. })
-            = anytime_play() {
-                todo!("perform play");
+            } else if let Some(AnytimePlay{ source, target, card }) 
+            = anytime_play(
+                &mut state.rng,
+                &state.cards,
+                &state.memories,
+                next_id
+            ) {
+                match card {
+                    AnytimeCard::GameWarden => {
+                        if let Some(()) = perform_game_warden(
+                            &mut state.cards,
+                            &mut state.animations,
+                            &mut state.rng,
+                            Targeting {
+                                source: source.into(),
+                                target,
+                            },
+                        ) {
+                            start_next_turn!();
+                        } else {
+                            debug_assert!(false, "perform_game_warden failed");
+                        }
+                    },
+                    AnytimeCard::GlassBottomBoat => {
+
+                    },
+                }
             } else {
                 start_next_turn!();
             }

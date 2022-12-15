@@ -1,4 +1,4 @@
-use models::{Basket, CpuId, Hand, HandId, Suit, Rank, DECK_SIZE};
+use models::{Basket, CpuId, Hand, HandId, Suit, Rank, ranks, DECK_SIZE};
 
 /// It seems intuitive that counting an amount of asks larger than the amount of
 /// suits would not be needed, but I don't have an explicitly worked out reason for
@@ -164,6 +164,44 @@ impl Memory {
         for card in basket {
             self.locations[card as usize] = Location::KnownGone;
         }
+    }
+
+    pub fn likely_to_fill_basket_soon(&self, target_id: HandId) -> Option<Rank> {
+        // Do high scoring ranks first so we will return them when there are 
+        // multiple options.
+        for rank in (0..ranks::COUNT).rev() {
+            const KNOWN_SCORE: u32 = 3;
+            let mut score = 0;
+            for suit in Suit::ALL {
+                use Location::*;
+                use Evidence::*;
+
+                match self.locations[models::fish_card(rank, suit) as usize] {
+                    Incomplete(incomplete) => match incomplete[target_id as usize] {
+                        Unknown | DidNotHave => {},
+                        AskedForSimilar(AskCount::One | AskCount::Two) => {
+                            score += 1;    
+                        },
+                        AskedForSimilar(_) => {
+                            score += 2;    
+                        },
+                    },
+                    Known(id) if id == target_id => {
+                        score += KNOWN_SCORE;
+                    },
+                    Known(_) => {},
+                    KnownGone => break,
+                }   
+            }
+
+            // TODO? check this actually produces the behaviour we want?
+            // How important is this actually?
+            if score >= KNOWN_SCORE * (Suit::ALL.len() - 2) as u32 {
+                return Some(rank);
+            }
+        }
+
+        None
     }
 
     pub fn informed_question(
