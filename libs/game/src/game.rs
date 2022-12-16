@@ -303,7 +303,7 @@ mod question {
 }
 use question::Question;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct PlayerSelection {
     target: CpuId,
     card: AnytimeCard,
@@ -330,7 +330,7 @@ impl Menu {
     fn player(selected: CardIndex) -> Self {
         Menu::PlayerTurn {
             selected,
-            menu: PlayerMenu::Selecting,
+            menu: PlayerMenu::default(),
         }
     }
 
@@ -348,7 +348,7 @@ impl Menu {
 
 #[derive(Clone)]
 pub enum PlayerMenu {
-    Selecting,
+    Selecting { player_selection: PlayerSelection },
     Asking {
         used: Card,
         question: Question,
@@ -362,7 +362,7 @@ pub enum PlayerMenu {
 
 impl Default for PlayerMenu {
     fn default() -> PlayerMenu {
-        PlayerMenu::Selecting
+        PlayerMenu::Selecting { player_selection: <_>::default() }
     }
 }
 
@@ -424,11 +424,11 @@ pub struct State {
 impl State {
     pub fn new(seed: Seed) -> State {
         // For debugging; gives player multiple zingers.
-        //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
         // Gives Cpu1 the game warden
         //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
         // Gives player glass bottom boat.
-        let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
+        //let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
 
         let mut rng = xs::from_seed(seed);
 
@@ -980,12 +980,194 @@ fn anytime_play(
     None
 }
 
+fn do_play_anytime_menu(
+    mut group: &mut ui::Group,
+    cards: &mut Cards,
+    animations: &mut Animations,
+    rng: &mut Xs,
+    player_selection: &mut PlayerSelection,
+    available: AvailablePlayAnytime,
+) -> Option<()> {
+    use AvailablePlayAnytime::*;
+
+    group.commands.draw_nine_slice(
+        gfx::NineSlice::Window,
+        PLAYER_PLAY_ANYTIME_WINDOW
+    );
+
+    let base_xy = PLAYER_PLAY_ANYTIME_WINDOW.xy()
+    + WINDOW_CONTENT_OFFSET;
+
+    let card_xy = base_xy
+        - WINDOW_CONTENT_OFFSET.h
+        + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CARD_HEIGHT)/ 2);
+
+    match available {
+        GameWarden(_) => {
+            player_selection.card = AnytimeCard::GameWarden;
+            group.commands.draw_card(
+                zingers::THE_GAME_WARDEN,
+                card_xy,
+            );
+        },
+        GlassBottomBoat(_) => {
+            player_selection.card = AnytimeCard::GlassBottomBoat;
+            // TODO suport playing the GlassBottomBoat.
+        }
+        Both(_, _) => {
+            // TODO add quickselect between cards.
+            group.commands.draw_card(
+                zingers::THE_GAME_WARDEN,
+                card_xy,
+            );
+            // TODO suport playing the GlassBottomBoat.
+        }
+    }
+
+    let target_xy = base_xy + CARD_WIDTH
+        + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
+
+    draw_cpu_id_quick_select(
+        group,
+        player_selection.target,
+        target_xy,
+    );
+
+    let submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
+
+    if !cards
+        .hand(player_selection.target.into())
+        .is_empty()
+    && do_button(
+        &mut group,
+        ButtonSpec {
+            id: AnytimeSubmit,
+            rect: fit_to_rest_of_window(
+                submit_base_xy,
+                PLAYER_PLAY_ANYTIME_WINDOW,
+            ),
+            text: b"Submit",
+        }
+    ) {
+        match player_selection.card {
+            AnytimeCard::GameWarden => {
+                if let Some(()) = perform_game_warden(
+                    cards,
+                    animations,
+                    rng,
+                    Targeting {
+                        source: HandId::Player,
+                        target: player_selection.target.into(),
+                    },
+                ) {
+                    return Some(());
+                } else {
+                    debug_assert!(false, "perform_game_warden failed");
+                }
+            },
+            AnytimeCard::GlassBottomBoat => {
+                // TODO switch to a state where the player gets to
+                // see the card before confirming
+            },
+        }
+    } else if group.input.pressed_this_frame(Button::B) {
+        // TODO? Separate decline button?
+        player_selection.declined = true;
+    } else if let Some(dir) = group.input.dir_pressed_this_frame() {
+        const GRID_LEN: usize = 3;
+
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum Section {
+            Card,
+            Target,
+            Submit,
+        }
+
+        const GRID: [Section; GRID_LEN] = [
+            Section::Card, Section::Target, Section::Submit,
+        ];
+
+        let old_el = match group.ctx.hot {
+            AnytimeCard => Some(Section::Card),
+            Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
+            AnytimeSubmit => Some(Section::Submit),
+            _ => None,
+        };
+
+        let mut el_i = GRID.iter()
+            .position(|el| Some(*el) == old_el)
+            .unwrap_or_default();
+
+        match dir {
+            Dir::Up => match GRID[el_i] {
+                Section::Card => {
+                    player_selection.card
+                        = player_selection.card.wrapping_inc();
+                },
+                Section::Target => {
+                    player_selection.target
+                        = player_selection.target.wrapping_inc();
+                },
+                Section::Submit => {}
+            },
+            Dir::Down => match GRID[el_i] {
+                Section::Card => {
+                    player_selection.card
+                        = player_selection.card.wrapping_dec();
+                },
+                Section::Target => {
+                    player_selection.target
+                        = player_selection.target.wrapping_dec();
+                },
+                Section::Submit => {}
+            },
+            Dir::Left => if el_i == 0 {
+                el_i = GRID_LEN - 1;
+            } else {
+                el_i -= 1;
+                if el_i == 0 && !matches!(available, Both(..)) {
+                    el_i = GRID_LEN - 1;
+                }
+            },
+            Dir::Right => if el_i >= GRID_LEN - 1 {
+                if matches!(available, Both(..)) {
+                    el_i = 0;
+                } else {
+                    el_i = 1;
+                }
+            } else {
+                el_i += 1;
+            },
+        }
+        group.ctx.set_next_hot(match GRID[el_i] {
+            Section::Card => AnytimeCard,
+            Section::Target => Cpu1,
+            Section::Submit => AnytimeSubmit,
+        });
+    } else {
+        // do nothing
+    }
+
+    None
+}
+
 pub fn update_and_render(
     commands: &mut Commands,
     state: &mut State,
     input: Input,
     speaker: &mut Speaker
 ) {
+    macro_rules! new_group {
+        () => {
+            &mut ui::Group {
+                commands,
+                ctx: &mut state.ctx,
+                input,
+                speaker,
+            }
+        }
+    }
+
     state.ctx.frame_init();
 
     state.tick(speaker);
@@ -1039,7 +1221,10 @@ pub fn update_and_render(
         }
 
         let selected = match state.menu {
-            Menu::PlayerTurn { selected, menu: PlayerMenu::Selecting } => Some(selected),
+            Menu::PlayerTurn { 
+                selected, 
+                menu: PlayerMenu::Selecting { .. }
+            } => Some(selected),
             _ => None,
         };
         for (i, card) in hand.enumerated_iter() {
@@ -1081,191 +1266,13 @@ pub fn update_and_render(
                 AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
                 player_selection.declined
             ) {
-                fn do_play_anytime_menu(
-                    mut group: &mut ui::Group,
-                    cards: &mut Cards,
-                    animations: &mut Animations,
-                    rng: &mut Xs,
-                    player_selection: &mut PlayerSelection,
-                    available: AvailablePlayAnytime,
-                ) -> Option<()> {
-                    use AvailablePlayAnytime::*;
-    
-                    group.commands.draw_nine_slice(
-                        gfx::NineSlice::Window,
-                        PLAYER_PLAY_ANYTIME_WINDOW
-                    );
-    
-                    let base_xy = PLAYER_PLAY_ANYTIME_WINDOW.xy()
-                    + WINDOW_CONTENT_OFFSET;
-    
-                    let card_xy = base_xy
-                        - WINDOW_CONTENT_OFFSET.h
-                        + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CARD_HEIGHT)/ 2);
-    
-                    match available {
-                        GameWarden(_) => {
-                            player_selection.card = AnytimeCard::GameWarden;
-                            group.commands.draw_card(
-                                zingers::THE_GAME_WARDEN,
-                                card_xy,
-                            );
-                        },
-                        GlassBottomBoat(_) => {
-                            player_selection.card = AnytimeCard::GlassBottomBoat;
-                            // TODO suport playing the GlassBottomBoat.
-                        }
-                        Both(_, _) => {
-                            // TODO add quickselect between cards.
-                            group.commands.draw_card(
-                                zingers::THE_GAME_WARDEN,
-                                card_xy,
-                            );
-                            // TODO suport playing the GlassBottomBoat.
-                        }
-                    }
-    
-                    let target_xy = base_xy + CARD_WIDTH
-                        + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
-    
-                    draw_cpu_id_quick_select(
-                        group,
-                        player_selection.target,
-                        target_xy,
-                    );
-    
-                    let submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
-    
-                    if !cards
-                        .hand(player_selection.target.into())
-                        .is_empty()
-                    && do_button(
-                        &mut group,
-                        ButtonSpec {
-                            id: AnytimeSubmit,
-                            rect: fit_to_rest_of_window(
-                                submit_base_xy,
-                                PLAYER_PLAY_ANYTIME_WINDOW,
-                            ),
-                            text: b"Submit",
-                        }
-                    ) {
-                        match player_selection.card {
-                            AnytimeCard::GameWarden => {
-                                if let Some(()) = perform_game_warden(
-                                    cards,
-                                    animations,
-                                    rng,
-                                    Targeting {
-                                        source: HandId::Player,
-                                        target: player_selection.target.into(),
-                                    },
-                                ) {
-                                    return Some(());
-                                } else {
-                                    debug_assert!(false, "perform_game_warden failed");
-                                }
-                            },
-                            AnytimeCard::GlassBottomBoat => {
-                                // TODO switch to a state where the player gets to
-                                // see the card before confirming
-                            },
-                        }
-                    } else if group.input.pressed_this_frame(Button::B) {
-                        // TODO? Separate decline button?
-                        player_selection.declined = true;
-                    } else if let Some(dir) = group.input.dir_pressed_this_frame() {
-                        const GRID_LEN: usize = 3;
-    
-                        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-                        enum Section {
-                            Card,
-                            Target,
-                            Submit,
-                        }
-    
-                        const GRID: [Section; GRID_LEN] = [
-                            Section::Card, Section::Target, Section::Submit,
-                        ];
-    
-                        let old_el = match group.ctx.hot {
-                            AnytimeCard => Some(Section::Card),
-                            Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
-                            AnytimeSubmit => Some(Section::Submit),
-                            _ => None,
-                        };
-    
-                        let mut el_i = GRID.iter()
-                            .position(|el| Some(*el) == old_el)
-                            .unwrap_or_default();
-    
-                        match dir {
-                            Dir::Up => match GRID[el_i] {
-                                Section::Card => {
-                                    player_selection.card
-                                        = player_selection.card.wrapping_inc();
-                                },
-                                Section::Target => {
-                                    player_selection.target
-                                        = player_selection.target.wrapping_inc();
-                                },
-                                Section::Submit => {}
-                            },
-                            Dir::Down => match GRID[el_i] {
-                                Section::Card => {
-                                    player_selection.card
-                                        = player_selection.card.wrapping_dec();
-                                },
-                                Section::Target => {
-                                    player_selection.target
-                                        = player_selection.target.wrapping_dec();
-                                },
-                                Section::Submit => {}
-                            },
-                            Dir::Left => if el_i == 0 {
-                                el_i = GRID_LEN - 1;
-                            } else {
-                                el_i -= 1;
-                                if el_i == 0 && !matches!(available, Both(..)) {
-                                    el_i = GRID_LEN - 1;
-                                }
-                            },
-                            Dir::Right => if el_i >= GRID_LEN - 1 {
-                                if matches!(available, Both(..)) {
-                                    el_i = 0;
-                                } else {
-                                    el_i = 1;
-                                }
-                            } else {
-                                el_i += 1;
-                            },
-                        }
-                        group.ctx.set_next_hot(match GRID[el_i] {
-                            Section::Card => AnytimeCard,
-                            Section::Target => Cpu1,
-                            Section::Submit => AnytimeSubmit,
-                        });
-                    } else {
-                        // do nothing
-                    }
-
-                    None
-                }
-
-                let mut group = ui::Group {
-                    commands,
-                    ctx: &mut state.ctx,
-                    input,
-                    speaker,
-                };
-
                 if let Some(()) = do_play_anytime_menu(
-                    &mut group,
+                    new_group!(),
                     &mut state.cards,
                     &mut state.animations,
                     &mut state.rng,
                     player_selection,
-                    available
+                    available,
                 ) {
                     start_next_turn!();
                 }
@@ -1311,7 +1318,11 @@ pub fn update_and_render(
                 state.has_started = true;
                 let id = HandId::Player;
                 match menu {
-                    PlayerMenu::Selecting => {
+                    PlayerMenu::Selecting {
+                        // TODO make this an option-like enum, and match 
+                        // on it to see if we should do the anytime menu
+                        ref mut player_selection,
+                    } => {
                         let selected_pos = get_card_position(
                             spread(id),
                             len,
@@ -1348,7 +1359,15 @@ pub fn update_and_render(
                                 if let Some(zinger) = models::get_zinger(player_card) {
                                     match zinger {
                                         Zinger::TheGameWarden => {
-                                            
+                                            do_play_anytime_menu(
+                                                new_group!(),
+                                                &mut state.cards,
+                                                &mut state.animations,
+                                                &mut state.rng,
+                                                player_selection,
+                                                AvailablePlayAnytime::GameWarden(selected)
+                                            );
+                                            // Does not count as a turn.
                                         },
                                         _ => {
                                             // TODO add specific menus for each zinger
@@ -1392,15 +1411,10 @@ pub fn update_and_render(
 
                         let target_xy = card_xy + CARD_WIDTH + (ASKING_WINDOW.h / 5);
 
-                        let mut group = ui::Group {
-                            commands,
-                            ctx: &mut state.ctx,
-                            input,
-                            speaker,
-                        };
+                        let group = new_group!();
 
                         draw_cpu_id_quick_select(
-                            &mut group,
+                            group,
                             question.target.try_into().unwrap_or(CpuId::One),
                             target_xy
                         );
@@ -1423,7 +1437,7 @@ pub fn update_and_render(
                         );
 
                         ui::draw_quick_select(
-                            &mut group,
+                            group,
                             suit_quick_select_rect,
                             &[
                                 AskSuit(Suit::ALL[0]),
@@ -1464,7 +1478,7 @@ pub fn update_and_render(
                         };
 
                         if do_button(
-                            &mut group,
+                            group,
                             ButtonSpec {
                                 id: AskSubmit,
                                 rect: fit_to_rest_of_window(
@@ -1526,7 +1540,7 @@ pub fn update_and_render(
                                     .. <_>::default()
                                 });
 
-                                *menu = PlayerMenu::Selecting;
+                                *menu = PlayerMenu::default();
                             } else {
                                 let drew = state.cards.deck.draw();
 
@@ -1554,10 +1568,7 @@ pub fn update_and_render(
                                 }
                             }
                         } else if input.pressed_this_frame(Button::B) {
-                            state.menu = Menu::PlayerTurn {
-                                selected,
-                                menu: PlayerMenu::Selecting,
-                            };
+                            state.menu = Menu::player(selected);
                         } else if let Some(dir) = input.dir_pressed_this_frame() {
                             const GRID_LEN: usize = 3;
 
