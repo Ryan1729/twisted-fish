@@ -149,9 +149,7 @@ pub enum AnimationAction {
     #[default]
     DoNothing,
     AddToHand(HandId),
-    PerformGameWarden {
-        holder: HandId,
-    },
+    PerformGameWarden,
     AddToDiscard,
 }
 
@@ -482,7 +480,6 @@ impl State {
     pub fn tick(&mut self, speaker: &mut Speaker) {
         use core::cmp::{min, Ordering::*};
 
-        let mut push_after = Vec::new();
         for anim in self.animations.0.iter_mut() {
             if anim.is_done() { continue }
 
@@ -633,44 +630,12 @@ impl State {
                             }
                         }
                     },
-                    AnimationAction::PerformGameWarden {
-                        holder,
-                    } => {
+                    AnimationAction::PerformGameWarden => {
                         // TODO Animate all cards in deck moving to random targets
                         // away from, then back to DECK_XY.
 
                         self.cards.deck.push(anim.card);
                         self.cards.deck.shuffle(&mut self.rng);
-
-                        let mut remove_at = None;
-                        for (i, current_card) in self.cards.hand(holder).enumerated_iter() {
-                            if current_card == zingers::THE_GAME_WARDEN {
-                                remove_at = Some(i);
-                                break
-                            }
-                        }
-
-                        if let Some(i) = remove_at {
-                            let hand = self.cards.hand_mut(holder);
-                            if let Some(card) = hand.remove(i) {
-                                let at = get_card_position(
-                                    spread(holder),
-                                    hand.len(),
-                                    i,
-                                );
-
-                                push_after.push(Animation {
-                                    card,
-                                    at,
-                                    target: DISCARD_XY,
-                                    action: AnimationAction::AddToDiscard,
-                                    shown: true,
-                                    .. <_>::default()
-                                });
-                            }
-                        } else {
-                            debug_assert!(false, "Didn't find game warden!");
-                        }
                     }
                     AnimationAction::AddToDiscard => {
                         self.cards.discard.push(anim.card);
@@ -679,9 +644,6 @@ impl State {
                     }
                 }
             }
-        }
-        for anim in push_after {
-            self.animations.push(anim);
         }
     }
 }
@@ -2151,19 +2113,51 @@ fn perform_game_warden(
         i,
     );
 
-    hand
+    let () = hand
         .remove(i)
         .map(|card| {
             animations.push(Animation {
                 card,
                 at,
                 target: DECK_XY,
-                action: AnimationAction::PerformGameWarden {
-                    holder: source,
-                },
+                action: AnimationAction::PerformGameWarden,
                 .. <_>::default()
             })
-        })
+        })?;
+
+    let mut remove_at = None;
+    for (i, current_card) in cards.hand(source).enumerated_iter() {
+        if current_card == zingers::THE_GAME_WARDEN {
+            remove_at = Some(i);
+            break
+        }
+    }
+
+    if let Some(i) = remove_at {
+        let hand = cards.hand_mut(source);
+        if let Some(card) = hand.remove(i) {
+            let at = get_card_position(
+                spread(source),
+                hand.len(),
+                i,
+            );
+
+            animations.push(Animation {
+                card,
+                at,
+                target: DISCARD_XY,
+                action: AnimationAction::AddToDiscard,
+                shown: true,
+                .. <_>::default()
+            });
+
+            return Some(());
+        }
+    } else {
+        debug_assert!(false, "Didn't find game warden!");
+    }
+
+    None
 }
 
 mod text {
