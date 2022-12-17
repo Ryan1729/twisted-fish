@@ -21,7 +21,10 @@ const DECK_XY: XY = XY {
 };
 
 const DISCARD_XY: XY = XY {
-    x: X((command::WIDTH - (CARD_WIDTH.get() * 3)) / 2),
+    x: X(
+        ((command::WIDTH - (CARD_WIDTH.get() * 3)) / 2)
+        - 2
+    ),
     y: Y((command::HEIGHT - CARD_HEIGHT.get()) / 2),
 };
 
