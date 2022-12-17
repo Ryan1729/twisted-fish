@@ -348,7 +348,7 @@ impl Menu {
 
 #[derive(Clone)]
 pub enum PlayerMenu {
-    Selecting { player_selection: PlayerSelection },
+    Selecting { sub_menu: PlayerSubMenu },
     Asking {
         used: Card,
         question: Question,
@@ -362,8 +362,15 @@ pub enum PlayerMenu {
 
 impl Default for PlayerMenu {
     fn default() -> PlayerMenu {
-        PlayerMenu::Selecting { player_selection: <_>::default() }
+        PlayerMenu::Selecting { sub_menu: <_>::default() }
     }
+}
+
+#[derive(Clone, Default)]
+pub enum PlayerSubMenu {
+    #[default]
+    Root,
+    Anytime(PlayerSelection, AvailablePlayAnytime)
 }
 
 #[derive(Clone, Default)]
@@ -834,7 +841,8 @@ mod ui {
 
 use ui::{ButtonSpec, Id::*, do_button};
 
-enum AvailablePlayAnytime {
+#[derive(Clone, Copy)]
+pub enum AvailablePlayAnytime {
     GameWarden(CardIndex),
     GlassBottomBoat(CardIndex),
     Both(CardIndex, CardIndex),
@@ -928,7 +936,7 @@ fn anytime_play(
         for card in hand.iter() {
             if card == zingers::THE_GAME_WARDEN {
                 let mut card_count = hand.len();
-                
+
                 let mut others = hand_id.besides();
                 xs::shuffle(rng, &mut others);
 
@@ -1221,8 +1229,8 @@ pub fn update_and_render(
         }
 
         let selected = match state.menu {
-            Menu::PlayerTurn { 
-                selected, 
+            Menu::PlayerTurn {
+                selected,
                 menu: PlayerMenu::Selecting { .. }
             } => Some(selected),
             _ => None,
@@ -1276,7 +1284,7 @@ pub fn update_and_render(
                 ) {
                     start_next_turn!();
                 }
-            } else if let Some(AnytimePlay{ source, target, card }) 
+            } else if let Some(AnytimePlay{ source, target, card })
             = anytime_play(
                 &mut state.rng,
                 &state.cards,
@@ -1319,9 +1327,7 @@ pub fn update_and_render(
                 let id = HandId::Player;
                 match menu {
                     PlayerMenu::Selecting {
-                        // TODO make this an option-like enum, and match 
-                        // on it to see if we should do the anytime menu
-                        ref mut player_selection,
+                        ref mut sub_menu,
                     } => {
                         let selected_pos = get_card_position(
                             spread(id),
@@ -1336,57 +1342,78 @@ pub fn update_and_render(
 
                         commands.draw_selectrum(selected_pos);
 
-                        if input.pressed_this_frame(Button::LEFT) {
-                            state.menu = Menu::player(
-                                if selected > 0 {
-                                    selected - 1
-                                } else {
-                                    state.cards.player.len().saturating_sub(1)
-                                }
-                            );
-                        } else if input.pressed_this_frame(Button::RIGHT) {
-                            state.menu = Menu::player(
-                                if selected < state.cards.player.len().saturating_sub(1) {
-                                    selected + 1
-                                } else {
-                                    0
-                                }
-                            );
-                        } else if input.pressed_this_frame(Button::A) {
-                            if !state.cards.player.is_empty() {
-                                let player_card = state.cards.player.get(selected)
-                                    .expect("selected index should always be valid");
-                                if let Some(zinger) = models::get_zinger(player_card) {
-                                    match zinger {
-                                        Zinger::TheGameWarden => {
-                                            do_play_anytime_menu(
-                                                new_group!(),
-                                                &mut state.cards,
-                                                &mut state.animations,
-                                                &mut state.rng,
-                                                player_selection,
-                                                AvailablePlayAnytime::GameWarden(selected)
-                                            );
-                                            // Does not count as a turn.
-                                        },
-                                        _ => {
-                                            // TODO add specific menus for each zinger
-                                        },
+                        match sub_menu {
+                            PlayerSubMenu::Root => {
+                                if input.pressed_this_frame(Button::LEFT) {
+                                    state.menu = Menu::player(
+                                        if selected > 0 {
+                                            selected - 1
+                                        } else {
+                                            state.cards.player.len().saturating_sub(1)
+                                        }
+                                    );
+                                } else if input.pressed_this_frame(Button::RIGHT) {
+                                    state.menu = Menu::player(
+                                        if selected < state.cards.player.len().saturating_sub(1) {
+                                            selected + 1
+                                        } else {
+                                            0
+                                        }
+                                    );
+                                } else if input.pressed_this_frame(Button::A) {
+                                    if !state.cards.player.is_empty() {
+                                        let player_card = state.cards.player.get(selected)
+                                            .expect("selected index should always be valid");
+                                        if let Some(zinger) = models::get_zinger(player_card) {
+                                            match zinger {
+                                                Zinger::TheGameWarden => {
+                                                    *sub_menu = PlayerSubMenu::Anytime(
+                                                        <_>::default(),
+                                                        AvailablePlayAnytime::GameWarden(selected),
+                                                    );
+                                                },
+                                                Zinger::GlassBottomBoat => {
+                                                    *sub_menu = PlayerSubMenu::Anytime(
+                                                        <_>::default(),
+                                                        AvailablePlayAnytime::GlassBottomBoat(selected),
+                                                    );
+                                                },
+                                                _ => {
+                                                    // TODO add specific menus for each zinger
+                                                },
+                                            }
+
+                                        } else {
+                                            state.menu = Menu::PlayerTurn {
+                                                selected,
+                                                menu: PlayerMenu::Asking{
+                                                    used: player_card,
+                                                    question: Default::default(),
+                                                },
+                                            };
+                                            state.ctx.set_next_hot(Cpu1);
+                                        }
                                     }
-                                    
                                 } else {
-                                    state.menu = Menu::PlayerTurn {
-                                        selected,
-                                        menu: PlayerMenu::Asking{
-                                            used: player_card,
-                                            question: Default::default(),
-                                        },
-                                    };
-                                    state.ctx.set_next_hot(Cpu1);
+                                    // do nothing
+                                }
+                            },
+                            PlayerSubMenu::Anytime(
+                                ref mut player_selection,
+                                available,
+                            ) => {
+                                if let Some(()) = do_play_anytime_menu(
+                                    new_group!(),
+                                    &mut state.cards,
+                                    &mut state.animations,
+                                    &mut state.rng,
+                                    player_selection,
+                                    *available
+                                ) {
+                                    // Does not count as a turn.
+                                    *sub_menu = PlayerSubMenu::Root;
                                 }
                             }
-                        } else {
-                            // do nothing
                         }
                     },
                     PlayerMenu::Asking {
