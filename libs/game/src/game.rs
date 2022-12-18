@@ -1,6 +1,6 @@
 use memories::Memories;
 use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, zingers};
-use gfx::{Commands, WINDOW_CONTENT_OFFSET};
+use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
     unscaled::{self, X, Y, XY, W, H, WH, Rect, x_const_add_w, w_const_sub},
@@ -96,8 +96,6 @@ pub const fn spread(id: HandId) -> Spread {
     }
 
 }
-
-const INITIAL_HAND_SIZE: u8 = 8;
 
 #[derive(Clone, Copy)]
 pub struct Animations(pub [Animation; DECK_SIZE as usize]);
@@ -431,12 +429,17 @@ pub struct State {
 
 impl State {
     pub fn new(seed: Seed) -> State {
-        // For debugging; gives player multiple zingers.
-        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
-        // Gives Cpu1 the game warden
+        const INITIAL_HAND_SIZE: u8 = 16;//8;
+        // For debugging: {
+        // Gives player multiple zingers. (8)
+        //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        // Gives Cpu1 the game warden (8)
         //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
-        // Gives player glass bottom boat.
+        // Gives player glass bottom boat. (8)
         //let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
+        // Gives player the game warden and glass bottom boat. (16)
+        let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
+        // }
 
         let mut rng = xs::from_seed(seed);
 
@@ -971,9 +974,11 @@ fn do_play_anytime_menu(
     let base_xy = PLAYER_PLAY_ANYTIME_WINDOW.xy()
     + WINDOW_CONTENT_OFFSET;
 
-    let card_xy = base_xy
+    let card_quick_select_xy = base_xy
         - WINDOW_CONTENT_OFFSET.h
-        + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CARD_HEIGHT)/ 2);
+        + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CARD_QUICK_SELECT_WH.h)/ 2);
+
+    let card_xy = card_quick_select_xy + CHEVRON_H;
 
     match available {
         GameWarden(_) => {
@@ -985,15 +990,35 @@ fn do_play_anytime_menu(
         },
         GlassBottomBoat(_) => {
             player_selection.card = AnytimeCard::GlassBottomBoat;
-            // TODO suport playing the GlassBottomBoat.
-        }
-        Both(_, _) => {
-            // TODO add quickselect between cards.
             group.commands.draw_card(
-                zingers::THE_GAME_WARDEN,
+                zingers::GLASS_BOTTOM_BOAT,
                 card_xy,
             );
-            // TODO suport playing the GlassBottomBoat.
+        }
+        Both(_, _) => {
+            match player_selection.card {
+                AnytimeCard::GameWarden => {
+                    group.commands.draw_card(
+                        zingers::THE_GAME_WARDEN,
+                        card_xy,
+                    );
+                },
+                AnytimeCard::GlassBottomBoat => {
+                    group.commands.draw_card(
+                        zingers::GLASS_BOTTOM_BOAT,
+                        card_xy,
+                    );
+                }
+            }
+
+            ui::draw_quick_select(
+                group,
+                Rect::xy_wh(
+                    card_quick_select_xy,
+                    CARD_QUICK_SELECT_WH,
+                ),
+                &[AnytimeCard]
+            );
         }
     }
 
@@ -1039,6 +1064,7 @@ fn do_play_anytime_menu(
                 }
             },
             AnytimeCard::GlassBottomBoat => {
+                // TODO suport playing the GlassBottomBoat.
                 // TODO switch to a state where the player gets to
                 // see the card before confirming
             },
@@ -1273,7 +1299,7 @@ pub fn update_and_render(
                         }
                     },
                     AnytimeCard::GlassBottomBoat => {
-
+                        // TODO suport playing the GlassBottomBoat.
                     },
                 }
             } else {
@@ -1367,7 +1393,9 @@ pub fn update_and_render(
                                 ref mut player_selection,
                                 available,
                             ) => {
-                                if let Some(()) = do_play_anytime_menu(
+                                if player_selection.declined {
+                                    *sub_menu = PlayerSubMenu::Root;
+                                } else if let Some(()) = do_play_anytime_menu(
                                     new_group!(),
                                     &mut state.cards,
                                     &mut state.animations,
@@ -2367,6 +2395,14 @@ fn draw_cpu_id_quick_select(
     );
 }
 
+const CARD_QUICK_SELECT_WH: unscaled::WH = unscaled::WH {
+    w: CARD_WIDTH,
+    h: unscaled::H(
+        CARD_HEIGHT.get()
+        + CHEVRON_H.get() * 2
+    ),
+};
+
 const ASKING_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 8;
 
@@ -2477,7 +2513,7 @@ const DEAD_IN_THE_WATER_WINDOW: unscaled::Rect = {
 };
 
 const PLAYER_PLAY_ANYTIME_WINDOW: unscaled::Rect = {
-    const OFFSET: unscaled::Inner = 128 - 32;
+    const OFFSET: unscaled::Inner = 64 + 16 + 8;
     unscaled::Rect {
         x: X(OFFSET),
         y: Y(OFFSET),
