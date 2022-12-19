@@ -307,6 +307,7 @@ pub struct PlayerSelection {
     target: CpuId,
     card: AnytimeCard,
     declined: bool,
+    viewing: Option<Card>,
 }
 
 #[derive(Clone)]
@@ -336,11 +337,7 @@ impl Menu {
     fn between_turns(next_id: HandId) -> Self {
         Menu::BetweenTurns {
             next_id,
-            player_selection: PlayerSelection {
-                target: CpuId::default(),
-                card: AnytimeCard::default(),
-                declined: bool::default(),
-            },
+            player_selection: PlayerSelection::default(),
         }
     }
 }
@@ -956,6 +953,12 @@ fn anytime_play(
     None
 }
 
+#[derive(Clone, Copy)]
+enum AnytimeOutcome {
+    Hold,
+    Done
+}
+
 fn do_play_anytime_menu(
     mut group: &mut ui::Group,
     cards: &mut Cards,
@@ -963,22 +966,70 @@ fn do_play_anytime_menu(
     rng: &mut Xs,
     player_selection: &mut PlayerSelection,
     available: AvailablePlayAnytime,
-) -> Option<()> {
+) -> AnytimeOutcome {
     use AvailablePlayAnytime::*;
+    use AnytimeOutcome::*;
 
-    group.commands.draw_nine_slice(
-        gfx::NineSlice::Window,
-        PLAYER_PLAY_ANYTIME_WINDOW
-    );
+    if let Some(card) = player_selection.viewing {
+        group.commands.draw_nine_slice(
+            gfx::NineSlice::Window,
+            CARD_VIEWING_WINDOW
+        );
+
+        let base_xy = CARD_VIEWING_WINDOW.xy()
+            + WINDOW_CONTENT_OFFSET;
+
+        let text_xy = base_xy;
+
+        group.commands.print_centered(
+            CpuId::HAS_TEXT[player_selection.target as u8 as usize],
+            Rect::xy_wh(
+                text_xy,
+                CARD_VIEWING_TEXT_WH,
+            ),
+            WHITE,
+        );
+
+        let viewing_card_xy = base_xy + CARD_VIEWING_TEXT_WH.h;
+
+        group.commands.draw_card(
+            card,
+            viewing_card_xy,
+        );
+
+        let submit_base_xy = base_xy + CARD_WIDTH;
+
+        return if do_button(
+            &mut group,
+            ButtonSpec {
+                id: AnytimeSubmit,
+                rect: fit_to_rest_of_window(
+                    submit_base_xy,
+                    CARD_VIEWING_WINDOW,
+                ),
+                text: b"Done",
+            }
+        ) {
+            Done
+        } else {
+            Hold
+        };
+    }
 
     let base_xy = PLAYER_PLAY_ANYTIME_WINDOW.xy()
-    + WINDOW_CONTENT_OFFSET;
+        + WINDOW_CONTENT_OFFSET;
 
     let card_quick_select_xy = base_xy
         - WINDOW_CONTENT_OFFSET.h
         + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CARD_QUICK_SELECT_WH.h)/ 2);
 
     let card_xy = card_quick_select_xy + CHEVRON_H;
+
+
+    group.commands.draw_nine_slice(
+        gfx::NineSlice::Window,
+        PLAYER_PLAY_ANYTIME_WINDOW
+    );
 
     match available {
         GameWarden(_) => {
@@ -1033,9 +1084,8 @@ fn do_play_anytime_menu(
 
     let submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
 
-    if !cards
-        .hand(player_selection.target.into())
-        .is_empty()
+    // TODO? show a "hand is empty" message?
+    if !cards.hand(player_selection.target.into()).is_empty()
     && do_button(
         &mut group,
         ButtonSpec {
@@ -1058,15 +1108,53 @@ fn do_play_anytime_menu(
                         target: player_selection.target.into(),
                     },
                 ) {
-                    return Some(());
+                    return Done;
                 } else {
                     debug_assert!(false, "perform_game_warden failed");
                 }
             },
             AnytimeCard::GlassBottomBoat => {
-                // TODO suport playing the GlassBottomBoat.
-                // TODO switch to a state where the player gets to
-                // see the card before confirming
+                // TODO? Actaully remove the card, Animate it going somewhere,
+                // then animate it back later?
+                let target_hand = cards.hand(player_selection.target.into());
+                let i = xs::range(rng, 0..(target_hand.len() as u32)) as _;
+                let card = target_hand.get(i).expect("hand should have already been checked to see if it was not empty!");
+                player_selection.viewing = Some(card);
+
+                // TODO? Reduce duplication with perform_game_warden? Or does the
+                // assert provide enough reason to keep them separate.
+                let source = HandId::Player;
+                let mut remove_at = None;
+                for (i, current_card) in cards.hand(source).enumerated_iter() {
+                    if current_card == zingers::GLASS_BOTTOM_BOAT {
+                        remove_at = Some(i);
+                        break
+                    }
+                }
+
+                if let Some(i) = remove_at {
+                    let hand = cards.hand_mut(source);
+                    if let Some(card) = hand.remove(i) {
+                        let at = get_card_position(
+                            spread(source),
+                            hand.len(),
+                            i,
+                        );
+
+                        animations.push(Animation {
+                            card,
+                            at,
+                            target: DISCARD_XY,
+                            action: AnimationAction::AddToDiscard,
+                            shown: true,
+                            .. <_>::default()
+                        });
+
+                        return Hold;
+                    }
+                } else {
+                    debug_assert!(false, "Didn't find glass bottom boat!");
+                }
             },
         }
     } else if group.input.pressed_this_frame(Button::B) {
@@ -1147,7 +1235,7 @@ fn do_play_anytime_menu(
         // do nothing
     }
 
-    None
+    Hold
 }
 
 pub fn update_and_render(
@@ -1265,7 +1353,7 @@ pub fn update_and_render(
                 AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
                 player_selection.declined
             ) {
-                if let Some(()) = do_play_anytime_menu(
+                if let AnytimeOutcome::Done = do_play_anytime_menu(
                     new_group!(),
                     &mut state.cards,
                     &mut state.animations,
@@ -1395,7 +1483,8 @@ pub fn update_and_render(
                             ) => {
                                 if player_selection.declined {
                                     *sub_menu = PlayerSubMenu::Root;
-                                } else if let Some(()) = do_play_anytime_menu(
+                                } else if let AnytimeOutcome::Done
+                                = do_play_anytime_menu(
                                     new_group!(),
                                     &mut state.cards,
                                     &mut state.animations,
@@ -2520,4 +2609,19 @@ const PLAYER_PLAY_ANYTIME_WINDOW: unscaled::Rect = {
         w: W(command::WIDTH - OFFSET * 2),
         h: H(command::HEIGHT - OFFSET * 2),
     }
+};
+
+const CARD_VIEWING_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 64 + 16 + 8;
+    unscaled::Rect {
+        x: X(OFFSET * 2),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 4),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};
+
+const CARD_VIEWING_TEXT_WH: unscaled::WH = unscaled::WH {
+    w: CARD_WIDTH,
+    h: H(CARD_VIEWING_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2 + CARD_HEIGHT.0)),
 };

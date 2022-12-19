@@ -403,6 +403,17 @@ impl From<&CpuId> for HandId {
     }
 }
 
+macro_rules! hand_id_text {
+    ("0") => { "Player" };
+    ("1") => { "Cpu 1" };
+    ("2") => { "Cpu 2" };
+    ("3") => { "Cpu 3" };
+    (b"0") => { b"Player" };
+    (b"1") => { b"Cpu 1" };
+    (b"2") => { b"Cpu 2" };
+    (b"3") => { b"Cpu 3" };
+}
+
 // TODO? macro for this, I guess?
 impl HandId {
     pub const COUNT: u8 = 4;
@@ -421,10 +432,10 @@ impl HandId {
     ];
 
     pub const TEXT: [&[u8]; Self::COUNT as usize] = [
-        b"Player",
-        b"Cpu 1",
-        b"Cpu 2",
-        b"Cpu 3",
+        hand_id_text!(b"0"),
+        hand_id_text!(b"1"),
+        hand_id_text!(b"2"),
+        hand_id_text!(b"3"),
     ];
 
     pub fn besides(self) -> [HandId; (Self::COUNT - 1) as usize] {
@@ -489,6 +500,10 @@ impl Iterator for CpuId {
     }
 }
 
+macro_rules! has_suffix {
+    () => {" has"}
+}
+
 impl CpuId {
     pub const COUNT: u8 = 3;
 
@@ -502,6 +517,12 @@ impl CpuId {
         HandId::TEXT[1],
         HandId::TEXT[2],
         HandId::TEXT[3],
+    ];
+
+    pub const HAS_TEXT: [&[u8]; Self::COUNT as usize] = [
+        concat!(hand_id_text!("1"), has_suffix!()).as_bytes(),
+        concat!(hand_id_text!("2"), has_suffix!()).as_bytes(),
+        concat!(hand_id_text!("3"), has_suffix!()).as_bytes(),
     ];
 
     pub fn wrapping_inc(self) -> Self {
