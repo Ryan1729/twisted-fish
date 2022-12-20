@@ -426,16 +426,16 @@ pub struct State {
 
 impl State {
     pub fn new(seed: Seed) -> State {
-        const INITIAL_HAND_SIZE: u8 = 16;//8;
+        const INITIAL_HAND_SIZE: u8 = 8;//16;
         // For debugging: {
         // Gives player multiple zingers. (8)
-        //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
         // Gives Cpu1 the game warden (8)
         //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
         // Gives player glass bottom boat. (8)
         //let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
         // Gives player the game warden and glass bottom boat. (16)
-        let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
+        //let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
         // }
 
         let mut rng = xs::from_seed(seed);
@@ -899,58 +899,117 @@ fn anytime_play(
         let hand = cards.hand(hand_id);
 
         for card in hand.iter() {
-            if card == zingers::THE_GAME_WARDEN {
-                let mut card_count = hand.len();
+            // TODO are the conditions for wanting to play these two cards really
+            // equal? In particualr I suspect that the timing for the glass bottom
+            // boat could be improved, or at least more justification for making it
+            // the same as the game warden could be described.
+            macro_rules! play_perhaps {
+                ($anytime_play_card: expr) => {
+                    let mut card_count = hand.len();
 
-                let mut others = hand_id.besides();
-                xs::shuffle(rng, &mut others);
+                    let mut others = hand_id.besides();
+                    xs::shuffle(rng, &mut others);
 
-                for target in others {
-                    // Note: It's not fair to look at other's cards besides counting
-                    // how many of them there are.
-                    let len = cards.hand(target).len();
-                    card_count += len;
-                    if len == 1 {
-                        return Some(AnytimePlay {
-                            source: cpu_id,
-                            target,
-                            card: AnytimeCard::GameWarden
-                        });
-                    }
-                }
-                card_count += cards.deck.len();
-                if card_count <= 10 {
                     for target in others {
-                        // Note: It's not fair to look at other's cards besides counting
-                        // how many of them there are.
-                        if !cards.hand(target).is_empty() {
+                        // Note: It's not fair to look at other's cards besides
+                        // counting how many of them there are.
+                        let len = cards.hand(target).len();
+                        card_count += len;
+                        if len == 1 {
                             return Some(AnytimePlay {
                                 source: cpu_id,
                                 target,
-                                card: AnytimeCard::GameWarden
+                                card: $anytime_play_card,
+                            });
+                        }
+                    }
+                    card_count += cards.deck.len();
+                    if card_count <= 10 {
+                        for target in others {
+                            // Note: It's not fair to look at other's cards besides
+                            // counting how many of them there are.
+                            if !cards.hand(target).is_empty() {
+                                return Some(AnytimePlay {
+                                    source: cpu_id,
+                                    target,
+                                    card: $anytime_play_card,
+                                });
+                            }
+                        }
+                    }
+
+                    if next_id != hand_id {
+                        if let Some(_) = memories
+                            .memory(cpu_id)
+                            .likely_to_fill_basket_soon(next_id) {
+                            return Some(AnytimePlay {
+                                source: cpu_id,
+                                target: next_id,
+                                card: $anytime_play_card,
                             });
                         }
                     }
                 }
-
-                if next_id != hand_id {
-                    if let Some(_) = memories
-                        .memory(cpu_id)
-                        .likely_to_fill_basket_soon(next_id) {
-                        return Some(AnytimePlay {
-                            source: cpu_id,
-                            target: next_id,
-                            card: AnytimeCard::GameWarden
-                        });
-                    }
-                }
             }
 
-            // TODO play AnytimeCard::GlassBottomBoat sometimes.
+            if card == zingers::THE_GAME_WARDEN {
+                play_perhaps!(AnytimeCard::GameWarden);
+            }
+
+            if card == zingers::GLASS_BOTTOM_BOAT {
+                play_perhaps!(AnytimeCard::GlassBottomBoat);
+
+                // For debugging; remove later {
+                return Some(AnytimePlay {
+                    source: cpu_id,
+                    target: next_id,
+                    card: AnytimeCard::GlassBottomBoat,
+                });
+                // }
+            }
         }
     }
 
     None
+}
+
+fn discard_glass_bottom_boat(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    source: HandId,
+) {
+    // TODO? Reduce duplication with perform_game_warden? Or does the
+    // assert provide enough reason to keep them separate.
+    let mut remove_at = None;
+    for (i, current_card) in cards.hand(source).enumerated_iter() {
+        if current_card == zingers::GLASS_BOTTOM_BOAT {
+            remove_at = Some(i);
+            break
+        }
+    }
+
+    if let Some(i) = remove_at {
+        let hand = cards.hand_mut(source);
+        if let Some(card) = hand.remove(i) {
+            let at = get_card_position(
+                spread(source),
+                hand.len(),
+                i,
+            );
+
+            animations.push(Animation {
+                card,
+                at,
+                target: DISCARD_XY,
+                action: AnimationAction::AddToDiscard,
+                shown: true,
+                .. <_>::default()
+            });
+
+            return
+        }
+    }
+    debug_assert!(false, "Didn't find glass bottom boat!");
 }
 
 #[derive(Clone, Copy)]
@@ -1084,8 +1143,9 @@ fn do_play_anytime_menu(
 
     let submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
 
+    let target = player_selection.target.into();
     // TODO? show a "hand is empty" message?
-    if !cards.hand(player_selection.target.into()).is_empty()
+    if !cards.hand(target).is_empty()
     && do_button(
         &mut group,
         ButtonSpec {
@@ -1114,47 +1174,19 @@ fn do_play_anytime_menu(
                 }
             },
             AnytimeCard::GlassBottomBoat => {
-                // TODO? Actaully remove the card, Animate it going somewhere,
-                // then animate it back later?
-                let target_hand = cards.hand(player_selection.target.into());
+                // TODO Actaully remove the card, animate it going in front of the,
+                // player then animate it back
+                let target_hand = cards.hand(target);
                 let i = xs::range(rng, 0..(target_hand.len() as u32)) as _;
                 let card = target_hand.get(i).expect("hand should have already been checked to see if it was not empty!");
                 player_selection.viewing = Some(card);
 
-                // TODO? Reduce duplication with perform_game_warden? Or does the
-                // assert provide enough reason to keep them separate.
-                let source = HandId::Player;
-                let mut remove_at = None;
-                for (i, current_card) in cards.hand(source).enumerated_iter() {
-                    if current_card == zingers::GLASS_BOTTOM_BOAT {
-                        remove_at = Some(i);
-                        break
-                    }
-                }
-
-                if let Some(i) = remove_at {
-                    let hand = cards.hand_mut(source);
-                    if let Some(card) = hand.remove(i) {
-                        let at = get_card_position(
-                            spread(source),
-                            hand.len(),
-                            i,
-                        );
-
-                        animations.push(Animation {
-                            card,
-                            at,
-                            target: DISCARD_XY,
-                            action: AnimationAction::AddToDiscard,
-                            shown: true,
-                            .. <_>::default()
-                        });
-
-                        return Hold;
-                    }
-                } else {
-                    debug_assert!(false, "Didn't find glass bottom boat!");
-                }
+                discard_glass_bottom_boat(
+                    cards,
+                    animations,
+                    HandId::Player,
+                );
+                return Hold;
             },
         }
     } else if group.input.pressed_this_frame(Button::B) {
@@ -1387,7 +1419,13 @@ pub fn update_and_render(
                         }
                     },
                     AnytimeCard::GlassBottomBoat => {
-                        // TODO suport playing the GlassBottomBoat.
+                        // TODO animate card to in front of asker and then animate
+                        // it back, all so the player can see who was asked
+                        discard_glass_bottom_boat(
+                            &mut state.cards,
+                            &mut state.animations,
+                            source.into()
+                        );
                     },
                 }
             } else {
