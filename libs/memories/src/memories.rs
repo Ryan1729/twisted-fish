@@ -1,4 +1,4 @@
-use models::{Basket, CpuId, Hand, HandId, Suit, Rank, ranks, DECK_SIZE};
+use models::{Basket, Card, CpuId, Hand, HandId, Suit, Rank, ranks, DECK_SIZE};
 
 /// It seems intuitive that counting an amount of asks larger than the amount of
 /// suits would not be needed, but I don't have an explicitly worked out reason for
@@ -150,14 +150,8 @@ impl Memory {
         }
     }
 
-    fn found(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
-        self.locations[models::fish_card(rank, suit) as usize] =
-            Location::Known(hand_id);
-    }
-
-    fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
-        self.locations[models::fish_card(rank, suit) as usize] =
-            Location::Known(hand_id);
+    pub fn known(&mut self, hand_id: HandId, card: Card) {
+        self.locations[card as usize] = Location::Known(hand_id);
     }
 
     fn basket_removed(&mut self, basket: Basket) {
@@ -307,7 +301,7 @@ impl Memories {
         }
     }
 
-    fn memory_mut(&mut self, id: CpuId) -> &mut Memory {
+    pub fn memory_mut(&mut self, id: CpuId) -> &mut Memory {
         match id {
             CpuId::One => &mut self.cpu1,
             CpuId::Two => &mut self.cpu2,
@@ -323,13 +317,13 @@ impl Memories {
 
     pub fn found(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
         for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).found(hand_id, rank, suit);
+            self.memory_mut(cpu_id).known(hand_id, models::fish_card(rank, suit));
         }
     }
 
     pub fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
         for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).fished_for(hand_id, rank, suit);
+            self.memory_mut(cpu_id).known(hand_id, models::fish_card(rank, suit));
         }
     }
 

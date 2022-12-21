@@ -48,6 +48,32 @@ const CPU3_BASE_XY: XY = XY {
     y: Y(CARD_HEIGHT.get() / 2),
 };
 
+fn in_front_of(id: HandId) -> XY {
+    const HALF_W: W = W(CARD_WIDTH.get() / 2);
+    const HALF_H: H = H(CARD_HEIGHT.get() / 2);
+
+    match spread(id) {
+        Spread::LTR((x1, x2), y) => XY {
+             x: x1 + ((x2 - x1) / 2) - HALF_W,
+             y: match id {
+                HandId::Player
+                | HandId::Cpu3 => y - HALF_H,
+                HandId::Cpu1
+                | HandId::Cpu2 => y + HALF_H,
+            },
+        },
+        Spread::TTB((y1, y2), x) => XY {
+             x: match id {
+                HandId::Player
+                | HandId::Cpu3 => x - HALF_W,
+                HandId::Cpu1
+                | HandId::Cpu2 => x + HALF_W,
+            },
+             y: y1 + ((y2 - y1) / 2) - HALF_H,
+        },
+    }
+}
+
 pub enum Spread {
     /// Left To Right
     LTR((X, X), Y),
@@ -94,7 +120,6 @@ pub const fn spread(id: HandId) -> Spread {
         HandId::Cpu2 => CPU2_SPREAD,
         HandId::Cpu3 => CPU3_SPREAD,
     }
-
 }
 
 #[derive(Clone, Copy)]
@@ -152,6 +177,7 @@ pub enum AnimationAction {
     AddToHand(HandId),
     PerformGameWarden,
     AddToDiscard,
+    AnimateBackToHand(HandId),
 }
 
 mod question {
@@ -429,11 +455,11 @@ impl State {
         const INITIAL_HAND_SIZE: u8 = 8;//16;
         // For debugging: {
         // Gives player multiple zingers. (8)
-        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
         // Gives Cpu1 the game warden (8)
         //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
         // Gives player glass bottom boat. (8)
-        //let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
+        let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
         // Gives player the game warden and glass bottom boat. (16)
         //let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
         // }
@@ -483,6 +509,7 @@ impl State {
     pub fn tick(&mut self, speaker: &mut Speaker) {
         use core::cmp::{min, Ordering::*};
 
+        let mut push_after = Vec::new();
         for anim in self.animations.0.iter_mut() {
             if anim.is_done() { continue }
 
@@ -645,8 +672,26 @@ impl State {
 
                         speaker.request_sfx(SFX::CardPlace);
                     }
+                    AnimationAction::AnimateBackToHand(id) => {
+                        let target = get_card_insert_position(
+                            spread(id),
+                            self.cards.hand(id).len(),
+                        );
+
+                        push_after.push(Animation {
+                            card: anim.card,
+                            at: anim.target,
+                            target,
+                            action: AnimationAction::AddToHand(id),
+                            .. <_>::default()
+                        })
+                    }
                 }
             }
+        }
+
+        for anim in push_after {
+            self.animations.push(anim);
         }
     }
 }
@@ -960,11 +1005,13 @@ fn anytime_play(
                 play_perhaps!(AnytimeCard::GlassBottomBoat);
 
                 // For debugging; remove later {
-                return Some(AnytimePlay {
-                    source: cpu_id,
-                    target: next_id,
-                    card: AnytimeCard::GlassBottomBoat,
-                });
+                if HandId::from(cpu_id) != next_id {
+                    return Some(AnytimePlay {
+                        source: cpu_id,
+                        target: next_id,
+                        card: AnytimeCard::GlassBottomBoat,
+                    });
+                }
                 // }
             }
         }
@@ -1174,12 +1221,27 @@ fn do_play_anytime_menu(
                 }
             },
             AnytimeCard::GlassBottomBoat => {
-                // TODO Actaully remove the card, animate it going in front of the,
-                // player then animate it back
-                let target_hand = cards.hand(target);
+                let target_hand = cards.hand_mut(target);
                 let i = xs::range(rng, 0..(target_hand.len() as u32)) as _;
-                let card = target_hand.get(i).expect("hand should have already been checked to see if it was not empty!");
+                let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
+
+                let at = get_card_position(
+                    spread(target),
+                    target_hand.len(),
+                    i,
+                );
+
+                // The card in the animation is the one that will be returned to the
+                // Cpu player's hand. This is a separate copy.
                 player_selection.viewing = Some(card);
+
+                animations.push(Animation {
+                    card,
+                    at,
+                    target: in_front_of(HandId::Player),
+                    action: AnimationAction::AnimateBackToHand(target),
+                    .. <_>::default()
+                });
 
                 discard_glass_bottom_boat(
                     cards,
@@ -1419,8 +1481,26 @@ pub fn update_and_render(
                         }
                     },
                     AnytimeCard::GlassBottomBoat => {
-                        // TODO animate card to in front of asker and then animate
-                        // it back, all so the player can see who was asked
+                        let target_hand = state.cards.hand_mut(target);
+                        let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
+                        let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
+
+                        state.memories.memory_mut(source).known(target, card);
+
+                        let at = get_card_position(
+                            spread(target),
+                            target_hand.len(),
+                            i,
+                        );
+
+                        state.animations.push(Animation {
+                            card,
+                            at,
+                            target: in_front_of(source.into()),
+                            action: AnimationAction::AnimateBackToHand(target),
+                            .. <_>::default()
+                        });
+
                         discard_glass_bottom_boat(
                             &mut state.cards,
                             &mut state.animations,
