@@ -852,43 +852,126 @@ mod ui {
 use ui::{ButtonSpec, Id::*, do_button};
 
 #[derive(Clone, Copy)]
-pub enum AvailablePlayAnytime {
-    GameWarden(CardIndex),
-    GlassBottomBoat(CardIndex),
-    Both(CardIndex, CardIndex),
+pub struct AvailablePlayAnytime {
+    flags: PlayAnytimeFlags,
+    warden_i: CardIndex,
+    boat_i: CardIndex,
+    scuba_i: CardIndex,
+}
+
+#[derive(Clone, Copy)]
+#[repr(u8)]
+#[allow(non_camel_case_types)]
+pub enum PlayAnytimeFlags {
+    GW = 1,
+    GBB = 2,
+    GBB_GW = 3,
+    DSD = 4,
+    DSD_GW = 5,
+    DSD_GBB = 6,
+    DSD_GBB_GW = 7,
+}
+
+impl core::ops::BitOrAssign for PlayAnytimeFlags {
+    fn bitor_assign(&mut self, rhs: Self) {
+        use PlayAnytimeFlags::*;
+        *self = match (*self as u8) | (rhs as u8) {
+            1 => GW,
+            2 => GBB,
+            3 => GBB_GW,
+            4 => DSD,
+            5 => DSD_GW,
+            6 => DSD_GBB,
+            7 => DSD_GBB_GW,
+            _ => unreachable!()
+        };
+    }
+}
+
+impl core::ops::BitOr for PlayAnytimeFlags {
+    type Output = Self;
+
+    fn bitor(mut self, rhs: Self) -> Self::Output {
+        self |= rhs;
+        self
+    }
+}
+
+impl PlayAnytimeFlags {
+    fn is_single(self) -> bool {
+        use PlayAnytimeFlags::*;
+        match self {
+            GW | GBB | DSD => true,
+            GBB_GW | DSD_GW | DSD_GBB | DSD_GBB_GW => false,
+        }
+    }
 }
 
 impl AvailablePlayAnytime {
+    fn game_warden(warden_i: CardIndex) -> Self {
+        AvailablePlayAnytime{
+            flags: PlayAnytimeFlags::GW,
+            warden_i,
+            boat_i: CardIndex::default(),
+            scuba_i: CardIndex::default(),
+        }
+    }
+
+    fn glass_bottom_boat(boat_i: CardIndex) -> Self {
+        AvailablePlayAnytime{
+            flags: PlayAnytimeFlags::GBB,
+            warden_i: CardIndex::default(),
+            boat_i,
+            scuba_i: CardIndex::default(),
+        }
+    }
+
+    fn dead_scuba_diver(scuba_i: CardIndex) -> Self {
+        AvailablePlayAnytime{
+            flags: PlayAnytimeFlags::DSD,
+            warden_i: CardIndex::default(),
+            boat_i: CardIndex::default(),
+            scuba_i,
+        }
+    }
+
     fn in_hand(hand: &Hand) -> Option<AvailablePlayAnytime> {
-        use AvailablePlayAnytime::*;
         let mut output = None;
 
         for (i, card) in hand.enumerated_iter() {
             if card == zingers::THE_GAME_WARDEN {
                 match output {
                     None => {
-                        output = Some(GameWarden(i));
+                        output = Some(AvailablePlayAnytime::game_warden(i));
                     },
-                    Some(GlassBottomBoat(boat_i)) => {
-                        output = Some(Both(i, boat_i));
+                    Some(ref mut apa) => {
+                        apa.flags |= PlayAnytimeFlags::GW;
+                        apa.warden_i = i;
                     },
-                    Some(GameWarden(_)) | Some(Both(_, _)) => {
-                        debug_assert!(false, "multiple copies of TheGameWarden");
-                    }
                 }
             }
 
             if card == zingers::GLASS_BOTTOM_BOAT {
                 match output {
                     None => {
-                        output = Some(GlassBottomBoat(i));
+                        output = Some(AvailablePlayAnytime::glass_bottom_boat(i));
                     },
-                    Some(GameWarden(warden_i)) => {
-                        output = Some(Both(warden_i, i));
+                    Some(ref mut apa) => {
+                        apa.flags |= PlayAnytimeFlags::GBB;
+                        apa.boat_i = i;
                     },
-                    Some(GlassBottomBoat(_)) | Some(Both(_, _)) => {
-                        debug_assert!(false, "multiple copies of GlassBottomBoat");
-                    }
+                }
+            }
+
+            if card == zingers::DEAD_SCUBA_DIVER {
+                match output {
+                    None => {
+                        output = Some(AvailablePlayAnytime::dead_scuba_diver(i));
+                    },
+                    Some(ref mut apa) => {
+                        apa.flags |= PlayAnytimeFlags::DSD;
+                        apa.scuba_i = i;
+                    },
                 }
             }
         }
@@ -902,20 +985,55 @@ enum AnytimeCard {
     #[default]
     GameWarden,
     GlassBottomBoat,
+    DeadScubaDiver,
 }
 
 impl AnytimeCard {
-    fn wrapping_inc(self) -> Self {
-        match self {
-            AnytimeCard::GameWarden => AnytimeCard::GlassBottomBoat,
-            AnytimeCard::GlassBottomBoat => AnytimeCard::GameWarden,
+    fn clamp_to(&mut self, flags: PlayAnytimeFlags) {
+        use PlayAnytimeFlags::*;
+
+        *self = match (*self, flags) {
+            (AnytimeCard::GameWarden, GW | GBB_GW | DSD_GW | DSD_GBB_GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::GameWarden, GBB | DSD_GBB) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::GameWarden, DSD) => AnytimeCard::DeadScubaDiver,
+            (AnytimeCard::GlassBottomBoat, GBB | GBB_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::GlassBottomBoat, DSD | DSD_GW) => AnytimeCard::DeadScubaDiver,
+            (AnytimeCard::GlassBottomBoat, GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::DeadScubaDiver, DSD | DSD_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::DeadScubaDiver,
+            (AnytimeCard::DeadScubaDiver, GW | GBB_GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::DeadScubaDiver, GBB) => AnytimeCard::GlassBottomBoat,
         }
     }
 
-    fn wrapping_dec(self) -> Self {
-        match self {
-            AnytimeCard::GameWarden => AnytimeCard::GlassBottomBoat,
-            AnytimeCard::GlassBottomBoat => AnytimeCard::GameWarden,
+    fn wrapping_inc(self, flags: PlayAnytimeFlags) -> Self {
+        use PlayAnytimeFlags::*;
+
+        match (self, flags) {
+            (AnytimeCard::GameWarden, GBB | GBB_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::GameWarden, DSD | DSD_GW) => AnytimeCard::DeadScubaDiver,
+            (AnytimeCard::GameWarden, GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::GlassBottomBoat, DSD_GBB | DSD_GBB_GW | DSD | DSD_GW) => AnytimeCard::DeadScubaDiver,
+            (AnytimeCard::GlassBottomBoat, GW | GBB_GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::GlassBottomBoat, GBB) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::DeadScubaDiver, GW | GBB_GW | DSD_GW | DSD_GBB_GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::DeadScubaDiver, GBB | DSD_GBB) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::DeadScubaDiver, DSD) => AnytimeCard::DeadScubaDiver,
+        }
+    }
+
+    fn wrapping_dec(self, flags: PlayAnytimeFlags) -> Self {
+        use PlayAnytimeFlags::*;
+
+        match (self, flags) {
+            (AnytimeCard::GameWarden, DSD_GBB | DSD_GBB_GW | DSD | DSD_GW) => AnytimeCard::DeadScubaDiver,
+            (AnytimeCard::GameWarden, GBB | GBB_GW) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::GameWarden, GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::GlassBottomBoat, GW | GBB_GW | DSD_GW | DSD_GBB_GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::GlassBottomBoat, DSD | DSD_GBB) => AnytimeCard::DeadScubaDiver,
+            (AnytimeCard::GlassBottomBoat, GBB) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::DeadScubaDiver, GBB | GBB_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::DeadScubaDiver, GW | DSD_GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::DeadScubaDiver, DSD) => AnytimeCard::DeadScubaDiver,
         }
     }
 }
@@ -1073,8 +1191,9 @@ fn do_play_anytime_menu(
     player_selection: &mut PlayerSelection,
     available: AvailablePlayAnytime,
 ) -> AnytimeOutcome {
-    use AvailablePlayAnytime::*;
     use AnytimeOutcome::*;
+
+    player_selection.card.clamp_to(available.flags);
 
     if let Some(card) = player_selection.viewing {
         group.commands.draw_nine_slice(
@@ -1137,22 +1256,29 @@ fn do_play_anytime_menu(
         PLAYER_PLAY_ANYTIME_WINDOW
     );
 
-    match available {
-        GameWarden(_) => {
+    match available.flags {
+        PlayAnytimeFlags::GW => {
             player_selection.card = AnytimeCard::GameWarden;
             group.commands.draw_card(
                 zingers::THE_GAME_WARDEN,
                 card_xy,
             );
         },
-        GlassBottomBoat(_) => {
+        PlayAnytimeFlags::GBB => {
             player_selection.card = AnytimeCard::GlassBottomBoat;
             group.commands.draw_card(
                 zingers::GLASS_BOTTOM_BOAT,
                 card_xy,
             );
+        },
+        PlayAnytimeFlags::DSD => {
+            player_selection.card = AnytimeCard::DeadScubaDiver;
+            group.commands.draw_card(
+                zingers::DEAD_SCUBA_DIVER,
+                card_xy,
+            );
         }
-        Both(_, _) => {
+        _multiple => {
             match player_selection.card {
                 AnytimeCard::GameWarden => {
                     group.commands.draw_card(
@@ -1165,7 +1291,13 @@ fn do_play_anytime_menu(
                         zingers::GLASS_BOTTOM_BOAT,
                         card_xy,
                     );
-                }
+                },
+                AnytimeCard::DeadScubaDiver => {
+                    group.commands.draw_card(
+                        zingers::DEAD_SCUBA_DIVER,
+                        card_xy,
+                    );
+                },
             }
 
             ui::draw_quick_select(
@@ -1250,6 +1382,9 @@ fn do_play_anytime_menu(
                 );
                 return Hold;
             },
+            AnytimeCard::DeadScubaDiver => {
+                todo!("Submit DeadScubaDiver");
+            }
         }
     } else if group.input.pressed_this_frame(Button::B) {
         // TODO? Separate decline button?
@@ -1283,7 +1418,7 @@ fn do_play_anytime_menu(
             Dir::Up => match GRID[el_i] {
                 Section::Card => {
                     player_selection.card
-                        = player_selection.card.wrapping_inc();
+                        = player_selection.card.wrapping_inc(available.flags);
                 },
                 Section::Target => {
                     player_selection.target
@@ -1294,7 +1429,7 @@ fn do_play_anytime_menu(
             Dir::Down => match GRID[el_i] {
                 Section::Card => {
                     player_selection.card
-                        = player_selection.card.wrapping_dec();
+                        = player_selection.card.wrapping_dec(available.flags);
                 },
                 Section::Target => {
                     player_selection.target
@@ -1306,15 +1441,17 @@ fn do_play_anytime_menu(
                 el_i = GRID_LEN - 1;
             } else {
                 el_i -= 1;
-                if el_i == 0 && !matches!(available, Both(..)) {
+                // Don't need to select the card if only one is available.
+                if el_i == 0 && available.flags.is_single() {
                     el_i = GRID_LEN - 1;
                 }
             },
             Dir::Right => if el_i >= GRID_LEN - 1 {
-                if matches!(available, Both(..)) {
-                    el_i = 0;
-                } else {
+                // Don't need to select the card if only one is available.
+                if available.flags.is_single() {
                     el_i = 1;
+                } else {
+                    el_i = 0;
                 }
             } else {
                 el_i += 1;
@@ -1507,6 +1644,9 @@ pub fn update_and_render(
                             source.into()
                         );
                     },
+                    AnytimeCard::DeadScubaDiver => {
+                        todo!("Cpu plays DeadScubaDiver");
+                    }
                 }
             } else {
                 start_next_turn!();
@@ -1566,13 +1706,19 @@ pub fn update_and_render(
                                                 Zinger::TheGameWarden => {
                                                     *sub_menu = PlayerSubMenu::Anytime(
                                                         <_>::default(),
-                                                        AvailablePlayAnytime::GameWarden(selected),
+                                                        AvailablePlayAnytime::game_warden(selected),
                                                     );
                                                 },
                                                 Zinger::GlassBottomBoat => {
                                                     *sub_menu = PlayerSubMenu::Anytime(
                                                         <_>::default(),
-                                                        AvailablePlayAnytime::GlassBottomBoat(selected),
+                                                        AvailablePlayAnytime::glass_bottom_boat(selected),
+                                                    );
+                                                },
+                                                Zinger::DeadScubaDiver => {
+                                                    *sub_menu = PlayerSubMenu::Anytime(
+                                                        <_>::default(),
+                                                        AvailablePlayAnytime::dead_scuba_diver(selected),
                                                     );
                                                 },
                                                 _ => {
