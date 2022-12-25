@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, zingers};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, ranks, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -328,12 +328,15 @@ mod question {
 }
 use question::Question;
 
+type RankIndex = u8;
+
 #[derive(Copy, Clone, Default)]
 pub struct PlayerSelection {
     target: CpuId,
     card: AnytimeCard,
     declined: bool,
     viewing: Option<Card>,
+    basket_i: RankIndex,
 }
 
 #[derive(Clone)]
@@ -852,14 +855,6 @@ mod ui {
 use ui::{ButtonSpec, Id::*, do_button};
 
 #[derive(Clone, Copy)]
-pub struct AvailablePlayAnytime {
-    flags: PlayAnytimeFlags,
-    warden_i: CardIndex,
-    boat_i: CardIndex,
-    scuba_i: CardIndex,
-}
-
-#[derive(Clone, Copy)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum PlayAnytimeFlags {
@@ -907,6 +902,19 @@ impl PlayAnytimeFlags {
     }
 }
 
+type AlmostCompleteBasket = [CardIndex; (Suit::COUNT - 1) as _];
+
+type AlmostCompleteBaskets = [Option<AlmostCompleteBasket>; ranks::COUNT as _];
+
+#[derive(Clone, Copy)]
+pub struct AvailablePlayAnytime {
+    flags: PlayAnytimeFlags,
+    warden_i: CardIndex,
+    boat_i: CardIndex,
+    scuba_i: CardIndex,
+    almost_complete_baskets: AlmostCompleteBaskets,
+}
+
 impl AvailablePlayAnytime {
     fn game_warden(warden_i: CardIndex) -> Self {
         AvailablePlayAnytime{
@@ -914,6 +922,7 @@ impl AvailablePlayAnytime {
             warden_i,
             boat_i: CardIndex::default(),
             scuba_i: CardIndex::default(),
+            almost_complete_baskets: [None; ranks::COUNT as _],
         }
     }
 
@@ -923,23 +932,28 @@ impl AvailablePlayAnytime {
             warden_i: CardIndex::default(),
             boat_i,
             scuba_i: CardIndex::default(),
+            almost_complete_baskets: [None; ranks::COUNT as _],
         }
     }
 
-    fn dead_scuba_diver(scuba_i: CardIndex) -> Self {
+    fn dead_scuba_diver(
+        scuba_i: CardIndex,
+        almost_complete_baskets: AlmostCompleteBaskets,
+    ) -> Self {
         AvailablePlayAnytime{
             flags: PlayAnytimeFlags::DSD,
             warden_i: CardIndex::default(),
             boat_i: CardIndex::default(),
             scuba_i,
+            almost_complete_baskets,
         }
     }
 
     fn in_hand(hand: &Hand) -> Option<AvailablePlayAnytime> {
         let mut output = None;
 
-        for (i, card) in hand.enumerated_iter() {
-            if card == zingers::THE_GAME_WARDEN {
+        for (i, possible_zinger_card) in hand.enumerated_iter() {
+            if possible_zinger_card == zingers::THE_GAME_WARDEN {
                 match output {
                     None => {
                         output = Some(AvailablePlayAnytime::game_warden(i));
@@ -951,7 +965,7 @@ impl AvailablePlayAnytime {
                 }
             }
 
-            if card == zingers::GLASS_BOTTOM_BOAT {
+            if possible_zinger_card == zingers::GLASS_BOTTOM_BOAT {
                 match output {
                     None => {
                         output = Some(AvailablePlayAnytime::glass_bottom_boat(i));
@@ -963,15 +977,23 @@ impl AvailablePlayAnytime {
                 }
             }
 
-            if card == zingers::DEAD_SCUBA_DIVER {
-                match output {
-                    None => {
-                        output = Some(AvailablePlayAnytime::dead_scuba_diver(i));
-                    },
-                    Some(ref mut apa) => {
-                        apa.flags |= PlayAnytimeFlags::DSD;
-                        apa.scuba_i = i;
-                    },
+            if possible_zinger_card == zingers::DEAD_SCUBA_DIVER {
+                if let Some(almost_complete) = find_almost_complete_baskets(hand) {
+                    match output {
+                        None => {
+                            output = Some(
+                                AvailablePlayAnytime::dead_scuba_diver(
+                                    i,
+                                    almost_complete
+                                )
+                            );
+                        },
+                        Some(ref mut apa) => {
+                            apa.flags |= PlayAnytimeFlags::DSD;
+                            apa.scuba_i = i;
+                            apa.almost_complete_baskets = almost_complete;
+                        },
+                    }
                 }
             }
         }
@@ -980,7 +1002,56 @@ impl AvailablePlayAnytime {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+fn find_almost_complete_baskets(
+    hand: &Hand,
+) -> Option<AlmostCompleteBaskets> {
+    // TODO? better name?
+    let mut scratch = [
+        [None; (Suit::COUNT - 1) as _];
+        ranks::COUNT as _
+    ];
+    for (card_i, card) in hand.enumerated_iter() {
+        if let Some(rank) = get_rank(card) {
+            let pile = &mut scratch[rank as u8 as usize];
+            let mut found_slot = false;
+            for pile_i in 0..pile.len() {
+                if pile[pile_i].is_some() {
+                    continue;
+                }
+
+                pile[pile_i] = Some(card_i);
+
+                found_slot = true;
+            }
+            debug_assert!(
+                found_slot,
+                "Seems like a basket was hanging around in someone's hand"
+            );
+        }
+    }
+
+    let mut almost_complete = [None; ranks::COUNT as _];
+    for (i, pile) in scratch.iter().enumerate() {
+        match pile {
+            [Some(a), Some(b), Some(c), Some(d)] => {
+                almost_complete[i] = Some([*a, *b, *c, *d]);
+            },
+            _ => {}
+        }
+    }
+
+    let mut found_any = false;
+    for entry in almost_complete {
+        if entry.is_some() {
+            found_any = true;
+            break
+        }
+    }
+
+    found_any.then_some(almost_complete)
+}
+
+#[derive(Copy, Clone, Default, PartialEq, Eq)]
 enum AnytimeCard {
     #[default]
     GameWarden,
@@ -1311,6 +1382,9 @@ fn do_play_anytime_menu(
         }
     }
 
+    // TODO when dead scuba diver is selected, show a menu that allows selecting
+    // which rank to use the diver on.
+
     let target_xy = base_xy + CARD_WIDTH
         + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
 
@@ -1323,8 +1397,20 @@ fn do_play_anytime_menu(
     let submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
 
     let target = player_selection.target.into();
+
+    let almost_basket_option: Option<AlmostCompleteBasket>
+        = available.almost_complete_baskets[
+            player_selection.basket_i as usize
+        ];
+
     // TODO? show a "hand is empty" message?
     if !cards.hand(target).is_empty()
+    && (
+        // if the player selected DeadScubaDiver, then the almost_basket_option must
+        // be `Some`, but otherwise that is not required.
+        player_selection.card != AnytimeCard::DeadScubaDiver
+        || almost_basket_option.is_some()
+    )
     && do_button(
         &mut group,
         ButtonSpec {
@@ -1383,7 +1469,37 @@ fn do_play_anytime_menu(
                 return Hold;
             },
             AnytimeCard::DeadScubaDiver => {
-                todo!("Submit DeadScubaDiver");
+                let almost_basket: AlmostCompleteBasket
+                    = almost_basket_option.expect("almost_basket_option should have already been checked");
+                let mut to_remove = [
+                    almost_basket[0],
+                    almost_basket[1],
+                    almost_basket[2],
+                    almost_basket[3],
+                    available.scuba_i
+                ];
+                to_remove.sort();
+
+                let id = HandId::Player;
+
+                let baskets = match id {
+                    HandId::Player => &mut cards.player_baskets,
+                    HandId::Cpu1 => &mut cards.cpu1_baskets,
+                    HandId::Cpu2 => &mut cards.cpu2_baskets,
+                    HandId::Cpu3 => &mut cards.cpu3_baskets,
+                };
+
+                let hand = match id {
+                    HandId::Player => &mut cards.player,
+                    HandId::Cpu1 => &mut cards.cpu1,
+                    HandId::Cpu2 => &mut cards.cpu2,
+                    HandId::Cpu3 => &mut cards.cpu3,
+                };
+
+                for i in to_remove.iter().rev() {
+                    let card = hand.remove(*i).expect("all to_remove indexes should be valid!");
+                    baskets.push(card);
+                }
             }
         }
     } else if group.input.pressed_this_frame(Button::B) {
@@ -1716,10 +1832,19 @@ pub fn update_and_render(
                                                     );
                                                 },
                                                 Zinger::DeadScubaDiver => {
-                                                    *sub_menu = PlayerSubMenu::Anytime(
-                                                        <_>::default(),
-                                                        AvailablePlayAnytime::dead_scuba_diver(selected),
-                                                    );
+                                                    if let Some(almost_complete_baskets) = find_almost_complete_baskets(
+                                                        &state.cards.player
+                                                    ) {
+                                                        *sub_menu = PlayerSubMenu::Anytime(
+                                                            <_>::default(),
+                                                            AvailablePlayAnytime::dead_scuba_diver(
+                                                                selected,
+                                                                almost_complete_baskets
+                                                            ),
+                                                        );
+                                                    } else {
+                                                        // TODO add submenu with message explaining that no baskets are available
+                                                    }
                                                 },
                                                 _ => {
                                                     // TODO add specific menus for each zinger
