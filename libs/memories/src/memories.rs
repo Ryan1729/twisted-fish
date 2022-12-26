@@ -255,7 +255,7 @@ mod informed_question_returns_the_expected_result {
 
         let mut mem = Memory::default();
 
-        mem.found(other_id, R, Suit::Red);
+        mem.known(other_id, models::fish_card(R, Suit::Red));
 
         assert_eq!(
             mem.informed_question(&my_hand, my_id),
@@ -274,7 +274,7 @@ mod informed_question_returns_the_expected_result {
 
         let mut mem = Memory::default();
 
-        mem.found(other_id, R, Suit::Red);
+        mem.known(other_id, models::fish_card(R, Suit::Red));
         // This previously caused `other_id_2` to be asked instead of `other_id`!
         mem.asked_for(other_id_2, R, Suit::Red);
 

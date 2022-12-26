@@ -50,6 +50,12 @@ compile_time_assert!{
     CardInner::MAX > DECK_SIZE
 }
 
+impl core::fmt::Debug for CardOption {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", self.option())
+    }
+}
+
 impl CardOption {
     pub const fn option(self) -> Option<Card> {
         self.0.checked_sub(1)
@@ -267,7 +273,7 @@ pub const fn zinger_card(zinger: Zinger) -> Card {
 pub type HandLen = u8;
 
 /// An ordered collection of cards that can hold at leat one copy of each card.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Hand([CardOption; DECK_SIZE as usize]);
 
 impl Default for Hand {

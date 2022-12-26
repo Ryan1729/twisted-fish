@@ -1013,6 +1013,7 @@ fn find_almost_complete_baskets(
     for (card_i, card) in hand.enumerated_iter() {
         if let Some(rank) = get_rank(card) {
             let pile = &mut scratch[rank as u8 as usize];
+
             let mut found_slot = false;
             for pile_i in 0..pile.len() {
                 if pile[pile_i].is_some() {
@@ -1022,6 +1023,7 @@ fn find_almost_complete_baskets(
                 pile[pile_i] = Some(card_i);
 
                 found_slot = true;
+                break;
             }
             debug_assert!(
                 found_slot,
@@ -1049,6 +1051,62 @@ fn find_almost_complete_baskets(
     }
 
     found_any.then_some(almost_complete)
+}
+
+#[test]
+fn find_almost_complete_baskets_works_on_this_previously_panicking_example() {
+    let mut hand = Hand::default();
+    hand.push(65);
+    hand.push(17);
+    hand.push(67);
+    hand.push(27);
+    hand.push(models::fish_card(ranks::DOGFISH, Suit::Yellow));
+    hand.push(models::fish_card(ranks::DOGFISH, Suit::Purple));
+    hand.push(42);
+    hand.push(30);
+
+    assert_eq!(
+        find_almost_complete_baskets(&hand),
+        None,
+    );
+}
+
+#[test]
+fn find_almost_complete_baskets_works_on_this_simplifed_previously_panicking_example() {
+    let mut hand = Hand::default();
+
+    hand.push(models::fish_card(ranks::DOGFISH, Suit::Yellow));
+    hand.push(models::fish_card(ranks::DOGFISH, Suit::Purple));
+
+    assert_eq!(
+        find_almost_complete_baskets(&hand),
+        None,
+    );
+}
+
+#[test]
+fn find_almost_complete_baskets_returns_none_on_this_previously_misbehaving_example() {
+    let mut hand = Hand::default();
+    hand.push(models::fish_card(ranks::DOGFISH, Suit::Yellow));
+
+    assert_eq!(
+        find_almost_complete_baskets(&hand),
+        None,
+    );
+}
+
+#[test]
+fn find_almost_complete_baskets_works_on_this_smaller_example() {
+    let mut hand = Hand::default();
+    hand.push(65);
+    hand.push(17);
+    hand.push(67);
+    hand.push(27);
+
+    assert_eq!(
+        find_almost_complete_baskets(&hand),
+        None,
+    );
 }
 
 #[derive(Copy, Clone, Default, PartialEq, Eq)]
