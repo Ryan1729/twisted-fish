@@ -395,7 +395,8 @@ impl Default for PlayerMenu {
 pub enum PlayerSubMenu {
     #[default]
     Root,
-    Anytime(PlayerSelection, AvailablePlayAnytime)
+    Anytime(PlayerSelection, AvailablePlayAnytime),
+    Message(Vec<u8>),
 }
 
 #[derive(Clone, Default)]
@@ -1191,7 +1192,7 @@ fn anytime_play(
         let hand = cards.hand(hand_id);
 
         for card in hand.iter() {
-            // TODO are the conditions for wanting to play these two cards really
+            // TODO? are the conditions for wanting to play these two cards really
             // equal? In particualr I suspect that the timing for the glass bottom
             // boat could be improved, or at least more justification for making it
             // the same as the game warden could be described.
@@ -1901,14 +1902,16 @@ pub fn update_and_render(
                                                             ),
                                                         );
                                                     } else {
-                                                        // TODO add submenu with message explaining that no baskets are available
+                                                        let message = b"There are no almost-full baskets in your hand.";
+                                                        let mut vec = Vec::with_capacity(message.len());
+                                                        vec.extend(message);
+                                                        *sub_menu = PlayerSubMenu::Message(vec);
                                                     }
                                                 },
                                                 _ => {
                                                     // TODO add specific menus for each zinger
                                                 },
                                             }
-
                                         } else {
                                             state.menu = Menu::PlayerTurn {
                                                 selected,
@@ -1942,7 +1945,37 @@ pub fn update_and_render(
                                     // Does not count as a turn.
                                     *sub_menu = PlayerSubMenu::Root;
                                 }
-                            }
+                            },
+                            PlayerSubMenu::Message(ref mut message) => {
+                                commands.draw_nine_slice(
+                                    gfx::NineSlice::Window,
+                                    MESSAGE_WINDOW
+                                );
+    
+                                let base_xy = MESSAGE_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+                
+                                let message_base_xy = base_xy;
+                
+                                let message_base_rect = fit_to_rest_of_window(
+                                    message_base_xy,
+                                    MESSAGE_WINDOW,
+                                );
+
+                                text::bytes_reflow_in_place(
+                                    message,
+                                    MESSAGE_WINDOW_WIDTH_IN_CHARS
+                                );
+
+                                commands.print_centered(
+                                    message,
+                                    message_base_rect,
+                                    WHITE,
+                                );
+
+                                if input.pressed_this_frame(Button::B) {
+                                    *sub_menu = PlayerSubMenu::Root;
+                                }
+                            },
                         }
                     },
                     PlayerMenu::Asking {
@@ -3072,3 +3105,18 @@ const CARD_VIEWING_TEXT_WH: unscaled::WH = unscaled::WH {
     w: CARD_WIDTH,
     h: H(CARD_VIEWING_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2 + CARD_HEIGHT.0)),
 };
+
+const MESSAGE_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 64;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};
+
+const MESSAGE_WINDOW_WIDTH_IN_CHARS: usize = (
+    (MESSAGE_WINDOW.w.get() - (WINDOW_CONTENT_OFFSET.w.get() * 2))
+    / gfx::CHAR_ADVANCE_W.get().get()
+) as usize;
