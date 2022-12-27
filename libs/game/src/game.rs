@@ -723,6 +723,7 @@ mod ui {
         AskSubmit,
         AnytimeCard,
         AnytimeSubmit,
+        RankSelect,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -1441,26 +1442,44 @@ fn do_play_anytime_menu(
         }
     }
 
-    // TODO when dead scuba diver is selected, show a menu that allows selecting
-    // which rank to use the diver on.
+    let mut almost_basket_option: Option<AlmostCompleteBasket> = None;
+    let submit_base_xy;
+    match player_selection.card {
+        AnytimeCard::GameWarden
+        | AnytimeCard::GlassBottomBoat => {
+            let target_xy = base_xy + CARD_WIDTH
+                + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
 
-    let target_xy = base_xy + CARD_WIDTH
-        + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
+            draw_cpu_id_quick_select(
+                group,
+                player_selection.target,
+                target_xy,
+            );
 
-    draw_cpu_id_quick_select(
-        group,
-        player_selection.target,
-        target_xy,
-    );
+            submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
+        },
+        AnytimeCard::DeadScubaDiver => {
+            let rank_xy = base_xy + CARD_WIDTH
+                + ((PLAYER_PLAY_ANYTIME_WINDOW.h - RANK_SELECT_WH.h)/ 2);
 
-    let submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
+            ui::draw_quick_select(
+                group,
+                Rect::xy_wh(
+                    rank_xy,
+                    RANK_SELECT_WH,
+                ),
+                &[RankSelect]
+            );
+
+            almost_basket_option = available.almost_complete_baskets[
+                player_selection.basket_i as usize
+            ];
+
+            submit_base_xy = base_xy + CARD_WIDTH + RANK_SELECT_WH.w;
+        }
+    }
 
     let target = player_selection.target.into();
-
-    let almost_basket_option: Option<AlmostCompleteBasket>
-        = available.almost_complete_baskets[
-            player_selection.basket_i as usize
-        ];
 
     // TODO? show a "hand is empty" message?
     if !cards.hand(target).is_empty()
@@ -1577,7 +1596,7 @@ fn do_play_anytime_menu(
         const GRID: [Section; GRID_LEN] = [
             Section::Card, Section::Target, Section::Submit,
         ];
-
+        // TODO handle RankSelect
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
             Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
@@ -1951,11 +1970,11 @@ pub fn update_and_render(
                                     gfx::NineSlice::Window,
                                     MESSAGE_WINDOW
                                 );
-    
+
                                 let base_xy = MESSAGE_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-                
+
                                 let message_base_xy = base_xy;
-                
+
                                 let message_base_rect = fit_to_rest_of_window(
                                     message_base_xy,
                                     MESSAGE_WINDOW,
@@ -3010,6 +3029,22 @@ const CPU_ID_SELECT_TEXT_WH: unscaled::WH = unscaled::WH {
     h: CPU_ID_SELECT_TEXT_OFFSET.h,
 };
 
+const RANK_SELECT_SPREAD_WH: unscaled::WH = unscaled::WH {
+    w: W(0),
+    h: H(CARD_HEIGHT.get() / 16),
+};
+
+const RANK_SELECT_WH: unscaled::WH = unscaled::WH {
+    w: W(ASKING_WINDOW.w.get() / 3),
+    h: unscaled::H(
+        CHEVRON_H.get()
+        + (RANK_SELECT_SPREAD_WH.h.get() * (Suit::COUNT - 1) as unscaled::Inner)
+        + CARD_HEIGHT.get()
+        + CHEVRON_H.get()
+    ),
+};
+
+
 const ASKING_SUIT_TEXT_OFFSET: unscaled::WH = CPU_ID_SELECT_TEXT_OFFSET;
 
 const ASKING_SUIT_WH: unscaled::WH = CPU_ID_SELECT_WH;
@@ -3082,7 +3117,7 @@ const DEAD_IN_THE_WATER_WINDOW: unscaled::Rect = {
 };
 
 const PLAYER_PLAY_ANYTIME_WINDOW: unscaled::Rect = {
-    const OFFSET: unscaled::Inner = 64 + 16 + 8;
+    const OFFSET: unscaled::Inner = 64;
     unscaled::Rect {
         x: X(OFFSET),
         y: Y(OFFSET),
