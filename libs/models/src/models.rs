@@ -19,7 +19,7 @@ pub type CardInner = u8;
 pub type Card = CardInner;
 
 pub fn fish_card(rank: Rank, suit: Suit) -> Card {
-    suit as CardInner * RANK_COUNT + rank
+    suit as CardInner * RANK_COUNT + (rank as CardInner)
 }
 
 #[test]
@@ -80,34 +80,51 @@ impl CardOption {
 // but doesn't allow non-matched cards?
 pub type Basket = [Card; Suit::COUNT as usize];
 
-pub type Rank = u8;
-
-pub mod ranks {
-    use super::*;
-
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Rank {
     // Worth 5 points {
-    pub const BARNACLE: Rank = 0;
-    pub const CRAB: Rank = 1;
-    pub const DOGFISH: Rank = 2;
-    pub const EEL: Rank = 3;
-    pub const FLYING_FISH: Rank = 4;
-    pub const HAMMERHEAD: Rank = 5;
-    pub const JELLYFISH: Rank = 6;
-    pub const SHRIMP: Rank = 7;
+    #[default]
+    Barnacle,
+    Crab,
+    Dogfish,
+    Eel,
+    FlyingFish,
+    Hammerhead,
+    Jellyfish,
+    Shrimp,
     // }
     // Worth 10 points {
-    pub const BLOWFISH: Rank = 8;
-    pub const CLOWNFISH: Rank = 9;
-    pub const STARFISH: Rank = 10;
-    pub const WHALE: Rank = 11;
+    Blowfish,
+    Clownfish,
+    Starfish,
+    Whale,
     // }
     // Worth 15 points {
-    pub const CARD_SHARK: Rank = 12;
+    CardShark,
     // }
+}
 
+impl Rank {
     pub const COUNT: u8 = 13;
 
-    pub const TEXT: [&[u8]; COUNT as usize] = [
+    pub const ALL: [Rank; Rank::COUNT as usize] = [
+        Rank::Barnacle,
+        Rank::Crab,
+        Rank::Dogfish,
+        Rank::Eel,
+        Rank::FlyingFish,
+        Rank::Hammerhead,
+        Rank::Jellyfish,
+        Rank::Shrimp,
+        Rank::Blowfish,
+        Rank::Clownfish,
+        Rank::Starfish,
+        Rank::Whale,
+        Rank::CardShark,
+    ];
+
+    pub const TEXT: [&[u8]; Rank::COUNT as usize] = [
         b"Barnacle",
         b"Crab",
         b"Dogfish",
@@ -122,13 +139,65 @@ pub mod ranks {
         b"Whale",
         b"Card Shark",
     ];
+
+    pub fn wrapping_dec(self) -> Self {
+        match self {
+            Rank::Barnacle => Rank::CardShark,
+            Rank::Crab => Rank::Barnacle,
+            Rank::Dogfish => Rank::Crab,
+            Rank::Eel => Rank::Dogfish,
+            Rank::FlyingFish => Rank::Eel,
+            Rank::Hammerhead => Rank::FlyingFish,
+            Rank::Jellyfish => Rank::Hammerhead,
+            Rank::Shrimp => Rank::Jellyfish,
+            Rank::Blowfish => Rank::Shrimp,
+            Rank::Clownfish => Rank::Blowfish,
+            Rank::Starfish => Rank::Clownfish,
+            Rank::Whale => Rank::Starfish,
+            Rank::CardShark => Rank::Whale,
+        }
+    }
+
+    pub fn wrapping_inc(self) -> Self {
+        match self {
+            Rank::Barnacle => Rank::Crab,
+            Rank::Crab => Rank::Dogfish,
+            Rank::Dogfish => Rank::Eel,
+            Rank::Eel => Rank::FlyingFish,
+            Rank::FlyingFish => Rank::Hammerhead,
+            Rank::Hammerhead => Rank::Jellyfish,
+            Rank::Jellyfish => Rank::Shrimp,
+            Rank::Shrimp => Rank::Blowfish,
+            Rank::Blowfish => Rank::Clownfish,
+            Rank::Clownfish => Rank::Starfish,
+            Rank::Starfish => Rank::Whale,
+            Rank::Whale => Rank::CardShark,
+            Rank::CardShark => Rank::Barnacle,
+        }
+    }
 }
 
 pub fn get_rank(card: Card) -> Option<Rank> {
     if card >= FISH_COUNT {
         None
     } else {
-        Some(card % RANK_COUNT)
+        use Rank::*;
+        match card % RANK_COUNT {
+            0 => Some(Barnacle),
+            1 => Some(Crab),
+            2 => Some(Dogfish),
+            3 => Some(Eel),
+            4 => Some(FlyingFish),
+            5 => Some(Hammerhead),
+            6 => Some(Jellyfish),
+            7 => Some(Shrimp),
+            8 => Some(Blowfish),
+            9 => Some(Clownfish),
+            10 => Some(Starfish),
+            11 => Some(Whale),
+            12 => Some(CardShark),
+            _ => None,
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, ranks, zingers};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -223,7 +223,7 @@ mod question {
             self.description.push(b' ');
 
             self.description.extend_from_slice(
-                models::ranks::TEXT[usize::from(rank as u8)]
+                Rank::TEXT[usize::from(rank as u8)]
             );
 
             self.description.push(b'?');
@@ -263,7 +263,7 @@ mod question {
             self.description.push(b' ');
 
             self.description.extend_from_slice(
-                models::ranks::TEXT[usize::from(rank as u8)]
+                Rank::TEXT[usize::from(rank as u8)]
             );
 
             self.description.push(b'?');
@@ -296,7 +296,7 @@ mod question {
             self.description.push(b' ');
 
             self.description.extend_from_slice(
-                models::ranks::TEXT[usize::from(rank as u8)]
+                Rank::TEXT[usize::from(rank as u8)]
             );
 
             self.description.push(b' ');
@@ -328,15 +328,13 @@ mod question {
 }
 use question::Question;
 
-type RankIndex = u8;
-
 #[derive(Copy, Clone, Default)]
 pub struct PlayerSelection {
     target: CpuId,
     card: AnytimeCard,
     declined: bool,
     viewing: Option<Card>,
-    basket_i: RankIndex,
+    rank: Rank,
 }
 
 #[derive(Clone)]
@@ -906,7 +904,7 @@ impl PlayAnytimeFlags {
 
 type AlmostCompleteBasket = [CardIndex; (Suit::COUNT - 1) as _];
 
-type AlmostCompleteBaskets = [Option<AlmostCompleteBasket>; ranks::COUNT as _];
+type AlmostCompleteBaskets = [Option<AlmostCompleteBasket>; Rank::COUNT as _];
 
 #[derive(Clone, Copy)]
 pub struct AvailablePlayAnytime {
@@ -924,7 +922,7 @@ impl AvailablePlayAnytime {
             warden_i,
             boat_i: CardIndex::default(),
             scuba_i: CardIndex::default(),
-            almost_complete_baskets: [None; ranks::COUNT as _],
+            almost_complete_baskets: [None; Rank::COUNT as _],
         }
     }
 
@@ -934,7 +932,7 @@ impl AvailablePlayAnytime {
             warden_i: CardIndex::default(),
             boat_i,
             scuba_i: CardIndex::default(),
-            almost_complete_baskets: [None; ranks::COUNT as _],
+            almost_complete_baskets: [None; Rank::COUNT as _],
         }
     }
 
@@ -1010,7 +1008,7 @@ fn find_almost_complete_baskets(
     // TODO? better name?
     let mut scratch = [
         [None; (Suit::COUNT - 1) as _];
-        ranks::COUNT as _
+        Rank::COUNT as _
     ];
     for (card_i, card) in hand.enumerated_iter() {
         if let Some(rank) = get_rank(card) {
@@ -1034,7 +1032,7 @@ fn find_almost_complete_baskets(
         }
     }
 
-    let mut almost_complete = [None; ranks::COUNT as _];
+    let mut almost_complete = [None; Rank::COUNT as _];
     for (i, pile) in scratch.iter().enumerate() {
         match pile {
             [Some(a), Some(b), Some(c), Some(d)] => {
@@ -1062,8 +1060,8 @@ fn find_almost_complete_baskets_works_on_this_previously_panicking_example() {
     hand.push(17);
     hand.push(67);
     hand.push(27);
-    hand.push(models::fish_card(ranks::DOGFISH, Suit::Yellow));
-    hand.push(models::fish_card(ranks::DOGFISH, Suit::Purple));
+    hand.push(models::fish_card(Rank::DOGFISH, Suit::Yellow));
+    hand.push(models::fish_card(Rank::DOGFISH, Suit::Purple));
     hand.push(42);
     hand.push(30);
 
@@ -1077,8 +1075,8 @@ fn find_almost_complete_baskets_works_on_this_previously_panicking_example() {
 fn find_almost_complete_baskets_works_on_this_simplifed_previously_panicking_example() {
     let mut hand = Hand::default();
 
-    hand.push(models::fish_card(ranks::DOGFISH, Suit::Yellow));
-    hand.push(models::fish_card(ranks::DOGFISH, Suit::Purple));
+    hand.push(models::fish_card(Rank::DOGFISH, Suit::Yellow));
+    hand.push(models::fish_card(Rank::DOGFISH, Suit::Purple));
 
     assert_eq!(
         find_almost_complete_baskets(&hand),
@@ -1089,7 +1087,7 @@ fn find_almost_complete_baskets_works_on_this_simplifed_previously_panicking_exa
 #[test]
 fn find_almost_complete_baskets_returns_none_on_this_previously_misbehaving_example() {
     let mut hand = Hand::default();
-    hand.push(models::fish_card(ranks::DOGFISH, Suit::Yellow));
+    hand.push(models::fish_card(Rank::DOGFISH, Suit::Yellow));
 
     assert_eq!(
         find_almost_complete_baskets(&hand),
@@ -1472,7 +1470,7 @@ fn do_play_anytime_menu(
             );
 
             almost_basket_option = available.almost_complete_baskets[
-                player_selection.basket_i as usize
+                (player_selection.rank as u8) as usize
             ];
 
             submit_base_xy = base_xy + CARD_WIDTH + RANK_SELECT_WH.w;
@@ -1596,12 +1594,17 @@ fn do_play_anytime_menu(
         const GRID: [Section; GRID_LEN] = [
             Section::Card, Section::Target, Section::Submit,
         ];
-        // TODO handle RankSelect
+
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
-            Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
+            Cpu1 
+            | Cpu2
+            | Cpu3
+            | RankSelect => Some(Section::Target),
             AnytimeSubmit => Some(Section::Submit),
-            _ => None,
+            Zero
+            | AskSuit(_)
+            | AskSubmit => None,
         };
 
         let mut el_i = GRID.iter()
@@ -1615,8 +1618,17 @@ fn do_play_anytime_menu(
                         = player_selection.card.wrapping_inc(available.flags);
                 },
                 Section::Target => {
-                    player_selection.target
-                        = player_selection.target.wrapping_inc();
+                    match player_selection.card {
+                        AnytimeCard::GameWarden
+                        | AnytimeCard::GlassBottomBoat => {
+                            player_selection.target
+                                = player_selection.target.wrapping_inc();
+                        },
+                        AnytimeCard::DeadScubaDiver => {
+                            player_selection.rank
+                                = player_selection.rank.wrapping_inc();
+                        },
+                    }
                 },
                 Section::Submit => {}
             },
@@ -1626,8 +1638,17 @@ fn do_play_anytime_menu(
                         = player_selection.card.wrapping_dec(available.flags);
                 },
                 Section::Target => {
-                    player_selection.target
-                        = player_selection.target.wrapping_dec();
+                    match player_selection.card {
+                        AnytimeCard::GameWarden
+                        | AnytimeCard::GlassBottomBoat => {
+                            player_selection.target
+                                = player_selection.target.wrapping_dec();
+                        },
+                        AnytimeCard::DeadScubaDiver => {
+                            player_selection.rank
+                                = player_selection.rank.wrapping_dec();
+                        },
+                    }
                 },
                 Section::Submit => {}
             },
@@ -1653,7 +1674,11 @@ fn do_play_anytime_menu(
         }
         group.ctx.set_next_hot(match GRID[el_i] {
             Section::Card => AnytimeCard,
-            Section::Target => Cpu1,
+            Section::Target => match player_selection.card {
+                AnytimeCard::GameWarden
+                | AnytimeCard::GlassBottomBoat => Cpu1,
+                AnytimeCard::DeadScubaDiver => RankSelect,
+            },
             Section::Submit => AnytimeSubmit,
         });
     } else {

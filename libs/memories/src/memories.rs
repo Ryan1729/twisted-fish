@@ -1,4 +1,4 @@
-use models::{Basket, Card, CpuId, Hand, HandId, Suit, Rank, ranks, DECK_SIZE};
+use models::{Basket, Card, CpuId, Hand, HandId, Suit, Rank, DECK_SIZE};
 
 /// It seems intuitive that counting an amount of asks larger than the amount of
 /// suits would not be needed, but I don't have an explicitly worked out reason for
@@ -163,7 +163,7 @@ impl Memory {
     pub fn likely_to_fill_basket_soon(&self, target_id: HandId) -> Option<Rank> {
         // Do high scoring ranks first so we will return them when there are 
         // multiple options.
-        for rank in (0..ranks::COUNT).rev() {
+        for &rank in Rank::ALL.iter().rev() {
             const KNOWN_SCORE: u32 = 3;
             let mut score = 0;
             for suit in Suit::ALL {
@@ -242,8 +242,8 @@ impl Memory {
 mod informed_question_returns_the_expected_result {
     use super::*;
 
-    const R: Rank = models::ranks::BARNACLE;
-    const R2: Rank = models::ranks::CRAB;
+    const R: Rank = models::Rank::Barnacle;
+    const R2: Rank = models::Rank::Crab;
 
     #[test]
     fn on_this_one_found_red_example() {

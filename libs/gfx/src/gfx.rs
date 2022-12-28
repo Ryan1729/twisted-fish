@@ -1,4 +1,4 @@
-use models::{Card, get_rank, get_suit, get_zinger, ranks, Zinger};
+use models::{Card, Rank, get_rank, get_suit, get_zinger, Zinger};
 
 use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT, bytes_lines};
 
@@ -182,7 +182,7 @@ impl Commands {
 
         let image_y = match rank_opt {
             Some(rank) => card::IMAGE_BASE_Y
-                + unscaled::Inner::from(rank)
+                + unscaled::Inner::from(rank as u8)
                 * card::IMAGE_H.get(),
             None => match zinger_opt {
                 Some(zinger) => card::IMAGE_BASE_Y
@@ -209,263 +209,263 @@ impl Commands {
         );
 
         let (line1, line2) = match (suit_opt, rank_opt, zinger_opt) {
-            (Some(Suit::Red), Some(ranks::BARNACLE), None) => (
+            (Some(Suit::Red), Some(Rank::Barnacle), None) => (
                 b"Red       ",
                 b"Barnacle  ",
             ),
-            (Some(Suit::Green), Some(ranks::BARNACLE), None) => (
+            (Some(Suit::Green), Some(Rank::Barnacle), None) => (
                 b"Green     ",
                 b"Barnacle  ",
             ),
-            (Some(Suit::Blue), Some(ranks::BARNACLE), None) => (
+            (Some(Suit::Blue), Some(Rank::Barnacle), None) => (
                 b"Blue      ",
                 b"Barnacle  ",
             ),
-            (Some(Suit::Yellow), Some(ranks::BARNACLE), None) => (
+            (Some(Suit::Yellow), Some(Rank::Barnacle), None) => (
                 b"Yellow    ",
                 b"Barnacle  ",
             ),
-            (Some(Suit::Purple), Some(ranks::BARNACLE), None) => (
+            (Some(Suit::Purple), Some(Rank::Barnacle), None) => (
                 b"Purple    ",
                 b"Barnacle  ",
             ),
-            (Some(Suit::Red), Some(ranks::CRAB), None) => (
+            (Some(Suit::Red), Some(Rank::Crab), None) => (
                 b"Red       ",
                 b"Crab      ",
             ),
-            (Some(Suit::Green), Some(ranks::CRAB), None) => (
+            (Some(Suit::Green), Some(Rank::Crab), None) => (
                 b"Green     ",
                 b"Crab      ",
             ),
-            (Some(Suit::Blue), Some(ranks::CRAB), None) => (
+            (Some(Suit::Blue), Some(Rank::Crab), None) => (
                 b"Blue      ",
                 b"Crab      ",
             ),
-            (Some(Suit::Yellow), Some(ranks::CRAB), None) => (
+            (Some(Suit::Yellow), Some(Rank::Crab), None) => (
                 b"Yellow    ",
                 b"Crab      ",
             ),
-            (Some(Suit::Purple), Some(ranks::CRAB), None) => (
+            (Some(Suit::Purple), Some(Rank::Crab), None) => (
                 b"Purple    ",
                 b"Crab      ",
             ),
-            (Some(Suit::Red), Some(ranks::DOGFISH), None) => (
+            (Some(Suit::Red), Some(Rank::Dogfish), None) => (
                 b"Red       ",
                 b"Dogfish   ",
             ),
-            (Some(Suit::Green), Some(ranks::DOGFISH), None) => (
+            (Some(Suit::Green), Some(Rank::Dogfish), None) => (
                 b"Green     ",
                 b"Dogfish   ",
             ),
-            (Some(Suit::Blue), Some(ranks::DOGFISH), None) => (
+            (Some(Suit::Blue), Some(Rank::Dogfish), None) => (
                 b"Blue      ",
                 b"Dogfish   ",
             ),
-            (Some(Suit::Yellow), Some(ranks::DOGFISH), None) => (
+            (Some(Suit::Yellow), Some(Rank::Dogfish), None) => (
                 b"Yellow    ",
                 b"Dogfish   ",
             ),
-            (Some(Suit::Purple), Some(ranks::DOGFISH), None) => (
+            (Some(Suit::Purple), Some(Rank::Dogfish), None) => (
                 b"Purple    ",
                 b"Dogfish   ",
             ),
-            (Some(Suit::Red), Some(ranks::EEL), None) => (
+            (Some(Suit::Red), Some(Rank::Eel), None) => (
                 b"Red       ",
                 b"Eel       ",
             ),
-            (Some(Suit::Green), Some(ranks::EEL), None) => (
+            (Some(Suit::Green), Some(Rank::Eel), None) => (
                 b"Green     ",
                 b"Eel       ",
             ),
-            (Some(Suit::Blue), Some(ranks::EEL), None) => (
+            (Some(Suit::Blue), Some(Rank::Eel), None) => (
                 b"Blue      ",
                 b"Eel       ",
             ),
-            (Some(Suit::Yellow), Some(ranks::EEL), None) => (
+            (Some(Suit::Yellow), Some(Rank::Eel), None) => (
                 b"Yellow    ",
                 b"Eel       ",
             ),
-            (Some(Suit::Purple), Some(ranks::EEL), None) => (
+            (Some(Suit::Purple), Some(Rank::Eel), None) => (
                 b"Purple    ",
                 b"Eel       ",
             ),
-            (Some(Suit::Red), Some(ranks::FLYING_FISH), None) => (
+            (Some(Suit::Red), Some(Rank::FlyingFish), None) => (
                 b"Red Flying",
                 b"fish      ",
             ),
-            (Some(Suit::Green), Some(ranks::FLYING_FISH), None) => (
+            (Some(Suit::Green), Some(Rank::FlyingFish), None) => (
                 b"Green Fly-",
                 b"ing fish  ",
             ),
-            (Some(Suit::Blue), Some(ranks::FLYING_FISH), None) => (
+            (Some(Suit::Blue), Some(Rank::FlyingFish), None) => (
                 b"Blue Fly- ",
                 b"ing fish  ",
             ),
-            (Some(Suit::Yellow), Some(ranks::FLYING_FISH), None) => (
+            (Some(Suit::Yellow), Some(Rank::FlyingFish), None) => (
                 b"Yellow Fl-",
                 b"ying fish ",
             ),
-            (Some(Suit::Purple), Some(ranks::FLYING_FISH), None) => (
+            (Some(Suit::Purple), Some(Rank::FlyingFish), None) => (
                 b"Purple Fl-",
                 b"ying fish ",
             ),
-            (Some(Suit::Red), Some(ranks::HAMMERHEAD), None) => (
+            (Some(Suit::Red), Some(Rank::Hammerhead), None) => (
                 b"Red       ",
                 b"Hammerhead",
             ),
-            (Some(Suit::Green), Some(ranks::HAMMERHEAD), None) => (
+            (Some(Suit::Green), Some(Rank::Hammerhead), None) => (
                 b"Green     ",
                 b"Hammerhead",
             ),
-            (Some(Suit::Blue), Some(ranks::HAMMERHEAD), None) => (
+            (Some(Suit::Blue), Some(Rank::Hammerhead), None) => (
                 b"Blue      ",
                 b"Hammerhead",
             ),
-            (Some(Suit::Yellow), Some(ranks::HAMMERHEAD), None) => (
+            (Some(Suit::Yellow), Some(Rank::Hammerhead), None) => (
                 b"Yellow    ",
                 b"Hammerhead",
             ),
-            (Some(Suit::Purple), Some(ranks::HAMMERHEAD), None) => (
+            (Some(Suit::Purple), Some(Rank::Hammerhead), None) => (
                 b"Purple    ",
                 b"Hammerhead",
             ),
-            (Some(Suit::Red), Some(ranks::JELLYFISH), None) => (
+            (Some(Suit::Red), Some(Rank::Jellyfish), None) => (
                 b"Red       ",
                 b"Jellyfish ",
             ),
-            (Some(Suit::Green), Some(ranks::JELLYFISH), None) => (
+            (Some(Suit::Green), Some(Rank::Jellyfish), None) => (
                 b"Green     ",
                 b"Jellyfish ",
             ),
-            (Some(Suit::Blue), Some(ranks::JELLYFISH), None) => (
+            (Some(Suit::Blue), Some(Rank::Jellyfish), None) => (
                 b"Blue      ",
                 b"Jellyfish ",
             ),
-            (Some(Suit::Yellow), Some(ranks::JELLYFISH), None) => (
+            (Some(Suit::Yellow), Some(Rank::Jellyfish), None) => (
                 b"Yellow    ",
                 b"Jellyfish ",
             ),
-            (Some(Suit::Purple), Some(ranks::JELLYFISH), None) => (
+            (Some(Suit::Purple), Some(Rank::Jellyfish), None) => (
                 b"Purple    ",
                 b"Jellyfish ",
             ),
-            (Some(Suit::Red), Some(ranks::SHRIMP), None) => (
+            (Some(Suit::Red), Some(Rank::Shrimp), None) => (
                 b"Red       ",
                 b"Shrimp    ",
             ),
-            (Some(Suit::Green), Some(ranks::SHRIMP), None) => (
+            (Some(Suit::Green), Some(Rank::Shrimp), None) => (
                 b"Green     ",
                 b"Shrimp    ",
             ),
-            (Some(Suit::Blue), Some(ranks::SHRIMP), None) => (
+            (Some(Suit::Blue), Some(Rank::Shrimp), None) => (
                 b"Blue      ",
                 b"Shrimp    ",
             ),
-            (Some(Suit::Yellow), Some(ranks::SHRIMP), None) => (
+            (Some(Suit::Yellow), Some(Rank::Shrimp), None) => (
                 b"Yellow    ",
                 b"Shrimp    ",
             ),
-            (Some(Suit::Purple), Some(ranks::SHRIMP), None) => (
+            (Some(Suit::Purple), Some(Rank::Shrimp), None) => (
                 b"Purple    ",
                 b"Shrimp    ",
             ),
-            (Some(Suit::Red), Some(ranks::BLOWFISH), None) => (
+            (Some(Suit::Red), Some(Rank::Blowfish), None) => (
                 b"Red       ",
                 b"Blowfish  ",
             ),
-            (Some(Suit::Green), Some(ranks::BLOWFISH), None) => (
+            (Some(Suit::Green), Some(Rank::Blowfish), None) => (
                 b"Green     ",
                 b"Blowfish  ",
             ),
-            (Some(Suit::Blue), Some(ranks::BLOWFISH), None) => (
+            (Some(Suit::Blue), Some(Rank::Blowfish), None) => (
                 b"Blue      ",
                 b"Blowfish  ",
             ),
-            (Some(Suit::Yellow), Some(ranks::BLOWFISH), None) => (
+            (Some(Suit::Yellow), Some(Rank::Blowfish), None) => (
                 b"Yellow    ",
                 b"Blowfish  ",
             ),
-            (Some(Suit::Purple), Some(ranks::BLOWFISH), None) => (
+            (Some(Suit::Purple), Some(Rank::Blowfish), None) => (
                 b"Purple    ",
                 b"Blowfish  ",
             ),
-            (Some(Suit::Red), Some(ranks::CLOWNFISH), None) => (
+            (Some(Suit::Red), Some(Rank::Clownfish), None) => (
                 b"Red       ",
                 b"Clownfish ",
             ),
-            (Some(Suit::Green), Some(ranks::CLOWNFISH), None) => (
+            (Some(Suit::Green), Some(Rank::Clownfish), None) => (
                 b"Green     ",
                 b"Clownfish ",
             ),
-            (Some(Suit::Blue), Some(ranks::CLOWNFISH), None) => (
+            (Some(Suit::Blue), Some(Rank::Clownfish), None) => (
                 b"Blue      ",
                 b"Clownfish ",
             ),
-            (Some(Suit::Yellow), Some(ranks::CLOWNFISH), None) => (
+            (Some(Suit::Yellow), Some(Rank::Clownfish), None) => (
                 b"Yellow    ",
                 b"Clownfish ",
             ),
-            (Some(Suit::Purple), Some(ranks::CLOWNFISH), None) => (
+            (Some(Suit::Purple), Some(Rank::Clownfish), None) => (
                 b"Purple    ",
                 b"Clownfish ",
             ),
-            (Some(Suit::Red), Some(ranks::STARFISH), None) => (
+            (Some(Suit::Red), Some(Rank::Starfish), None) => (
                 b"Red       ",
                 b"Starfish  ",
             ),
-            (Some(Suit::Green), Some(ranks::STARFISH), None) => (
+            (Some(Suit::Green), Some(Rank::Starfish), None) => (
                 b"Green     ",
                 b"Starfish  ",
             ),
-            (Some(Suit::Blue), Some(ranks::STARFISH), None) => (
+            (Some(Suit::Blue), Some(Rank::Starfish), None) => (
                 b"Blue      ",
                 b"Starfish  ",
             ),
-            (Some(Suit::Yellow), Some(ranks::STARFISH), None) => (
+            (Some(Suit::Yellow), Some(Rank::Starfish), None) => (
                 b"Yellow    ",
                 b"Starfish  ",
             ),
-            (Some(Suit::Purple), Some(ranks::STARFISH), None) => (
+            (Some(Suit::Purple), Some(Rank::Starfish), None) => (
                 b"Purple    ",
                 b"Starfish  ",
             ),
-            (Some(Suit::Red), Some(ranks::WHALE), None) => (
+            (Some(Suit::Red), Some(Rank::Whale), None) => (
                 b"Red       ",
                 b"Whale     ",
             ),
-            (Some(Suit::Green), Some(ranks::WHALE), None) => (
+            (Some(Suit::Green), Some(Rank::Whale), None) => (
                 b"Green     ",
                 b"Whale     ",
             ),
-            (Some(Suit::Blue), Some(ranks::WHALE), None) => (
+            (Some(Suit::Blue), Some(Rank::Whale), None) => (
                 b"Blue      ",
                 b"Whale     ",
             ),
-            (Some(Suit::Yellow), Some(ranks::WHALE), None) => (
+            (Some(Suit::Yellow), Some(Rank::Whale), None) => (
                 b"Yellow    ",
                 b"Whale     ",
             ),
-            (Some(Suit::Purple), Some(ranks::WHALE), None) => (
+            (Some(Suit::Purple), Some(Rank::Whale), None) => (
                 b"Purple    ",
                 b"Whale     ",
             ),
-            (Some(Suit::Red), Some(ranks::CARD_SHARK), None) => (
+            (Some(Suit::Red), Some(Rank::CardShark), None) => (
                 b"Red       ",
                 b"Card Shark",
             ),
-            (Some(Suit::Green), Some(ranks::CARD_SHARK), None) => (
+            (Some(Suit::Green), Some(Rank::CardShark), None) => (
                 b"Green     ",
                 b"Card Shark",
             ),
-            (Some(Suit::Blue), Some(ranks::CARD_SHARK), None) => (
+            (Some(Suit::Blue), Some(Rank::CardShark), None) => (
                 b"Blue      ",
                 b"Card Shark",
             ),
-            (Some(Suit::Yellow), Some(ranks::CARD_SHARK), None) => (
+            (Some(Suit::Yellow), Some(Rank::CardShark), None) => (
                 b"Yellow    ",
                 b"Card Shark",
             ),
-            (Some(Suit::Purple), Some(ranks::CARD_SHARK), None) => (
+            (Some(Suit::Purple), Some(Rank::CardShark), None) => (
                 b"Purple    ",
                 b"Card Shark",
             ),
