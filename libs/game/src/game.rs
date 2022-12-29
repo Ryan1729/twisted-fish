@@ -1000,6 +1000,16 @@ impl AvailablePlayAnytime {
 
         output
     }
+
+    fn basket_count(&self) -> u8 {
+        debug_assert!(self.almost_complete_baskets.len() <= u8::MAX as usize);
+
+        self
+            .almost_complete_baskets
+            .into_iter()
+            .filter(Option::is_some)
+            .count() as u8
+    }
 }
 
 fn find_almost_complete_baskets(
@@ -1322,7 +1332,68 @@ fn do_play_anytime_menu(
 ) -> AnytimeOutcome {
     use AnytimeOutcome::*;
 
-    player_selection.card.clamp_to(available.flags);
+    const GRID_LEN: usize = 3;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Section {
+        Card,
+        Target,
+        Submit,
+    }
+
+    const GRID: [Section; GRID_LEN] = [
+        Section::Card, Section::Target, Section::Submit,
+    ];
+
+    // Clmap things to initial god vales, from the defaults.
+    {
+        player_selection.card.clamp_to(available.flags);
+
+        if available.almost_complete_baskets[(player_selection.rank as u8) as usize]
+            .is_none() {
+            for (i, entry) in available.almost_complete_baskets.iter().enumerate() {
+                if entry.is_some() {
+                    player_selection.rank = Rank::ALL[i];
+                    break
+                }
+            }
+        }
+
+        let old_el = match group.ctx.hot {
+            AnytimeCard => Some(Section::Card),
+            Cpu1 
+            | Cpu2
+            | Cpu3
+            | RankSelect => Some(Section::Target),
+            AnytimeSubmit => Some(Section::Submit),
+            Zero
+            | AskSuit(_)
+            | AskSubmit => None,
+        };
+
+        let mut el_i = GRID.iter()
+            .position(|el| Some(*el) == old_el)
+            .unwrap_or_default();
+
+        // Place it on the first active position if it is not on an active position.
+        if el_i == 0 && available.flags.is_single() {
+            el_i = 1;
+        }
+        if el_i == 1 && available.basket_count() <= 1 {
+            el_i = GRID_LEN - 1;
+        }
+
+        group.ctx.set_next_hot(match GRID[el_i] {
+            Section::Card => AnytimeCard,
+            Section::Target => match player_selection.card {
+                AnytimeCard::GameWarden
+                | AnytimeCard::GlassBottomBoat => Cpu1,
+                AnytimeCard::DeadScubaDiver => RankSelect,
+            },
+            Section::Submit => AnytimeSubmit,
+        });
+    }
+
 
     if let Some(card) = player_selection.viewing {
         group.commands.draw_nine_slice(
@@ -1470,14 +1541,16 @@ fn do_play_anytime_menu(
                 suit_xy += RANK_SELECT_SPREAD_WH;
             }
 
-            ui::draw_quick_select(
-                group,
-                Rect::xy_wh(
-                    rank_xy,
-                    RANK_SELECT_WH,
-                ),
-                &[RankSelect]
-            );
+            if available.basket_count() > 1 {
+                ui::draw_quick_select(
+                    group,
+                    Rect::xy_wh(
+                        rank_xy,
+                        RANK_SELECT_WH,
+                    ),
+                    &[RankSelect]
+                );
+            }
 
             almost_basket_option = available.almost_complete_baskets[
                 (player_selection.rank as u8) as usize
@@ -1592,19 +1665,6 @@ fn do_play_anytime_menu(
         // TODO? Separate decline button?
         player_selection.declined = true;
     } else if let Some(dir) = group.input.dir_pressed_this_frame() {
-        const GRID_LEN: usize = 3;
-
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        enum Section {
-            Card,
-            Target,
-            Submit,
-        }
-
-        const GRID: [Section; GRID_LEN] = [
-            Section::Card, Section::Target, Section::Submit,
-        ];
-
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
             Cpu1 
@@ -1636,7 +1696,9 @@ fn do_play_anytime_menu(
                         },
                         AnytimeCard::DeadScubaDiver => {
                             player_selection.rank
-                                = player_selection.rank.wrapping_inc();
+                                = player_selection.rank.wrapping_inc(
+                                    available.almost_complete_baskets
+                                );
                         },
                     }
                 },
@@ -1656,7 +1718,9 @@ fn do_play_anytime_menu(
                         },
                         AnytimeCard::DeadScubaDiver => {
                             player_selection.rank
-                                = player_selection.rank.wrapping_dec();
+                                = player_selection.rank.wrapping_dec(
+                                    available.almost_complete_baskets
+                                );
                         },
                     }
                 },
@@ -1670,18 +1734,29 @@ fn do_play_anytime_menu(
                 if el_i == 0 && available.flags.is_single() {
                     el_i = GRID_LEN - 1;
                 }
-            },
-            Dir::Right => if el_i >= GRID_LEN - 1 {
-                // Don't need to select the card if only one is available.
-                if available.flags.is_single() {
-                    el_i = 1;
-                } else {
-                    el_i = 0;
+
+                if el_i == 1 && available.basket_count() <= 1 {
+                    el_i = GRID_LEN - 1;
                 }
-            } else {
-                el_i += 1;
+            },
+            Dir::Right => {
+                if el_i >= GRID_LEN - 1 {
+                    // Don't need to select the card if only one is available.
+                    if available.flags.is_single() {
+                        el_i = 1;
+                    } else {
+                        el_i = 0;
+                    }
+                } else {
+                    el_i += 1;
+                }
+
+                if el_i == 1 && available.basket_count() <= 1 {
+                    el_i = GRID_LEN - 1;
+                }
             },
         }
+
         group.ctx.set_next_hot(match GRID[el_i] {
             Section::Card => AnytimeCard,
             Section::Target => match player_selection.card {

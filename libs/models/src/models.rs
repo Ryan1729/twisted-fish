@@ -80,6 +80,10 @@ impl CardOption {
 // but doesn't allow non-matched cards?
 pub type Basket = [Card; Suit::COUNT as usize];
 
+pub type AlmostCompleteBasket = [CardIndex; (Suit::COUNT - 1) as _];
+
+pub type AlmostCompleteBaskets = [Option<AlmostCompleteBasket>; Rank::COUNT as _];
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Rank {
@@ -140,41 +144,58 @@ impl Rank {
         b"Card Shark",
     ];
 
-    pub fn wrapping_dec(self) -> Self {
-        match self {
-            Rank::Barnacle => Rank::CardShark,
-            Rank::Crab => Rank::Barnacle,
-            Rank::Dogfish => Rank::Crab,
-            Rank::Eel => Rank::Dogfish,
-            Rank::FlyingFish => Rank::Eel,
-            Rank::Hammerhead => Rank::FlyingFish,
-            Rank::Jellyfish => Rank::Hammerhead,
-            Rank::Shrimp => Rank::Jellyfish,
-            Rank::Blowfish => Rank::Shrimp,
-            Rank::Clownfish => Rank::Blowfish,
-            Rank::Starfish => Rank::Clownfish,
-            Rank::Whale => Rank::Starfish,
-            Rank::CardShark => Rank::Whale,
+    pub fn wrapping_dec(mut self, acb: AlmostCompleteBaskets) -> Self {
+        for _ in 0..acb.len() {
+            self = match self {
+                Rank::Barnacle => Rank::CardShark,
+                Rank::Crab => Rank::Barnacle,
+                Rank::Dogfish => Rank::Crab,
+                Rank::Eel => Rank::Dogfish,
+                Rank::FlyingFish => Rank::Eel,
+                Rank::Hammerhead => Rank::FlyingFish,
+                Rank::Jellyfish => Rank::Hammerhead,
+                Rank::Shrimp => Rank::Jellyfish,
+                Rank::Blowfish => Rank::Shrimp,
+                Rank::Clownfish => Rank::Blowfish,
+                Rank::Starfish => Rank::Clownfish,
+                Rank::Whale => Rank::Starfish,
+                Rank::CardShark => Rank::Whale,
+            };
+
+            if acb[(self as u8) as usize].is_some() {
+                break
+            }
         }
+
+        self
     }
 
-    pub fn wrapping_inc(self) -> Self {
-        match self {
-            Rank::Barnacle => Rank::Crab,
-            Rank::Crab => Rank::Dogfish,
-            Rank::Dogfish => Rank::Eel,
-            Rank::Eel => Rank::FlyingFish,
-            Rank::FlyingFish => Rank::Hammerhead,
-            Rank::Hammerhead => Rank::Jellyfish,
-            Rank::Jellyfish => Rank::Shrimp,
-            Rank::Shrimp => Rank::Blowfish,
-            Rank::Blowfish => Rank::Clownfish,
-            Rank::Clownfish => Rank::Starfish,
-            Rank::Starfish => Rank::Whale,
-            Rank::Whale => Rank::CardShark,
-            Rank::CardShark => Rank::Barnacle,
+    pub fn wrapping_inc(mut self, acb: AlmostCompleteBaskets) -> Self {
+        for _ in 0..acb.len() {
+            self = match self {
+                Rank::Barnacle => Rank::Crab,
+                Rank::Crab => Rank::Dogfish,
+                Rank::Dogfish => Rank::Eel,
+                Rank::Eel => Rank::FlyingFish,
+                Rank::FlyingFish => Rank::Hammerhead,
+                Rank::Hammerhead => Rank::Jellyfish,
+                Rank::Jellyfish => Rank::Shrimp,
+                Rank::Shrimp => Rank::Blowfish,
+                Rank::Blowfish => Rank::Clownfish,
+                Rank::Clownfish => Rank::Starfish,
+                Rank::Starfish => Rank::Whale,
+                Rank::Whale => Rank::CardShark,
+                Rank::CardShark => Rank::Barnacle,
+            };
+
+            if acb[(self as u8) as usize].is_some() {
+                break
+            }
         }
+
+        self
     }
+
 }
 
 pub fn get_rank(card: Card) -> Option<Rank> {
