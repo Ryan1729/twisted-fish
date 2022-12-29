@@ -1460,6 +1460,16 @@ fn do_play_anytime_menu(
             let rank_xy = base_xy + CARD_WIDTH
                 + ((PLAYER_PLAY_ANYTIME_WINDOW.h - RANK_SELECT_WH.h)/ 2);
 
+            let mut suit_xy = (rank_xy + (RANK_SELECT_WH.w / 2)) - (CARD_WIDTH / 2) + gfx::CHEVRON_H;
+            for &suit in Suit::ALL.iter().rev() {
+                group.commands.draw_card(
+                    models::fish_card(player_selection.rank, suit),
+                    suit_xy
+                );
+
+                suit_xy += RANK_SELECT_SPREAD_WH;
+            }
+
             ui::draw_quick_select(
                 group,
                 Rect::xy_wh(
