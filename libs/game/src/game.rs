@@ -1773,6 +1773,14 @@ fn do_play_anytime_menu(
     Hold
 }
 
+fn should_use_no_fishing_against(
+    _: &memories::Memory,
+    _: &Hand,
+    _: HandId,
+) -> bool {
+    todo!()
+}
+
 pub fn update_and_render(
     commands: &mut Commands,
     state: &mut State,
@@ -2206,6 +2214,8 @@ pub fn update_and_render(
                                 text: b"Submit",
                             }
                         ) {
+                            // TODO allow Cpu player to play "No Fishing".
+
                             let player_len = state.cards.player.len();
                             let target_hand = state.cards.hand_mut(question.target);
 
@@ -2553,117 +2563,151 @@ pub fn update_and_render(
                 }
             },
             CpuMenu::Asking(rank, ref mut question) => {
-                commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
+                macro_rules! handle_ask {
+                    () => {
+                        let rank = *rank;
 
-                let base_xy = CPU_ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-
-                let description_base_xy = base_xy;
-
-                let description_base_rect = fit_to_rest_of_window(
-                    description_base_xy,
-                    CPU_ASKING_WINDOW,
-                );
-
-                let description = question.fresh_cpu_ask_description(
-                    *rank,
-                    id.into(),
-                    description_base_rect.w,
-                );
-
-                commands.print_centered(
-                    description,
-                    description_base_rect,
-                    WHITE,
-                );
-
-                if input.pressed_this_frame(Button::A)
-                | input.pressed_this_frame(Button::B) {
-                    let rank = *rank;
-                    state.memories.asked_for(id.into(), rank, question.suit);
-
-                    let target_card = models::fish_card(rank, question.suit);
-                    let my_len = state.cards.hand(id.into()).len();
-
-                    let target_hand = state.cards.hand_mut(question.target);
-
-                    let mut found = None;
-                    // TODO? randomize order here to make it harder to learn their
-                    // whole hand with glass bottom boat
-                    for i in 0..target_hand.len() {
-                        let was_found = target_hand.get(i)
-                            .map(|card| card == target_card)
-                            .unwrap_or_default();
-                        if was_found {
-                            found = Some((
-                                target_hand.remove(i)
-                                    .expect("We just looked at it! (cpu)"),
-                                i
-                            ));
-
-                            break
+                        state.memories.asked_for(id.into(), rank, question.suit);
+    
+                        let target_card = models::fish_card(rank, question.suit);
+                        let my_len = state.cards.hand(id.into()).len();
+    
+                        let target_hand = state.cards.hand_mut(question.target);
+    
+                        let mut found = None;
+                        // TODO? randomize order here to make it harder to learn their
+                        // whole hand with glass bottom boat
+                        for i in 0..target_hand.len() {
+                            let was_found = target_hand.get(i)
+                                .map(|card| card == target_card)
+                                .unwrap_or_default();
+                            if was_found {
+                                found = Some((
+                                    target_hand.remove(i)
+                                        .expect("We just looked at it! (cpu)"),
+                                    i
+                                ));
+    
+                                break
+                            }
                         }
-                    }
-
-                    if let Some((card, i)) = found {
-                        state.memories.found(id.into(), rank, question.suit);
-
-                        let at = get_card_position(
-                            spread(question.target),
-                            target_hand.len(),
-                            i,
-                        );
-
-                        let target = get_card_insert_position(
-                            spread(id.into()),
-                            my_len
-                        );
-
-                        state.animations.push(Animation {
-                            card,
-                            at,
-                            target,
-                            action: AnimationAction::AddToHand(id.into()),
-                            shown: true,
-                            .. <_>::default()
-                        });
-
-                        state.menu = Menu::CpuTurn{
-                            id,
-                            menu: CpuMenu::WaitingForSuccesfulAsk,
-                        };
-                    } else {
-                        let card_option = state.cards.deck.draw();
-
-                        if let Some(card) = card_option {
-                            let at = DECK_XY;
-
+    
+                        if let Some((card, i)) = found {
+                            state.memories.found(id.into(), rank, question.suit);
+    
+                            let at = get_card_position(
+                                spread(question.target),
+                                target_hand.len(),
+                                i,
+                            );
+    
                             let target = get_card_insert_position(
                                 spread(id.into()),
                                 my_len
                             );
-
+    
                             state.animations.push(Animation {
                                 card,
                                 at,
                                 target,
                                 action: AnimationAction::AddToHand(id.into()),
+                                shown: true,
                                 .. <_>::default()
                             });
-
-                            if card == target_card {
-                                state.memories.fished_for(id.into(), rank, question.suit);
-
-                                state.menu = Menu::CpuTurn{
-                                    id,
-                                    menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
-                                };
+    
+                            state.menu = Menu::CpuTurn{
+                                id,
+                                menu: CpuMenu::WaitingForSuccesfulAsk,
+                            };
+                        } else {
+                            let card_option = state.cards.deck.draw();
+    
+                            if let Some(card) = card_option {
+                                let at = DECK_XY;
+    
+                                let target = get_card_insert_position(
+                                    spread(id.into()),
+                                    my_len
+                                );
+    
+                                state.animations.push(Animation {
+                                    card,
+                                    at,
+                                    target,
+                                    action: AnimationAction::AddToHand(id.into()),
+                                    .. <_>::default()
+                                });
+    
+                                if card == target_card {
+                                    state.memories.fished_for(id.into(), rank, question.suit);
+    
+                                    state.menu = Menu::CpuTurn{
+                                        id,
+                                        menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
+                                    };
+                                } else {
+                                    state.menu = next_turn_menu(id, &state.cards.player);
+                                }
                             } else {
                                 state.menu = next_turn_menu(id, &state.cards.player);
                             }
-                        } else {
-                            state.menu = next_turn_menu(id, &state.cards.player);
                         }
                     }
+                }
+
+                // TODO allow target Player or Cpu to play "No Fishing".
+
+                match (
+                    question.target,
+                    state.cards.hand(question.target).contains(zingers::NO_FISHING),
+                ) {
+                    (HandId::Player, true) => {
+                        todo!()
+                    },
+                    (_, has_no_fishing) => {
+                        // If we reach this branch when the target is 
+                        // `HandId::Player`, then we know that `has_no_fishing`
+                        // is false.
+                        if has_no_fishing
+                        && should_use_no_fishing_against(
+                            state.memories.memory(
+                                CpuId::try_from(question.target)
+                                .expect("target should be a Cpu player")
+                            ),
+                            state.cards.hand(question.target),
+                            id.into(),
+                        ) {
+                            todo!()
+                        } else {
+                            commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
+    
+                            let base_xy = CPU_ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+            
+                            let description_base_xy = base_xy;
+            
+                            let description_base_rect = fit_to_rest_of_window(
+                                description_base_xy,
+                                CPU_ASKING_WINDOW,
+                            );
+            
+                            let description = question.fresh_cpu_ask_description(
+                                *rank,
+                                id.into(),
+                                description_base_rect.w,
+                            );
+            
+                            commands.print_centered(
+                                description,
+                                description_base_rect,
+                                WHITE,
+                            );
+            
+                            if input.pressed_this_frame(Button::A)
+                            | input.pressed_this_frame(Button::B) {
+                                handle_ask!();
+                            }
+                        }
+                    },
                 }
             },
             CpuMenu::DeadInTheWater => {

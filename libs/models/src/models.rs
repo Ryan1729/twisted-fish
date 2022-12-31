@@ -446,6 +446,15 @@ impl Hand {
             xs::shuffle(rng, &mut self.0[0..i as _]);
         }
     }
+
+    pub fn contains(&self, needle: Card) -> bool {
+        for card in self.iter() {
+            if card == needle {
+                return true
+            }
+        }
+        false
+    }
 }
 
 pub type CardIndex = u8;
