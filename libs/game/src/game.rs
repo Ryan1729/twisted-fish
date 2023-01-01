@@ -2214,85 +2214,97 @@ pub fn update_and_render(
                                 text: b"Submit",
                             }
                         ) {
-                            // TODO allow Cpu player to play "No Fishing".
-
-                            let player_len = state.cards.player.len();
-                            let target_hand = state.cards.hand_mut(question.target);
-
-                            state.memories.asked_for(
+                            if state.cards.hand(question.target)
+                                .contains(zingers::NO_FISHING)
+                            && should_use_no_fishing_against(
+                                state.memories.memory(
+                                    CpuId::try_from(question.target)
+                                    .expect("target should be a Cpu player")
+                                ),
+                                state.cards.hand(question.target),
                                 HandId::Player,
-                                rank,
-                                question.suit
-                            );
-
-                            let target_card = models::fish_card(rank, question.suit);
-
-                            let mut found = None;
-                            for i in 0..target_hand.len() {
-                                let was_found = target_hand.get(i)
-                                    .map(|card| card == target_card)
-                                    .unwrap_or_default();
-                                if was_found {
-                                    found = Some((
-                                        target_hand.remove(i).expect("We just looked at it! (player)"),
-                                        i
-                                    ));
-
-                                    break
-                                }
-                            }
-
-                            if let Some((card, i)) = found {
-                                state.memories.found(
+                            ) {
+                                // TODO have Cpu player play "No Fishing".
+                                todo!();
+                            } else {
+                                let player_len = state.cards.player.len();
+                                let target_hand = state.cards.hand_mut(question.target);
+    
+                                state.memories.asked_for(
                                     HandId::Player,
                                     rank,
                                     question.suit
                                 );
-                                let at = get_card_position(
-                                    spread(question.target),
-                                    target_hand.len(),
-                                    i,
-                                );
-
-                                let target = get_card_insert_position(
-                                    spread(HandId::Player),
-                                    player_len
-                                );
-
-                                state.animations.push(Animation {
-                                    card,
-                                    at,
-                                    target,
-                                    action: AnimationAction::AddToHand(HandId::Player),
-                                    shown: true,
-                                    .. <_>::default()
-                                });
-
-                                *menu = PlayerMenu::default();
-                            } else {
-                                let drew = state.cards.deck.draw();
-
-                                *menu = PlayerMenu::Fished{
-                                    used,
-                                    question: core::mem::take(question),
-                                    drew,
-                                };
-
-                                if let Some(card) = drew {
-                                    let at = DECK_XY;
-
+    
+                                let target_card = models::fish_card(rank, question.suit);
+    
+                                let mut found = None;
+                                for i in 0..target_hand.len() {
+                                    let was_found = target_hand.get(i)
+                                        .map(|card| card == target_card)
+                                        .unwrap_or_default();
+                                    if was_found {
+                                        found = Some((
+                                            target_hand.remove(i).expect("We just looked at it! (player)"),
+                                            i
+                                        ));
+    
+                                        break
+                                    }
+                                }
+    
+                                if let Some((card, i)) = found {
+                                    state.memories.found(
+                                        HandId::Player,
+                                        rank,
+                                        question.suit
+                                    );
+                                    let at = get_card_position(
+                                        spread(question.target),
+                                        target_hand.len(),
+                                        i,
+                                    );
+    
                                     let target = get_card_insert_position(
                                         spread(HandId::Player),
                                         player_len
                                     );
-
+    
                                     state.animations.push(Animation {
                                         card,
                                         at,
                                         target,
                                         action: AnimationAction::AddToHand(HandId::Player),
+                                        shown: true,
                                         .. <_>::default()
                                     });
+    
+                                    *menu = PlayerMenu::default();
+                                } else {
+                                    let drew = state.cards.deck.draw();
+    
+                                    *menu = PlayerMenu::Fished{
+                                        used,
+                                        question: core::mem::take(question),
+                                        drew,
+                                    };
+    
+                                    if let Some(card) = drew {
+                                        let at = DECK_XY;
+    
+                                        let target = get_card_insert_position(
+                                            spread(HandId::Player),
+                                            player_len
+                                        );
+    
+                                        state.animations.push(Animation {
+                                            card,
+                                            at,
+                                            target,
+                                            action: AnimationAction::AddToHand(HandId::Player),
+                                            .. <_>::default()
+                                        });
+                                    }
                                 }
                             }
                         } else if input.pressed_this_frame(Button::B) {
