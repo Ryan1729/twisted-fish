@@ -164,38 +164,46 @@ impl Memory {
         // Do high scoring ranks first so we will return them when there are 
         // multiple options.
         for &rank in Rank::ALL.iter().rev() {
-            const KNOWN_SCORE: u32 = 3;
-            let mut score = 0;
-            for suit in Suit::ALL {
-                use Location::*;
-                use Evidence::*;
-
-                match self.locations[models::fish_card(rank, suit) as usize] {
-                    Incomplete(incomplete) => match incomplete[target_id as usize] {
-                        Unknown | DidNotHave => {},
-                        AskedForSimilar(AskCount::One | AskCount::Two) => {
-                            score += 1;    
-                        },
-                        AskedForSimilar(_) => {
-                            score += 2;    
-                        },
-                    },
-                    Known(id) if id == target_id => {
-                        score += KNOWN_SCORE;
-                    },
-                    Known(_) => {},
-                    KnownGone => break,
-                }   
-            }
-
-            // TODO? check this actually produces the behaviour we want?
-            // How important is this actually?
-            if score >= KNOWN_SCORE * (Suit::ALL.len() - 2) as u32 {
-                return Some(rank);
+            if self.is_likely_to_fill_rank_soon(target_id, rank) {
+                return Some(rank)
             }
         }
 
         None
+    }
+
+    pub fn is_likely_to_fill_rank_soon(
+        &self,
+        target_id: HandId,
+        rank: Rank,
+    ) -> bool {
+        const KNOWN_SCORE: u32 = 3;
+        let mut score = 0;
+        for suit in Suit::ALL {
+            use Location::*;
+            use Evidence::*;
+
+            match self.locations[models::fish_card(rank, suit) as usize] {
+                Incomplete(incomplete) => match incomplete[target_id as usize] {
+                    Unknown | DidNotHave => {},
+                    AskedForSimilar(AskCount::One | AskCount::Two) => {
+                        score += 1;    
+                    },
+                    AskedForSimilar(_) => {
+                        score += 2;    
+                    },
+                },
+                Known(id) if id == target_id => {
+                    score += KNOWN_SCORE;
+                },
+                Known(_) => {},
+                KnownGone => break,
+            }   
+        }
+
+        // TODO? check this actually produces the behaviour we want?
+        // How important is this actually?
+        score >= KNOWN_SCORE * (Suit::ALL.len() - 2) as u32
     }
 
     pub fn informed_question(

@@ -439,6 +439,25 @@ impl Cards {
             HandId::Cpu3 => &mut self.cpu3,
         }
     }
+
+    fn active_count(&self) -> ActiveCardCount {
+        let count = self.deck.len()
+        + self.player.len()
+        + self.cpu1.len()
+        + self.cpu2.len()
+        + self.cpu3.len();
+
+        if count <= Suit::COUNT * 3 {
+            ActiveCardCount::VeryFew
+        } else {
+            ActiveCardCount::Several
+        }
+    }
+}
+
+enum ActiveCardCount {
+    Several,
+    VeryFew
 }
 
 #[derive(Clone, Default)]
@@ -1202,13 +1221,11 @@ fn anytime_play(
 
         for card in hand.iter() {
             // TODO? are the conditions for wanting to play these two cards really
-            // equal? In particualr I suspect that the timing for the glass bottom
+            // equal? In particular I suspect that the timing for the glass bottom
             // boat could be improved, or at least more justification for making it
             // the same as the game warden could be described.
             macro_rules! play_perhaps {
                 ($anytime_play_card: expr) => {
-                    let mut card_count = hand.len();
-
                     let mut others = hand_id.besides();
                     xs::shuffle(rng, &mut others);
 
@@ -1216,7 +1233,6 @@ fn anytime_play(
                         // Note: It's not fair to look at other's cards besides
                         // counting how many of them there are.
                         let len = cards.hand(target).len();
-                        card_count += len;
                         if len == 1 {
                             return Some(AnytimePlay {
                                 source: cpu_id,
@@ -1225,8 +1241,8 @@ fn anytime_play(
                             });
                         }
                     }
-                    card_count += cards.deck.len();
-                    if card_count <= 10 {
+                
+                    if let ActiveCardCount::VeryFew = cards.active_count() {
                         for target in others {
                             // Note: It's not fair to look at other's cards besides
                             // counting how many of them there are.
@@ -1774,11 +1790,19 @@ fn do_play_anytime_menu(
 }
 
 fn should_use_no_fishing_against(
-    _: &memories::Memory,
-    _: &Hand,
-    _: HandId,
+    memory: &memories::Memory,
+    hand: &Hand,
+    target: HandId,
+    rank: Rank,
+    suit: Suit,
+    active_count: ActiveCardCount,
 ) -> bool {
-    todo!()
+    if let ActiveCardCount::VeryFew = active_count {
+        return true
+    }
+
+    hand.contains(models::fish_card(rank, suit))
+    && memory.is_likely_to_fill_rank_soon(target, rank)
 }
 
 pub fn update_and_render(
@@ -2223,6 +2247,9 @@ pub fn update_and_render(
                                 ),
                                 state.cards.hand(question.target),
                                 HandId::Player,
+                                rank,
+                                question.suit,
+                                state.cards.active_count(),
                             ) {
                                 // TODO have Cpu player play "No Fishing".
                                 todo!();
@@ -2688,6 +2715,9 @@ pub fn update_and_render(
                             ),
                             state.cards.hand(question.target),
                             id.into(),
+                            *rank,
+                            question.suit,
+                            state.cards.active_count(),
                         ) {
                             todo!()
                         } else {
