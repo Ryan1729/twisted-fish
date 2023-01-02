@@ -1361,7 +1361,7 @@ fn do_play_anytime_menu(
         Section::Card, Section::Target, Section::Submit,
     ];
 
-    // Clmap things to initial god vales, from the defaults.
+    // Clamp things to initial good vales, from the defaults.
     {
         player_selection.card.clamp_to(available.flags);
 
@@ -1395,7 +1395,9 @@ fn do_play_anytime_menu(
         if el_i == 0 && available.flags.is_single() {
             el_i = 1;
         }
-        if el_i == 1 && available.basket_count() <= 1 {
+        if player_selection.card == AnytimeCard::DeadScubaDiver
+        && el_i == 1
+        && available.basket_count() <= 1 {
             el_i = GRID_LEN - 1;
         }
 
@@ -1746,12 +1748,15 @@ fn do_play_anytime_menu(
                 el_i = GRID_LEN - 1;
             } else {
                 el_i -= 1;
-                // Don't need to select the card if only one is available.
-                if el_i == 0 && available.flags.is_single() {
-                    el_i = GRID_LEN - 1;
+
+                if player_selection.card == AnytimeCard::DeadScubaDiver
+                && el_i == 1
+                && available.basket_count() <= 1 {
+                    el_i = 0;
                 }
 
-                if el_i == 1 && available.basket_count() <= 1 {
+                // Don't need to select the card if only one is available.
+                if el_i == 0 && available.flags.is_single() {
                     el_i = GRID_LEN - 1;
                 }
             },
@@ -1767,7 +1772,9 @@ fn do_play_anytime_menu(
                     el_i += 1;
                 }
 
-                if el_i == 1 && available.basket_count() <= 1 {
+                if player_selection.card == AnytimeCard::DeadScubaDiver
+                && el_i == 1
+                && available.basket_count() <= 1 {
                     el_i = GRID_LEN - 1;
                 }
             },
