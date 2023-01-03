@@ -455,6 +455,7 @@ impl Cards {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ActiveCardCount {
     Several,
     VeryFew
@@ -925,6 +926,20 @@ type AlmostCompleteBasket = [CardIndex; (Suit::COUNT - 1) as _];
 
 type AlmostCompleteBaskets = [Option<AlmostCompleteBasket>; Rank::COUNT as _];
 
+type RankCount = u8;
+
+fn almost_complete_basket_count(baskets: AlmostCompleteBaskets) -> RankCount {
+    let mut count = 0;
+
+    for op in baskets {
+        if op.is_some() {
+            count += 1;
+        }
+    }
+
+    count
+}
+
 #[derive(Clone, Copy)]
 pub struct AvailablePlayAnytime {
     flags: PlayAnytimeFlags,
@@ -1276,16 +1291,23 @@ fn anytime_play(
 
             if card == zingers::GLASS_BOTTOM_BOAT {
                 play_perhaps!(AnytimeCard::GlassBottomBoat);
+            }
 
-                // For debugging; remove later {
-                if HandId::from(cpu_id) != next_id {
-                    return Some(AnytimePlay {
-                        source: cpu_id,
-                        target: next_id,
-                        card: AnytimeCard::GlassBottomBoat,
-                    });
+            if card == zingers::DEAD_SCUBA_DIVER {
+                let hand = cards.hand(cpu_id.into());
+                if let Some(almost_complete) = find_almost_complete_baskets(hand) {
+                    // TODO? Think more carefully about how to make this decision?
+                    let count = almost_complete_basket_count(almost_complete);
+                    if count >= 2 
+                    || cards.active_count() == ActiveCardCount::VeryFew {
+                        return Some(AnytimePlay {
+                            source: cpu_id,
+                            // TODO avoid needing to stuff something in here
+                            target: cpu_id.into(),
+                            card: AnytimeCard::DeadScubaDiver,
+                        });
+                    }
                 }
-                // }
             }
         }
     }
