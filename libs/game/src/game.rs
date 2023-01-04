@@ -1256,7 +1256,7 @@ fn anytime_play(
                             });
                         }
                     }
-                
+
                     if let ActiveCardCount::VeryFew = cards.active_count() {
                         for target in others {
                             // Note: It's not fair to look at other's cards besides
@@ -1298,7 +1298,7 @@ fn anytime_play(
                 if let Some(almost_complete) = find_almost_complete_baskets(hand) {
                     // TODO? Think more carefully about how to make this decision?
                     let count = almost_complete_basket_count(almost_complete);
-                    if count >= 2 
+                    if count >= 2
                     || cards.active_count() == ActiveCardCount::VeryFew {
                         return Some(AnytimePlay {
                             source: cpu_id,
@@ -1399,7 +1399,7 @@ fn do_play_anytime_menu(
 
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
-            Cpu1 
+            Cpu1
             | Cpu2
             | Cpu3
             | RankSelect => Some(Section::Target),
@@ -1668,37 +1668,49 @@ fn do_play_anytime_menu(
                 return Hold;
             },
             AnytimeCard::DeadScubaDiver => {
+                fn play_dead_scuba_diver(
+                    cards: &mut Cards,
+                    almost_basket: AlmostCompleteBasket,
+                    scuba_i: CardIndex,
+                ) {
+                    let mut to_remove = [
+                        almost_basket[0],
+                        almost_basket[1],
+                        almost_basket[2],
+                        almost_basket[3],
+                        scuba_i
+                    ];
+                    to_remove.sort();
+
+                    let id = HandId::Player;
+
+                    let baskets = match id {
+                        HandId::Player => &mut cards.player_baskets,
+                        HandId::Cpu1 => &mut cards.cpu1_baskets,
+                        HandId::Cpu2 => &mut cards.cpu2_baskets,
+                        HandId::Cpu3 => &mut cards.cpu3_baskets,
+                    };
+
+                    let hand = match id {
+                        HandId::Player => &mut cards.player,
+                        HandId::Cpu1 => &mut cards.cpu1,
+                        HandId::Cpu2 => &mut cards.cpu2,
+                        HandId::Cpu3 => &mut cards.cpu3,
+                    };
+
+                    for i in to_remove.iter().rev() {
+                        let card = hand.remove(*i).expect("all to_remove indexes should be valid!");
+                        baskets.push(card);
+                    }
+                }
+
                 let almost_basket: AlmostCompleteBasket
                     = almost_basket_option.expect("almost_basket_option should have already been checked");
-                let mut to_remove = [
-                    almost_basket[0],
-                    almost_basket[1],
-                    almost_basket[2],
-                    almost_basket[3],
+                play_dead_scuba_diver(
+                    cards,
+                    almost_basket,
                     available.scuba_i
-                ];
-                to_remove.sort();
-
-                let id = HandId::Player;
-
-                let baskets = match id {
-                    HandId::Player => &mut cards.player_baskets,
-                    HandId::Cpu1 => &mut cards.cpu1_baskets,
-                    HandId::Cpu2 => &mut cards.cpu2_baskets,
-                    HandId::Cpu3 => &mut cards.cpu3_baskets,
-                };
-
-                let hand = match id {
-                    HandId::Player => &mut cards.player,
-                    HandId::Cpu1 => &mut cards.cpu1,
-                    HandId::Cpu2 => &mut cards.cpu2,
-                    HandId::Cpu3 => &mut cards.cpu3,
-                };
-
-                for i in to_remove.iter().rev() {
-                    let card = hand.remove(*i).expect("all to_remove indexes should be valid!");
-                    baskets.push(card);
-                }
+                );
             }
         }
     } else if group.input.pressed_this_frame(Button::B) {
@@ -1707,7 +1719,7 @@ fn do_play_anytime_menu(
     } else if let Some(dir) = group.input.dir_pressed_this_frame() {
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
-            Cpu1 
+            Cpu1
             | Cpu2
             | Cpu3
             | RankSelect => Some(Section::Target),
@@ -2285,15 +2297,15 @@ pub fn update_and_render(
                             } else {
                                 let player_len = state.cards.player.len();
                                 let target_hand = state.cards.hand_mut(question.target);
-    
+
                                 state.memories.asked_for(
                                     HandId::Player,
                                     rank,
                                     question.suit
                                 );
-    
+
                                 let target_card = models::fish_card(rank, question.suit);
-    
+
                                 let mut found = None;
                                 for i in 0..target_hand.len() {
                                     let was_found = target_hand.get(i)
@@ -2304,11 +2316,11 @@ pub fn update_and_render(
                                             target_hand.remove(i).expect("We just looked at it! (player)"),
                                             i
                                         ));
-    
+
                                         break
                                     }
                                 }
-    
+
                                 if let Some((card, i)) = found {
                                     state.memories.found(
                                         HandId::Player,
@@ -2320,12 +2332,12 @@ pub fn update_and_render(
                                         target_hand.len(),
                                         i,
                                     );
-    
+
                                     let target = get_card_insert_position(
                                         spread(HandId::Player),
                                         player_len
                                     );
-    
+
                                     state.animations.push(Animation {
                                         card,
                                         at,
@@ -2334,25 +2346,25 @@ pub fn update_and_render(
                                         shown: true,
                                         .. <_>::default()
                                     });
-    
+
                                     *menu = PlayerMenu::default();
                                 } else {
                                     let drew = state.cards.deck.draw();
-    
+
                                     *menu = PlayerMenu::Fished{
                                         used,
                                         question: core::mem::take(question),
                                         drew,
                                     };
-    
+
                                     if let Some(card) = drew {
                                         let at = DECK_XY;
-    
+
                                         let target = get_card_insert_position(
                                             spread(HandId::Player),
                                             player_len
                                         );
-    
+
                                         state.animations.push(Animation {
                                             card,
                                             at,
@@ -2636,12 +2648,12 @@ pub fn update_and_render(
                         let rank = *rank;
 
                         state.memories.asked_for(id.into(), rank, question.suit);
-    
+
                         let target_card = models::fish_card(rank, question.suit);
                         let my_len = state.cards.hand(id.into()).len();
-    
+
                         let target_hand = state.cards.hand_mut(question.target);
-    
+
                         let mut found = None;
                         // TODO? randomize order here to make it harder to learn their
                         // whole hand with glass bottom boat
@@ -2655,25 +2667,25 @@ pub fn update_and_render(
                                         .expect("We just looked at it! (cpu)"),
                                     i
                                 ));
-    
+
                                 break
                             }
                         }
-    
+
                         if let Some((card, i)) = found {
                             state.memories.found(id.into(), rank, question.suit);
-    
+
                             let at = get_card_position(
                                 spread(question.target),
                                 target_hand.len(),
                                 i,
                             );
-    
+
                             let target = get_card_insert_position(
                                 spread(id.into()),
                                 my_len
                             );
-    
+
                             state.animations.push(Animation {
                                 card,
                                 at,
@@ -2682,22 +2694,22 @@ pub fn update_and_render(
                                 shown: true,
                                 .. <_>::default()
                             });
-    
+
                             state.menu = Menu::CpuTurn{
                                 id,
                                 menu: CpuMenu::WaitingForSuccesfulAsk,
                             };
                         } else {
                             let card_option = state.cards.deck.draw();
-    
+
                             if let Some(card) = card_option {
                                 let at = DECK_XY;
-    
+
                                 let target = get_card_insert_position(
                                     spread(id.into()),
                                     my_len
                                 );
-    
+
                                 state.animations.push(Animation {
                                     card,
                                     at,
@@ -2705,10 +2717,10 @@ pub fn update_and_render(
                                     action: AnimationAction::AddToHand(id.into()),
                                     .. <_>::default()
                                 });
-    
+
                                 if card == target_card {
                                     state.memories.fished_for(id.into(), rank, question.suit);
-    
+
                                     state.menu = Menu::CpuTurn{
                                         id,
                                         menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
@@ -2733,7 +2745,7 @@ pub fn update_and_render(
                         todo!()
                     },
                     (_, has_no_fishing) => {
-                        // If we reach this branch when the target is 
+                        // If we reach this branch when the target is
                         // `HandId::Player`, then we know that `has_no_fishing`
                         // is false.
                         if has_no_fishing
@@ -2751,28 +2763,28 @@ pub fn update_and_render(
                             todo!()
                         } else {
                             commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
-    
+
                             let base_xy = CPU_ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-            
+
                             let description_base_xy = base_xy;
-            
+
                             let description_base_rect = fit_to_rest_of_window(
                                 description_base_xy,
                                 CPU_ASKING_WINDOW,
                             );
-            
+
                             let description = question.fresh_cpu_ask_description(
                                 *rank,
                                 id.into(),
                                 description_base_rect.w,
                             );
-            
+
                             commands.print_centered(
                                 description,
                                 description_base_rect,
                                 WHITE,
                             );
-            
+
                             if input.pressed_this_frame(Button::A)
                             | input.pressed_this_frame(Button::B) {
                                 handle_ask!();
