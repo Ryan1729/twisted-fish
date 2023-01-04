@@ -1711,6 +1711,7 @@ fn do_play_anytime_menu(
                     almost_basket,
                     available.scuba_i
                 );
+                return Done;
             }
         }
     } else if group.input.pressed_this_frame(Button::B) {
