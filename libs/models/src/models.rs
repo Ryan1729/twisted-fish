@@ -52,7 +52,16 @@ compile_time_assert!{
 
 impl core::fmt::Debug for CardOption {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:?}", self.option())
+        write!(
+            f, 
+            "{:?} ({:?})",
+            self.option(),
+            self.option()
+                .and_then(|card| 
+                    get_rank(card)
+                        .map(|r| (r, get_suit(card).unwrap()))
+                )
+        )
     }
 }
 

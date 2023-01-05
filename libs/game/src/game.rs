@@ -481,9 +481,11 @@ impl State {
         // Gives Cpu1 the game warden (8)
         //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
         // Gives player glass bottom boat. (8)
-        let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
+        //let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
         // Gives player the game warden and glass bottom boat. (16)
         //let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
+        // Gives Cpu2 the dead scuba diver. (8)
+        let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
         // }
 
         let mut rng = xs::from_seed(seed);
@@ -1212,12 +1214,18 @@ impl AnytimeCard {
 }
 
 #[derive(Copy, Clone)]
+enum AnytimePlaySelection {
+    GameWarden(HandId),
+    GlassBottomBoat(HandId),
+    DeadScubaDiver(AlmostCompleteBasket, CardIndex)
+}
+
+#[derive(Copy, Clone)]
 struct AnytimePlay {
     // Arguably we don't actually want to be able to represent a player targeting
     // themselves. But maybe we won't make those errors in practice.
     source: CpuId,
-    target: HandId,
-    card: AnytimeCard,
+    selection: AnytimePlaySelection,
 }
 
 fn anytime_play(
@@ -1234,13 +1242,13 @@ fn anytime_play(
         let hand_id = cpu_id.into();
         let hand = cards.hand(hand_id);
 
-        for card in hand.iter() {
+        for (card_i, card) in hand.enumerated_iter() {
             // TODO? are the conditions for wanting to play these two cards really
             // equal? In particular I suspect that the timing for the glass bottom
             // boat could be improved, or at least more justification for making it
             // the same as the game warden could be described.
             macro_rules! play_perhaps {
-                ($anytime_play_card: expr) => {
+                ($card: ident) => {
                     let mut others = hand_id.besides();
                     xs::shuffle(rng, &mut others);
 
@@ -1251,8 +1259,9 @@ fn anytime_play(
                         if len == 1 {
                             return Some(AnytimePlay {
                                 source: cpu_id,
-                                target,
-                                card: $anytime_play_card,
+                                selection: AnytimePlaySelection::$card(
+                                    target
+                                ),
                             });
                         }
                     }
@@ -1264,8 +1273,9 @@ fn anytime_play(
                             if !cards.hand(target).is_empty() {
                                 return Some(AnytimePlay {
                                     source: cpu_id,
-                                    target,
-                                    card: $anytime_play_card,
+                                    selection: AnytimePlaySelection::$card(
+                                        target
+                                    ),
                                 });
                             }
                         }
@@ -1277,8 +1287,9 @@ fn anytime_play(
                             .likely_to_fill_basket_soon(next_id) {
                             return Some(AnytimePlay {
                                 source: cpu_id,
-                                target: next_id,
-                                card: $anytime_play_card,
+                                selection: AnytimePlaySelection::$card(
+                                    next_id
+                                ),
                             });
                         }
                     }
@@ -1286,11 +1297,11 @@ fn anytime_play(
             }
 
             if card == zingers::THE_GAME_WARDEN {
-                play_perhaps!(AnytimeCard::GameWarden);
+                play_perhaps!(GameWarden);
             }
 
             if card == zingers::GLASS_BOTTOM_BOAT {
-                play_perhaps!(AnytimeCard::GlassBottomBoat);
+                play_perhaps!(GlassBottomBoat);
             }
 
             if card == zingers::DEAD_SCUBA_DIVER {
@@ -1298,13 +1309,26 @@ fn anytime_play(
                 if let Some(almost_complete) = find_almost_complete_baskets(hand) {
                     // TODO? Think more carefully about how to make this decision?
                     let count = almost_complete_basket_count(almost_complete);
-                    if count >= 2
+                    // For testing; remove later
+                    if count >= 1
+                    //if count >= 2
                     || cards.active_count() == ActiveCardCount::VeryFew {
+                        let mut best_basket = None;
+
+                        // Choose the highest scoring basket
+                        for basket in almost_complete.iter().rev() {
+                            if let Some(basket) = basket {
+                                best_basket = Some(*basket);
+                                break
+                            }
+                        }
+
                         return Some(AnytimePlay {
                             source: cpu_id,
-                            // TODO avoid needing to stuff something in here
-                            target: cpu_id.into(),
-                            card: AnytimeCard::DeadScubaDiver,
+                            selection: AnytimePlaySelection::DeadScubaDiver(
+                                best_basket.expect("There should be a basket available!"),
+                                card_i
+                            ),
                         });
                     }
                 }
@@ -1352,6 +1376,41 @@ fn discard_glass_bottom_boat(
         }
     }
     debug_assert!(false, "Didn't find glass bottom boat!");
+}
+
+fn play_dead_scuba_diver(
+    cards: &mut Cards,
+    id: HandId,
+    almost_basket: AlmostCompleteBasket,
+    scuba_i: CardIndex,
+) {
+    let mut to_remove = [
+        almost_basket[0],
+        almost_basket[1],
+        almost_basket[2],
+        almost_basket[3],
+        scuba_i
+    ];
+    to_remove.sort();
+
+    let baskets = match id {
+        HandId::Player => &mut cards.player_baskets,
+        HandId::Cpu1 => &mut cards.cpu1_baskets,
+        HandId::Cpu2 => &mut cards.cpu2_baskets,
+        HandId::Cpu3 => &mut cards.cpu3_baskets,
+    };
+
+    let hand = match id {
+        HandId::Player => &mut cards.player,
+        HandId::Cpu1 => &mut cards.cpu1,
+        HandId::Cpu2 => &mut cards.cpu2,
+        HandId::Cpu3 => &mut cards.cpu3,
+    };
+
+    for i in to_remove.iter().rev() {
+        let card = hand.remove(*i).expect("all to_remove indexes should be valid!");
+        baskets.push(card);
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1668,46 +1727,11 @@ fn do_play_anytime_menu(
                 return Hold;
             },
             AnytimeCard::DeadScubaDiver => {
-                fn play_dead_scuba_diver(
-                    cards: &mut Cards,
-                    almost_basket: AlmostCompleteBasket,
-                    scuba_i: CardIndex,
-                ) {
-                    let mut to_remove = [
-                        almost_basket[0],
-                        almost_basket[1],
-                        almost_basket[2],
-                        almost_basket[3],
-                        scuba_i
-                    ];
-                    to_remove.sort();
-
-                    let id = HandId::Player;
-
-                    let baskets = match id {
-                        HandId::Player => &mut cards.player_baskets,
-                        HandId::Cpu1 => &mut cards.cpu1_baskets,
-                        HandId::Cpu2 => &mut cards.cpu2_baskets,
-                        HandId::Cpu3 => &mut cards.cpu3_baskets,
-                    };
-
-                    let hand = match id {
-                        HandId::Player => &mut cards.player,
-                        HandId::Cpu1 => &mut cards.cpu1,
-                        HandId::Cpu2 => &mut cards.cpu2,
-                        HandId::Cpu3 => &mut cards.cpu3,
-                    };
-
-                    for i in to_remove.iter().rev() {
-                        let card = hand.remove(*i).expect("all to_remove indexes should be valid!");
-                        baskets.push(card);
-                    }
-                }
-
                 let almost_basket: AlmostCompleteBasket
                     = almost_basket_option.expect("almost_basket_option should have already been checked");
                 play_dead_scuba_diver(
                     cards,
+                    HandId::Player,
                     almost_basket,
                     available.scuba_i
                 );
@@ -1972,15 +1996,15 @@ pub fn update_and_render(
                 ) {
                     start_next_turn!();
                 }
-            } else if let Some(AnytimePlay{ source, target, card })
+            } else if let Some(AnytimePlay { source, selection })
             = anytime_play(
                 &mut state.rng,
                 &state.cards,
                 &state.memories,
                 next_id
             ) {
-                match card {
-                    AnytimeCard::GameWarden => {
+                match selection {
+                    AnytimePlaySelection::GameWarden(target) => {
                         if let Some(()) = perform_game_warden(
                             &mut state.cards,
                             &mut state.animations,
@@ -1995,7 +2019,7 @@ pub fn update_and_render(
                             debug_assert!(false, "perform_game_warden failed");
                         }
                     },
-                    AnytimeCard::GlassBottomBoat => {
+                    AnytimePlaySelection::GlassBottomBoat(target) => {
                         let target_hand = state.cards.hand_mut(target);
                         let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
                         let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
@@ -2022,8 +2046,13 @@ pub fn update_and_render(
                             source.into()
                         );
                     },
-                    AnytimeCard::DeadScubaDiver => {
-                        todo!("Cpu plays DeadScubaDiver");
+                    AnytimePlaySelection::DeadScubaDiver(almost_basket, scuba_i) => {
+                        play_dead_scuba_diver(
+                            &mut state.cards,
+                            source.into(),
+                            almost_basket,
+                            scuba_i
+                        );
                     }
                 }
             } else {
