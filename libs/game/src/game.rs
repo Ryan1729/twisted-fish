@@ -484,8 +484,10 @@ impl State {
         //let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
         // Gives player the game warden and glass bottom boat. (16)
         //let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
-        // Gives Cpu2 the dead scuba diver. (8)
-        let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
+        // Gives Cpu2 the dead scuba diver and no fishing. (8)
+        //let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
+        // Gives player the net and no fishing. (8)
+        let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
         // }
 
         let mut rng = xs::from_seed(seed);
@@ -2765,14 +2767,48 @@ pub fn update_and_render(
                     }
                 }
 
-                // TODO allow target Player or Cpu to play "No Fishing".
-
                 match (
                     question.target,
                     state.cards.hand(question.target).contains(zingers::NO_FISHING),
                 ) {
                     (HandId::Player, true) => {
-                        todo!()
+                        commands.draw_nine_slice(gfx::NineSlice::Window, NO_FISHING_WINDOW);
+
+                        let base_xy = NO_FISHING_WINDOW.xy()
+                            + WINDOW_CONTENT_OFFSET;
+                    
+                        let card_xy = base_xy;
+
+                        commands.draw_card(
+                            zingers::NO_FISHING,
+                            card_xy,
+                        );
+
+                        let description_base_xy = card_xy + CARD_WIDTH;
+
+                        let description_base_rect = unscaled::Rect::xy_wh(
+                            description_base_xy,
+                            unscaled::WH {
+                                w: CARD_WIDTH,
+                                h: NO_FISHING_WINDOW.h - WINDOW_CONTENT_OFFSET.h * 2,
+                            }
+                        );
+
+                        let description = question.fresh_cpu_ask_description(
+                            *rank,
+                            id.into(),
+                            description_base_rect.w,
+                        );
+
+                        commands.print_centered(
+                            description,
+                            description_base_rect,
+                            WHITE,
+                        );
+
+                        if input.pressed_this_frame(Button::B) {
+                            handle_ask!();
+                        }
                     },
                     (_, has_no_fishing) => {
                         // If we reach this branch when the target is
@@ -3422,3 +3458,20 @@ const MESSAGE_WINDOW_WIDTH_IN_CHARS: usize = (
     (MESSAGE_WINDOW.w.get() - (WINDOW_CONTENT_OFFSET.w.get() * 2))
     / gfx::CHAR_ADVANCE_W.get().get()
 ) as usize;
+
+const NO_FISHING_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 8;
+
+    const WIN_W: unscaled::Inner = CARD_WIDTH.get() * 3
+    + WINDOW_CONTENT_OFFSET.w.get() * 2;
+
+    const WIN_H: unscaled::Inner = CARD_HEIGHT.get()
+    + WINDOW_CONTENT_OFFSET.h.get() * 2;
+
+    unscaled::Rect {
+        x: X((command::WIDTH - WIN_W) / 2),
+        y: Y((command::HEIGHT - WIN_H) / 2),
+        w: W(WIN_W),
+        h: H(WIN_H),
+    }
+};
