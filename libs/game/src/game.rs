@@ -2816,7 +2816,7 @@ pub fn update_and_render(
                         let description_base_rect = unscaled::Rect::xy_wh(
                             description_base_xy,
                             unscaled::WH {
-                                w: CARD_WIDTH,
+                                w: NO_FISHING_WINDOW.w - CARD_WIDTH * 2,
                                 h: NO_FISHING_WINDOW.h - WINDOW_CONTENT_OFFSET.h * 2,
                             }
                         );
@@ -2833,8 +2833,10 @@ pub fn update_and_render(
                             WHITE,
                         );
 
-                        let submit_base_xy = description_base_xy
-                            + description_base_rect.w;
+                        let submit_base_xy = NO_FISHING_WINDOW.xy()
+                            + WINDOW_CONTENT_OFFSET.h
+                            + NO_FISHING_WINDOW.w
+                            - (CARD_WIDTH + WINDOW_CONTENT_OFFSET.w);
 
                         let group = new_group!();
 
@@ -3493,7 +3495,7 @@ const MESSAGE_WINDOW_WIDTH_IN_CHARS: usize = (
 const NO_FISHING_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 8;
 
-    const WIN_W: unscaled::Inner = CARD_WIDTH.get() * 3
+    const WIN_W: unscaled::Inner = ((CARD_WIDTH.get() * 3) / 2) * 3
     + WINDOW_CONTENT_OFFSET.w.get() * 2;
 
     const WIN_H: unscaled::Inner = CARD_HEIGHT.get()
