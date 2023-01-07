@@ -746,6 +746,7 @@ mod ui {
         AnytimeCard,
         AnytimeSubmit,
         RankSelect,
+        NoFishingSubmit,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -1346,11 +1347,26 @@ fn discard_glass_bottom_boat(
     animations: &mut Animations,
     source: HandId,
 ) {
-    // TODO? Reduce duplication with perform_game_warden? Or does the
-    // assert provide enough reason to keep them separate.
+    discard_given_card(cards, animations, source, zingers::GLASS_BOTTOM_BOAT)
+}
+
+fn discard_no_fishing(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    source: HandId,
+) {
+    discard_given_card(cards, animations, source, zingers::NO_FISHING)
+}
+
+fn discard_given_card(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    source: HandId,
+    card: Card,
+) {
     let mut remove_at = None;
     for (i, current_card) in cards.hand(source).enumerated_iter() {
-        if current_card == zingers::GLASS_BOTTOM_BOAT {
+        if current_card == card {
             remove_at = Some(i);
             break
         }
@@ -1377,7 +1393,7 @@ fn discard_glass_bottom_boat(
             return
         }
     }
-    debug_assert!(false, "Didn't find glass bottom boat!");
+    debug_assert!(false, "Didn't find card {}!", card);
 }
 
 fn play_dead_scuba_diver(
@@ -1467,7 +1483,8 @@ fn do_play_anytime_menu(
             AnytimeSubmit => Some(Section::Submit),
             Zero
             | AskSuit(_)
-            | AskSubmit => None,
+            | AskSubmit 
+            | NoFishingSubmit => None,
         };
 
         let mut el_i = GRID.iter()
@@ -1753,7 +1770,8 @@ fn do_play_anytime_menu(
             AnytimeSubmit => Some(Section::Submit),
             Zero
             | AskSuit(_)
-            | AskSubmit => None,
+            | AskSubmit
+            | NoFishingSubmit => None,
         };
 
         let mut el_i = GRID.iter()
@@ -2675,6 +2693,45 @@ pub fn update_and_render(
                 }
             },
             CpuMenu::Asking(rank, ref mut question) => {
+                macro_rules! handle_negative_response {
+                    () => {
+                        let rank = *rank;
+                        let target_card = models::fish_card(rank, question.suit);
+                        let my_len = state.cards.hand(id.into()).len();
+
+                        let card_option = state.cards.deck.draw();
+
+                        if let Some(card) = card_option {
+                            let at = DECK_XY;
+
+                            let target = get_card_insert_position(
+                                spread(id.into()),
+                                my_len
+                            );
+
+                            state.animations.push(Animation {
+                                card,
+                                at,
+                                target,
+                                action: AnimationAction::AddToHand(id.into()),
+                                .. <_>::default()
+                            });
+
+                            if card == target_card {
+                                state.memories.fished_for(id.into(), rank, question.suit);
+
+                                state.menu = Menu::CpuTurn{
+                                    id,
+                                    menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
+                                };
+                            } else {
+                                state.menu = next_turn_menu(id, &state.cards.player);
+                            }
+                        } else {
+                            state.menu = next_turn_menu(id, &state.cards.player);
+                        }
+                    }
+                }
                 macro_rules! handle_ask {
                     () => {
                         let rank = *rank;
@@ -2732,37 +2789,7 @@ pub fn update_and_render(
                                 menu: CpuMenu::WaitingForSuccesfulAsk,
                             };
                         } else {
-                            let card_option = state.cards.deck.draw();
-
-                            if let Some(card) = card_option {
-                                let at = DECK_XY;
-
-                                let target = get_card_insert_position(
-                                    spread(id.into()),
-                                    my_len
-                                );
-
-                                state.animations.push(Animation {
-                                    card,
-                                    at,
-                                    target,
-                                    action: AnimationAction::AddToHand(id.into()),
-                                    .. <_>::default()
-                                });
-
-                                if card == target_card {
-                                    state.memories.fished_for(id.into(), rank, question.suit);
-
-                                    state.menu = Menu::CpuTurn{
-                                        id,
-                                        menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
-                                    };
-                                } else {
-                                    state.menu = next_turn_menu(id, &state.cards.player);
-                                }
-                            } else {
-                                state.menu = next_turn_menu(id, &state.cards.player);
-                            }
+                            handle_negative_response!();
                         }
                     }
                 }
@@ -2806,9 +2833,33 @@ pub fn update_and_render(
                             WHITE,
                         );
 
-                        if input.pressed_this_frame(Button::B) {
+                        let submit_base_xy = description_base_xy
+                            + description_base_rect.w;
+
+                        let group = new_group!();
+
+                        if do_button(
+                            group,
+                            ButtonSpec {
+                                id: NoFishingSubmit,
+                                rect: fit_to_rest_of_window(
+                                    submit_base_xy,
+                                    NO_FISHING_WINDOW,
+                                ),
+                                text: b"Play",
+                            }
+                        ) {
+                            discard_no_fishing(
+                                &mut state.cards,
+                                &mut state.animations,
+                                question.target
+                            );
+                            handle_negative_response!();
+                        } else if input.pressed_this_frame(Button::B) {
                             handle_ask!();
                         }
+
+                        group.ctx.set_next_hot(NoFishingSubmit);
                     },
                     (_, has_no_fishing) => {
                         // If we reach this branch when the target is
@@ -2826,7 +2877,12 @@ pub fn update_and_render(
                             question.suit,
                             state.cards.active_count(),
                         ) {
-                            todo!()
+                            discard_no_fishing(
+                                &mut state.cards,
+                                &mut state.animations,
+                                question.target
+                            );
+                            handle_negative_response!();
                         } else {
                             commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
 
@@ -3047,37 +3103,12 @@ fn perform_game_warden(
             })
         })?;
 
-    let mut remove_at = None;
-    for (i, current_card) in cards.hand(source).enumerated_iter() {
-        if current_card == zingers::THE_GAME_WARDEN {
-            remove_at = Some(i);
-            break
-        }
-    }
-
-    if let Some(i) = remove_at {
-        let hand = cards.hand_mut(source);
-        if let Some(card) = hand.remove(i) {
-            let at = get_card_position(
-                spread(source),
-                hand.len(),
-                i,
-            );
-
-            animations.push(Animation {
-                card,
-                at,
-                target: DISCARD_XY,
-                action: AnimationAction::AddToDiscard,
-                shown: true,
-                .. <_>::default()
-            });
-
-            return Some(());
-        }
-    } else {
-        debug_assert!(false, "Didn't find game warden!");
-    }
+    discard_given_card(
+        cards,
+        animations,
+        source.into(),
+        zingers::THE_GAME_WARDEN,
+    );
 
     None
 }
