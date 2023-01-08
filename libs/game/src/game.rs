@@ -485,9 +485,9 @@ impl State {
         // Gives player the game warden and glass bottom boat. (16)
         //let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
         // Gives Cpu2 the dead scuba diver and no fishing. (8)
-        //let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
+        let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
         // Gives player the net and no fishing. (8)
-        let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
+        //let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
         // }
 
         let mut rng = xs::from_seed(seed);
@@ -2329,6 +2329,37 @@ pub fn update_and_render(
                                 text: b"Submit",
                             }
                         ) {
+                            macro_rules! handle_negative_response {
+                                () => {
+                                    let player_len = state.cards.player.len();
+
+                                    let drew = state.cards.deck.draw();
+
+                                    *menu = PlayerMenu::Fished{
+                                        used,
+                                        question: core::mem::take(question),
+                                        drew,
+                                    };
+
+                                    if let Some(card) = drew {
+                                        let at = DECK_XY;
+
+                                        let target = get_card_insert_position(
+                                            spread(HandId::Player),
+                                            player_len
+                                        );
+
+                                        state.animations.push(Animation {
+                                            card,
+                                            at,
+                                            target,
+                                            action: AnimationAction::AddToHand(HandId::Player),
+                                            .. <_>::default()
+                                        });
+                                    }
+                                }
+                            }
+
                             if state.cards.hand(question.target)
                                 .contains(zingers::NO_FISHING)
                             && should_use_no_fishing_against(
@@ -2342,8 +2373,12 @@ pub fn update_and_render(
                                 question.suit,
                                 state.cards.active_count(),
                             ) {
-                                // TODO have Cpu player play "No Fishing".
-                                todo!();
+                                discard_no_fishing(
+                                    &mut state.cards,
+                                    &mut state.animations,
+                                    question.target
+                                );
+                                handle_negative_response!();
                             } else {
                                 let player_len = state.cards.player.len();
                                 let target_hand = state.cards.hand_mut(question.target);
@@ -2399,30 +2434,7 @@ pub fn update_and_render(
 
                                     *menu = PlayerMenu::default();
                                 } else {
-                                    let drew = state.cards.deck.draw();
-
-                                    *menu = PlayerMenu::Fished{
-                                        used,
-                                        question: core::mem::take(question),
-                                        drew,
-                                    };
-
-                                    if let Some(card) = drew {
-                                        let at = DECK_XY;
-
-                                        let target = get_card_insert_position(
-                                            spread(HandId::Player),
-                                            player_len
-                                        );
-
-                                        state.animations.push(Animation {
-                                            card,
-                                            at,
-                                            target,
-                                            action: AnimationAction::AddToHand(HandId::Player),
-                                            .. <_>::default()
-                                        });
-                                    }
+                                    handle_negative_response!();
                                 }
                             }
                         } else if input.pressed_this_frame(Button::B) {
