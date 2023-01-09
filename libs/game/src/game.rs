@@ -171,12 +171,19 @@ impl Animation {
 }
 
 #[derive(Clone, Copy, Default)]
+pub enum AfterDiscard {
+    #[default]
+    Nothing,
+    BackToSelecting(HandId),
+}
+
+#[derive(Clone, Copy, Default)]
 pub enum AnimationAction {
     #[default]
     DoNothing,
     AddToHand(HandId),
     PerformGameWarden,
-    AddToDiscard,
+    AddToDiscard(AfterDiscard),
     AnimateBackToHand(HandId),
 }
 
@@ -405,6 +412,7 @@ pub enum CpuMenu {
     DeadInTheWater,
     WaitingForSuccesfulAsk,
     WaitingWhenGotWhatWasFishingFor,
+    WaitingWhenPlayedTwoFistedFisherman,
 }
 
 #[derive(Clone, Default)]
@@ -581,6 +589,44 @@ impl State {
             };
 
             if anim.is_done() {
+                macro_rules! back_to_selecting {
+                    ($id: ident) => ({
+                        let hand = match $id {
+                            HandId::Player => &mut self.cards.player,
+                            HandId::Cpu1 => &mut self.cards.cpu1,
+                            HandId::Cpu2 => &mut self.cards.cpu2,
+                            HandId::Cpu3 => &mut self.cards.cpu3,
+                        };
+
+                        match CpuId::try_from($id) {
+                            Err(_) => match self.menu {
+                                Menu::PlayerTurn {
+                                    ref mut selected,
+                                    menu: _
+                                } => {
+                                    *selected = hand.len() - 1;
+                                },
+                                _ => {},
+                            },
+                            Ok(cpu_id) => match self.menu {
+                                Menu::CpuTurn {
+                                    id,
+                                    ref mut menu,
+                                } if cpu_id == id
+                                && matches!(
+                                    *menu,
+                                    CpuMenu::WaitingForSuccesfulAsk
+                                    | CpuMenu::WaitingWhenGotWhatWasFishingFor
+                                    | CpuMenu::WaitingWhenPlayedTwoFistedFisherman
+                                ) => {
+                                    *menu = CpuMenu::Selecting;
+                                },
+                                _ => {},
+                            }
+                        }
+                    })
+                }
+
                 match anim.action {
                     AnimationAction::DoNothing => {},
                     AnimationAction::AddToHand(id) => {
@@ -660,31 +706,7 @@ impl State {
 
                         speaker.request_sfx(SFX::CardPlace);
 
-                        match CpuId::try_from(id) {
-                            Err(_) => match self.menu {
-                                Menu::PlayerTurn {
-                                    ref mut selected,
-                                    menu: _
-                                } => {
-                                    *selected = hand.len() - 1;
-                                },
-                                _ => {},
-                            },
-                            Ok(cpu_id) => match self.menu {
-                                Menu::CpuTurn {
-                                    id,
-                                    ref mut menu,
-                                } if cpu_id == id
-                                && matches!(
-                                    *menu,
-                                    CpuMenu::WaitingForSuccesfulAsk
-                                    | CpuMenu::WaitingWhenGotWhatWasFishingFor
-                                ) => {
-                                    *menu = CpuMenu::Selecting;
-                                },
-                                _ => {},
-                            }
-                        }
+                        back_to_selecting!(id);
                     },
                     AnimationAction::PerformGameWarden => {
                         // TODO Animate all cards in deck moving to random targets
@@ -693,10 +715,16 @@ impl State {
                         self.cards.deck.push(anim.card);
                         self.cards.deck.shuffle(&mut self.rng);
                     }
-                    AnimationAction::AddToDiscard => {
+                    AnimationAction::AddToDiscard(after_discard) => {
                         self.cards.discard.push(anim.card);
 
                         speaker.request_sfx(SFX::CardPlace);
+
+                        match after_discard {
+                            AfterDiscard::BackToSelecting(id)
+                                => back_to_selecting!(id),
+                            AfterDiscard::Nothing => {}
+                        }
                     }
                     AnimationAction::AnimateBackToHand(id) => {
                         let target = get_card_insert_position(
@@ -1342,12 +1370,32 @@ fn anytime_play(
     None
 }
 
+fn discard_game_warden(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    source: HandId,
+) {
+    discard_given_card(
+        cards,
+        animations,
+        source,
+        zingers::THE_GAME_WARDEN,
+        AfterDiscard::Nothing,
+    )
+}
+
 fn discard_glass_bottom_boat(
     cards: &mut Cards,
     animations: &mut Animations,
     source: HandId,
 ) {
-    discard_given_card(cards, animations, source, zingers::GLASS_BOTTOM_BOAT)
+    discard_given_card(
+        cards,
+        animations,
+        source,
+        zingers::GLASS_BOTTOM_BOAT,
+        AfterDiscard::Nothing,
+    )
 }
 
 fn discard_no_fishing(
@@ -1355,7 +1403,27 @@ fn discard_no_fishing(
     animations: &mut Animations,
     source: HandId,
 ) {
-    discard_given_card(cards, animations, source, zingers::NO_FISHING)
+    discard_given_card(
+        cards,
+        animations,
+        source,
+        zingers::NO_FISHING,
+        AfterDiscard::Nothing,
+    )
+}
+
+fn discard_two_fisted_fisherman(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    source: HandId,
+) {
+    discard_given_card(
+        cards,
+        animations,
+        source,
+        zingers::TWO_FISTED_FISHERMAN,
+        AfterDiscard::BackToSelecting(source),
+    )
 }
 
 fn discard_given_card(
@@ -1363,6 +1431,7 @@ fn discard_given_card(
     animations: &mut Animations,
     source: HandId,
     card: Card,
+    after_discard: AfterDiscard,
 ) {
     let mut remove_at = None;
     for (i, current_card) in cards.hand(source).enumerated_iter() {
@@ -1385,7 +1454,7 @@ fn discard_given_card(
                 card,
                 at,
                 target: DISCARD_XY,
-                action: AnimationAction::AddToDiscard,
+                action: AnimationAction::AddToDiscard(after_discard),
                 shown: true,
                 .. <_>::default()
             });
@@ -1483,7 +1552,7 @@ fn do_play_anytime_menu(
             AnytimeSubmit => Some(Section::Submit),
             Zero
             | AskSuit(_)
-            | AskSubmit 
+            | AskSubmit
             | NoFishingSubmit => None,
         };
 
@@ -1889,6 +1958,41 @@ fn should_use_no_fishing_against(
 
     hand.contains(models::fish_card(rank, suit))
     && memory.is_likely_to_fill_rank_soon(target, rank)
+}
+
+fn can_and_should_play_two_fisted_fisherman(
+    memories: &memories::Memories,
+    hand: &Hand,
+    source: CpuId,
+    active_count: ActiveCardCount,
+) -> bool {
+    if !hand.contains(zingers::TWO_FISTED_FISHERMAN) {
+        return false
+    }
+
+    if let ActiveCardCount::VeryFew = active_count {
+        return true
+    }
+
+    let targets = HandId::from(source).besides();
+
+    // Note: It is not fair to read other players' memories.
+    let memory = memories.memory(source);
+
+    // TODO? Does this capture the criteria we want to capture?
+    for rank in Rank::ALL {
+        for suit in Suit::ALL {
+            if hand.contains(models::fish_card(rank, suit)) {
+                for target in targets {
+                    if memory.is_likely_to_fill_rank_soon(target, rank) {
+                        return true
+                    }
+                }
+            }
+        }
+    }
+
+    return true
 }
 
 pub fn update_and_render(
@@ -2331,6 +2435,8 @@ pub fn update_and_render(
                         ) {
                             macro_rules! handle_negative_response {
                                 () => {
+                                    // TODO allow player to play Two Fisted Fisherman
+
                                     let player_len = state.cards.player.len();
 
                                     let drew = state.cards.deck.draw();
@@ -2707,40 +2813,57 @@ pub fn update_and_render(
             CpuMenu::Asking(rank, ref mut question) => {
                 macro_rules! handle_negative_response {
                     () => {
-                        let rank = *rank;
-                        let target_card = models::fish_card(rank, question.suit);
-                        let my_len = state.cards.hand(id.into()).len();
-
-                        let card_option = state.cards.deck.draw();
-
-                        if let Some(card) = card_option {
-                            let at = DECK_XY;
-
-                            let target = get_card_insert_position(
-                                spread(id.into()),
-                                my_len
+                        if can_and_should_play_two_fisted_fisherman(
+                            &state.memories,
+                            state.cards.hand(id.into()),
+                            id,
+                            state.cards.active_count(),
+                        ) {
+                            discard_two_fisted_fisherman(
+                                &mut state.cards,
+                                &mut state.animations,
+                                id.into(),
                             );
+                            state.menu = Menu::CpuTurn{
+                                id,
+                                menu: CpuMenu::WaitingWhenPlayedTwoFistedFisherman,
+                            };
+                        } else {
+                            let rank = *rank;
+                            let target_card = models::fish_card(rank, question.suit);
+                            let my_len = state.cards.hand(id.into()).len();
 
-                            state.animations.push(Animation {
-                                card,
-                                at,
-                                target,
-                                action: AnimationAction::AddToHand(id.into()),
-                                .. <_>::default()
-                            });
+                            let card_option = state.cards.deck.draw();
 
-                            if card == target_card {
-                                state.memories.fished_for(id.into(), rank, question.suit);
+                            if let Some(card) = card_option {
+                                let at = DECK_XY;
 
-                                state.menu = Menu::CpuTurn{
-                                    id,
-                                    menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
-                                };
+                                let target = get_card_insert_position(
+                                    spread(id.into()),
+                                    my_len
+                                );
+
+                                state.animations.push(Animation {
+                                    card,
+                                    at,
+                                    target,
+                                    action: AnimationAction::AddToHand(id.into()),
+                                    .. <_>::default()
+                                });
+
+                                if card == target_card {
+                                    state.memories.fished_for(id.into(), rank, question.suit);
+
+                                    state.menu = Menu::CpuTurn{
+                                        id,
+                                        menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
+                                    };
+                                } else {
+                                    state.menu = next_turn_menu(id, &state.cards.player);
+                                }
                             } else {
                                 state.menu = next_turn_menu(id, &state.cards.player);
                             }
-                        } else {
-                            state.menu = next_turn_menu(id, &state.cards.player);
                         }
                     }
                 }
@@ -2815,7 +2938,7 @@ pub fn update_and_render(
 
                         let base_xy = NO_FISHING_WINDOW.xy()
                             + WINDOW_CONTENT_OFFSET;
-                    
+
                         let card_xy = base_xy;
 
                         commands.draw_card(
@@ -2959,7 +3082,7 @@ pub fn update_and_render(
                     }
                 }
             },
-            // TODO? retain their target card for this message
+            // TODO? retain their target card for this message?
             CpuMenu::WaitingForSuccesfulAsk => {
                 commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_ASK_WINDOW);
 
@@ -2978,7 +3101,7 @@ pub fn update_and_render(
                     WHITE,
                 );
             },
-            // TODO? retain their target card for this message
+            // TODO? retain their target card for this message?
             CpuMenu::WaitingWhenGotWhatWasFishingFor => {
                 commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_FISH_WINDOW);
 
@@ -2993,6 +3116,25 @@ pub fn update_and_render(
 
                 commands.print_centered(
                     b"They got what they fished for!",
+                    description_base_rect,
+                    WHITE,
+                );
+            },
+            CpuMenu::WaitingWhenPlayedTwoFistedFisherman => {
+                commands.draw_nine_slice(gfx::NineSlice::Window, CPU_TWO_FISTED_FISHERMAN_WINDOW);
+
+                let base_xy = CPU_TWO_FISTED_FISHERMAN_WINDOW.xy()
+                    + WINDOW_CONTENT_OFFSET;
+
+                let description_base_xy = base_xy;
+
+                let description_base_rect = fit_to_rest_of_window(
+                    description_base_xy,
+                    CPU_TWO_FISTED_FISHERMAN_WINDOW,
+                );
+
+                commands.print_centered(
+                    b"They played the Two-Fisted \nFisherman! So they get to go again!",
                     description_base_rect,
                     WHITE,
                 );
@@ -3117,11 +3259,10 @@ fn perform_game_warden(
             })
         })?;
 
-    discard_given_card(
+    discard_game_warden(
         cards,
         animations,
         source.into(),
-        zingers::THE_GAME_WARDEN,
     );
 
     None
@@ -3445,6 +3586,16 @@ const CPU_SUCCESFUL_ASK_WINDOW: unscaled::Rect = {
 };
 
 const CPU_SUCCESFUL_FISH_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 128 - 16;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
+    }
+};
+
+const CPU_TWO_FISTED_FISHERMAN_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 128 - 16;
     unscaled::Rect {
         x: X(OFFSET),
