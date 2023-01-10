@@ -378,10 +378,11 @@ impl Menu {
 
 #[derive(Clone)]
 pub enum PlayerMenu {
-    Selecting { sub_menu: PlayerSubMenu },
+    Selecting { sub_menu: PlayerSelectingSubMenu },
     Asking {
         used: Card,
         question: Question,
+        sub_menu: PlayerAskingSubMenu,
     },
     Fished{
         used: Card,
@@ -397,11 +398,18 @@ impl Default for PlayerMenu {
 }
 
 #[derive(Clone, Default)]
-pub enum PlayerSubMenu {
+pub enum PlayerSelectingSubMenu {
     #[default]
     Root,
     Anytime(PlayerSelection, AvailablePlayAnytime),
     Message(Vec<u8>),
+}
+
+#[derive(Clone, Default)]
+pub enum PlayerAskingSubMenu {
+    #[default]
+    Root,
+    TwoFistedFisherman,
 }
 
 #[derive(Clone, Default)]
@@ -485,7 +493,7 @@ impl State {
         const INITIAL_HAND_SIZE: u8 = 8;//16;
         // For debugging: {
         // Gives player multiple zingers. (8)
-        //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
         // Gives Cpu1 the game warden (8)
         //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
         // Gives player glass bottom boat. (8)
@@ -493,7 +501,7 @@ impl State {
         // Gives player the game warden and glass bottom boat. (16)
         //let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
         // Gives Cpu2 the dead scuba diver and no fishing. (8)
-        let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
+        //let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
         // Gives player the net and no fishing. (8)
         //let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
         // }
@@ -775,6 +783,7 @@ mod ui {
         AnytimeSubmit,
         RankSelect,
         NoFishingSubmit,
+        TwoFistedFishermanSubmit,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -1553,7 +1562,8 @@ fn do_play_anytime_menu(
             Zero
             | AskSuit(_)
             | AskSubmit
-            | NoFishingSubmit => None,
+            | NoFishingSubmit
+            | TwoFistedFishermanSubmit => None,
         };
 
         let mut el_i = GRID.iter()
@@ -1840,7 +1850,8 @@ fn do_play_anytime_menu(
             Zero
             | AskSuit(_)
             | AskSubmit
-            | NoFishingSubmit => None,
+            | NoFishingSubmit
+            | TwoFistedFishermanSubmit => None,
         };
 
         let mut el_i = GRID.iter()
@@ -2211,7 +2222,7 @@ pub fn update_and_render(
                         commands.draw_selectrum(selected_pos);
 
                         match sub_menu {
-                            PlayerSubMenu::Root => {
+                            PlayerSelectingSubMenu::Root => {
                                 if input.pressed_this_frame(Button::LEFT) {
                                     state.menu = Menu::player(
                                         if selected > 0 {
@@ -2235,13 +2246,13 @@ pub fn update_and_render(
                                         if let Some(zinger) = models::get_zinger(player_card) {
                                             match zinger {
                                                 Zinger::TheGameWarden => {
-                                                    *sub_menu = PlayerSubMenu::Anytime(
+                                                    *sub_menu = PlayerSelectingSubMenu::Anytime(
                                                         <_>::default(),
                                                         AvailablePlayAnytime::game_warden(selected),
                                                     );
                                                 },
                                                 Zinger::GlassBottomBoat => {
-                                                    *sub_menu = PlayerSubMenu::Anytime(
+                                                    *sub_menu = PlayerSelectingSubMenu::Anytime(
                                                         <_>::default(),
                                                         AvailablePlayAnytime::glass_bottom_boat(selected),
                                                     );
@@ -2250,7 +2261,7 @@ pub fn update_and_render(
                                                     if let Some(almost_complete_baskets) = find_almost_complete_baskets(
                                                         &state.cards.player
                                                     ) {
-                                                        *sub_menu = PlayerSubMenu::Anytime(
+                                                        *sub_menu = PlayerSelectingSubMenu::Anytime(
                                                             <_>::default(),
                                                             AvailablePlayAnytime::dead_scuba_diver(
                                                                 selected,
@@ -2261,7 +2272,7 @@ pub fn update_and_render(
                                                         let message = b"There are no almost-full baskets in your hand.";
                                                         let mut vec = Vec::with_capacity(message.len());
                                                         vec.extend(message);
-                                                        *sub_menu = PlayerSubMenu::Message(vec);
+                                                        *sub_menu = PlayerSelectingSubMenu::Message(vec);
                                                     }
                                                 },
                                                 _ => {
@@ -2274,6 +2285,7 @@ pub fn update_and_render(
                                                 menu: PlayerMenu::Asking{
                                                     used: player_card,
                                                     question: Default::default(),
+                                                    sub_menu: Default::default(),
                                                 },
                                             };
                                             state.ctx.set_next_hot(Cpu1);
@@ -2283,12 +2295,12 @@ pub fn update_and_render(
                                     // do nothing
                                 }
                             },
-                            PlayerSubMenu::Anytime(
+                            PlayerSelectingSubMenu::Anytime(
                                 ref mut player_selection,
                                 available,
                             ) => {
                                 if player_selection.declined {
-                                    *sub_menu = PlayerSubMenu::Root;
+                                    *sub_menu = PlayerSelectingSubMenu::Root;
                                 } else if let AnytimeOutcome::Done
                                 = do_play_anytime_menu(
                                     new_group!(),
@@ -2299,10 +2311,10 @@ pub fn update_and_render(
                                     *available
                                 ) {
                                     // Does not count as a turn.
-                                    *sub_menu = PlayerSubMenu::Root;
+                                    *sub_menu = PlayerSelectingSubMenu::Root;
                                 }
                             },
-                            PlayerSubMenu::Message(ref mut message) => {
+                            PlayerSelectingSubMenu::Message(ref mut message) => {
                                 commands.draw_nine_slice(
                                     gfx::NineSlice::Window,
                                     MESSAGE_WINDOW
@@ -2329,7 +2341,7 @@ pub fn update_and_render(
                                 );
 
                                 if input.pressed_this_frame(Button::B) {
-                                    *sub_menu = PlayerSubMenu::Root;
+                                    *sub_menu = PlayerSelectingSubMenu::Root;
                                 }
                             },
                         }
@@ -2337,192 +2349,24 @@ pub fn update_and_render(
                     PlayerMenu::Asking {
                         used,
                         ref mut question,
+                        ref mut sub_menu,
                     } => {
                         let used = *used;
-                        // TODO? handle the Net here, or elsewhere?
-                        let rank = models::get_rank(used)
-                            .expect("Asking used card should always have a rank!");
 
-                        commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
-
-                        let base_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-
-                        let card_xy = base_xy;
-
-                        commands.draw_card(
-                            used,
-                            card_xy
-                        );
-
-                        let target_xy = card_xy + CARD_WIDTH + (ASKING_WINDOW.h / 5);
-
-                        let group = new_group!();
-
-                        draw_cpu_id_quick_select(
-                            group,
-                            question.target.try_into().unwrap_or(CpuId::One),
-                            target_xy
-                        );
-
-                        let suit_base_xy = target_xy + CPU_ID_SELECT_WH.w;
-
-                        let suit_quick_select_rect = Rect::xy_wh(
-                            suit_base_xy,
-                            ASKING_SUIT_WH,
-                        );
-
-                        // TODO? Display the target card instead of text?
-                        group.commands.print_centered(
-                            Suit::TEXT[question.suit as u8 as usize],
-                            Rect::xy_wh(
-                                suit_base_xy + ASKING_SUIT_TEXT_OFFSET,
-                                ASKING_SUIT_TEXT_WH,
-                            ),
-                            WHITE,
-                        );
-
-                        ui::draw_quick_select(
-                            group,
-                            suit_quick_select_rect,
-                            &[
-                                AskSuit(Suit::ALL[0]),
-                                AskSuit(Suit::ALL[1]),
-                                AskSuit(Suit::ALL[2]),
-                                AskSuit(Suit::ALL[3]),
-                                AskSuit(Suit::ALL[4])
-                            ]
-                        );
-
-                        let description_base_rect = unscaled::Rect::xy_wh(
-                            unscaled::XY {
-                                x: base_xy.x,
-                                y: suit_base_xy.y + ASKING_SUIT_WH.h,
-                            },
-                            unscaled::WH {
-                                w: ASKING_WINDOW.w,
-                                h: (base_xy.y + ASKING_WINDOW.h)
-                                - (suit_base_xy.y + ASKING_SUIT_WH.h),
-                            }
-                        );
-
-                        let description = question.fresh_ask_description(rank);
-
-                        let description_xy = gfx::center_line_in_rect(
-                            description.len() as _,
-                            description_base_rect,
-                        );
-                        group.commands.print_line(
-                            description,
-                            description_xy,
-                            WHITE,
-                        );
-
-                        let submit_base_xy = unscaled::XY {
-                            x: suit_base_xy.x + ASKING_SUIT_WH.w,
-                            y: base_xy.y
-                        };
-
-                        if do_button(
-                            group,
-                            ButtonSpec {
-                                id: AskSubmit,
-                                rect: fit_to_rest_of_window(
-                                    submit_base_xy,
-                                    ASKING_WINDOW,
-                                ),
-                                text: b"Submit",
-                            }
-                        ) {
-                            macro_rules! handle_negative_response {
-                                () => {
-                                    // TODO allow player to play Two Fisted Fisherman
-
-                                    let player_len = state.cards.player.len();
-
-                                    let drew = state.cards.deck.draw();
-
-                                    *menu = PlayerMenu::Fished{
-                                        used,
-                                        question: core::mem::take(question),
-                                        drew,
-                                    };
-
-                                    if let Some(card) = drew {
-                                        let at = DECK_XY;
-
-                                        let target = get_card_insert_position(
-                                            spread(HandId::Player),
-                                            player_len
-                                        );
-
-                                        state.animations.push(Animation {
-                                            card,
-                                            at,
-                                            target,
-                                            action: AnimationAction::AddToHand(HandId::Player),
-                                            .. <_>::default()
-                                        });
-                                    }
-                                }
-                            }
-
-                            if state.cards.hand(question.target)
-                                .contains(zingers::NO_FISHING)
-                            && should_use_no_fishing_against(
-                                state.memories.memory(
-                                    CpuId::try_from(question.target)
-                                    .expect("target should be a Cpu player")
-                                ),
-                                state.cards.hand(question.target),
-                                HandId::Player,
-                                rank,
-                                question.suit,
-                                state.cards.active_count(),
-                            ) {
-                                discard_no_fishing(
-                                    &mut state.cards,
-                                    &mut state.animations,
-                                    question.target
-                                );
-                                handle_negative_response!();
-                            } else {
+                        macro_rules! handle_negative_response {
+                            () => {
                                 let player_len = state.cards.player.len();
-                                let target_hand = state.cards.hand_mut(question.target);
 
-                                state.memories.asked_for(
-                                    HandId::Player,
-                                    rank,
-                                    question.suit
-                                );
+                                let drew = state.cards.deck.draw();
 
-                                let target_card = models::fish_card(rank, question.suit);
+                                *menu = PlayerMenu::Fished{
+                                    used,
+                                    question: core::mem::take(question),
+                                    drew,
+                                };
 
-                                let mut found = None;
-                                for i in 0..target_hand.len() {
-                                    let was_found = target_hand.get(i)
-                                        .map(|card| card == target_card)
-                                        .unwrap_or_default();
-                                    if was_found {
-                                        found = Some((
-                                            target_hand.remove(i).expect("We just looked at it! (player)"),
-                                            i
-                                        ));
-
-                                        break
-                                    }
-                                }
-
-                                if let Some((card, i)) = found {
-                                    state.memories.found(
-                                        HandId::Player,
-                                        rank,
-                                        question.suit
-                                    );
-                                    let at = get_card_position(
-                                        spread(question.target),
-                                        target_hand.len(),
-                                        i,
-                                    );
+                                if let Some(card) = drew {
+                                    let at = DECK_XY;
 
                                     let target = get_card_insert_position(
                                         spread(HandId::Player),
@@ -2534,91 +2378,321 @@ pub fn update_and_render(
                                         at,
                                         target,
                                         action: AnimationAction::AddToHand(HandId::Player),
-                                        shown: true,
                                         .. <_>::default()
                                     });
-
-                                    *menu = PlayerMenu::default();
-                                } else {
-                                    handle_negative_response!();
                                 }
                             }
-                        } else if input.pressed_this_frame(Button::B) {
-                            state.menu = Menu::player(selected);
-                        } else if let Some(dir) = input.dir_pressed_this_frame() {
-                            const GRID_LEN: usize = 3;
+                        }
 
-                            #[derive(Clone, Copy, PartialEq, Eq)]
-                            enum Section {
-                                Target,
-                                Suit,
-                                Submit,
-                            }
-
-                            const GRID: [Section; GRID_LEN] = [
-                                Section::Target, Section::Suit, Section::Submit,
-                            ];
-
-                            let old_el = match state.ctx.hot {
-                                Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
-                                AskSuit(_) => Some(Section::Suit),
-                                AskSubmit => Some(Section::Submit),
-                                _ => None,
-                            };
-                            let mut el_i = GRID.iter()
-                                .position(|el| Some(*el) == old_el)
-                                .unwrap_or_default();
-
-                            match dir {
-                                Dir::Up => match GRID[el_i] {
-                                    Section::Target => match question.target {
-                                        HandId::Cpu1 => { question.target = HandId::Cpu2; },
-                                        HandId::Cpu2 => { question.target = HandId::Cpu3; },
-                                        HandId::Cpu3 => { question.target = HandId::Cpu1; },
-                                        HandId::Player => {
-                                            // Player cannot ask the player.
-                                            debug_assert!(false);
+                        match sub_menu {
+                            PlayerAskingSubMenu::Root => {
+                                // TODO? handle the Net here, or elsewhere?
+                                let rank = models::get_rank(used)
+                                    .expect("Asking used card should always have a rank!");
+        
+                                commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
+        
+                                let base_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+        
+                                let card_xy = base_xy;
+        
+                                commands.draw_card(
+                                    used,
+                                    card_xy
+                                );
+        
+                                let target_xy = card_xy + CARD_WIDTH + (ASKING_WINDOW.h / 5);
+        
+                                let group = new_group!();
+        
+                                draw_cpu_id_quick_select(
+                                    group,
+                                    question.target.try_into().unwrap_or(CpuId::One),
+                                    target_xy
+                                );
+        
+                                let suit_base_xy = target_xy + CPU_ID_SELECT_WH.w;
+        
+                                let suit_quick_select_rect = Rect::xy_wh(
+                                    suit_base_xy,
+                                    ASKING_SUIT_WH,
+                                );
+        
+                                // TODO? Display the target card instead of text?
+                                group.commands.print_centered(
+                                    Suit::TEXT[question.suit as u8 as usize],
+                                    Rect::xy_wh(
+                                        suit_base_xy + ASKING_SUIT_TEXT_OFFSET,
+                                        ASKING_SUIT_TEXT_WH,
+                                    ),
+                                    WHITE,
+                                );
+        
+                                ui::draw_quick_select(
+                                    group,
+                                    suit_quick_select_rect,
+                                    &[
+                                        AskSuit(Suit::ALL[0]),
+                                        AskSuit(Suit::ALL[1]),
+                                        AskSuit(Suit::ALL[2]),
+                                        AskSuit(Suit::ALL[3]),
+                                        AskSuit(Suit::ALL[4])
+                                    ]
+                                );
+        
+                                let description_base_rect = unscaled::Rect::xy_wh(
+                                    unscaled::XY {
+                                        x: base_xy.x,
+                                        y: suit_base_xy.y + ASKING_SUIT_WH.h,
+                                    },
+                                    unscaled::WH {
+                                        w: ASKING_WINDOW.w,
+                                        h: (base_xy.y + ASKING_WINDOW.h)
+                                        - (suit_base_xy.y + ASKING_SUIT_WH.h),
+                                    }
+                                );
+        
+                                let description = question.fresh_ask_description(rank);
+        
+                                let description_xy = gfx::center_line_in_rect(
+                                    description.len() as _,
+                                    description_base_rect,
+                                );
+                                group.commands.print_line(
+                                    description,
+                                    description_xy,
+                                    WHITE,
+                                );
+        
+                                let submit_base_xy = unscaled::XY {
+                                    x: suit_base_xy.x + ASKING_SUIT_WH.w,
+                                    y: base_xy.y
+                                };
+        
+                                if do_button(
+                                    group,
+                                    ButtonSpec {
+                                        id: AskSubmit,
+                                        rect: fit_to_rest_of_window(
+                                            submit_base_xy,
+                                            ASKING_WINDOW,
+                                        ),
+                                        text: b"Submit",
+                                    }
+                                ) {
+                                    if state.cards.hand(question.target)
+                                        .contains(zingers::NO_FISHING)
+                                    && should_use_no_fishing_against(
+                                        state.memories.memory(
+                                            CpuId::try_from(question.target)
+                                            .expect("target should be a Cpu player")
+                                        ),
+                                        state.cards.hand(question.target),
+                                        HandId::Player,
+                                        rank,
+                                        question.suit,
+                                        state.cards.active_count(),
+                                    ) {
+                                        discard_no_fishing(
+                                            &mut state.cards,
+                                            &mut state.animations,
+                                            question.target
+                                        );
+                                        handle_negative_response!();
+                                    } else {
+                                        let player_len = state.cards.player.len();
+                                        let target_hand = state.cards.hand_mut(question.target);
+        
+                                        state.memories.asked_for(
+                                            HandId::Player,
+                                            rank,
+                                            question.suit
+                                        );
+        
+                                        let target_card = models::fish_card(rank, question.suit);
+        
+                                        let mut found = None;
+                                        for i in 0..target_hand.len() {
+                                            let was_found = target_hand.get(i)
+                                                .map(|card| card == target_card)
+                                                .unwrap_or_default();
+                                            if was_found {
+                                                found = Some((
+                                                    target_hand.remove(i).expect("We just looked at it! (player)"),
+                                                    i
+                                                ));
+        
+                                                break
+                                            }
                                         }
-                                    },
-                                    Section::Suit => {
-                                        question.suit = question.suit.wrapping_inc()
-                                    },
-                                    Section::Submit => {}
-                                },
-                                Dir::Down => match GRID[el_i] {
-                                    Section::Target => match question.target {
-                                        HandId::Cpu1 => { question.target = HandId::Cpu3; },
-                                        HandId::Cpu2 => { question.target = HandId::Cpu1; },
-                                        HandId::Cpu3 => { question.target = HandId::Cpu2; },
-                                        HandId::Player => {
-                                            // Player cannot ask the player.
-                                            debug_assert!(false);
+        
+                                        if let Some((card, i)) = found {
+                                            state.memories.found(
+                                                HandId::Player,
+                                                rank,
+                                                question.suit
+                                            );
+                                            let at = get_card_position(
+                                                spread(question.target),
+                                                target_hand.len(),
+                                                i,
+                                            );
+        
+                                            let target = get_card_insert_position(
+                                                spread(HandId::Player),
+                                                player_len
+                                            );
+        
+                                            state.animations.push(Animation {
+                                                card,
+                                                at,
+                                                target,
+                                                action: AnimationAction::AddToHand(HandId::Player),
+                                                shown: true,
+                                                .. <_>::default()
+                                            });
+        
+                                            *menu = PlayerMenu::default();
+                                        } else if state.cards.player.contains(zingers::TWO_FISTED_FISHERMAN) {
+                                            *sub_menu = PlayerAskingSubMenu::TwoFistedFisherman;
+                                        } else {
+                                            handle_negative_response!();
                                         }
-                                    },
-                                    Section::Suit => {
-                                        question.suit = question.suit.wrapping_dec()
-                                    },
-                                    Section::Submit => {}
-                                },
-                                Dir::Left => if el_i == 0 {
-                                    el_i = GRID_LEN - 1;
+                                    }
+                                } else if input.pressed_this_frame(Button::B) {
+                                    state.menu = Menu::player(selected);
+                                } else if let Some(dir) = input.dir_pressed_this_frame() {
+                                    const GRID_LEN: usize = 3;
+        
+                                    #[derive(Clone, Copy, PartialEq, Eq)]
+                                    enum Section {
+                                        Target,
+                                        Suit,
+                                        Submit,
+                                    }
+        
+                                    const GRID: [Section; GRID_LEN] = [
+                                        Section::Target, Section::Suit, Section::Submit,
+                                    ];
+        
+                                    let old_el = match state.ctx.hot {
+                                        Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
+                                        AskSuit(_) => Some(Section::Suit),
+                                        AskSubmit => Some(Section::Submit),
+                                        _ => None,
+                                    };
+                                    let mut el_i = GRID.iter()
+                                        .position(|el| Some(*el) == old_el)
+                                        .unwrap_or_default();
+        
+                                    match dir {
+                                        Dir::Up => match GRID[el_i] {
+                                            Section::Target => match question.target {
+                                                HandId::Cpu1 => { question.target = HandId::Cpu2; },
+                                                HandId::Cpu2 => { question.target = HandId::Cpu3; },
+                                                HandId::Cpu3 => { question.target = HandId::Cpu1; },
+                                                HandId::Player => {
+                                                    // Player cannot ask the player.
+                                                    debug_assert!(false);
+                                                }
+                                            },
+                                            Section::Suit => {
+                                                question.suit = question.suit.wrapping_inc()
+                                            },
+                                            Section::Submit => {}
+                                        },
+                                        Dir::Down => match GRID[el_i] {
+                                            Section::Target => match question.target {
+                                                HandId::Cpu1 => { question.target = HandId::Cpu3; },
+                                                HandId::Cpu2 => { question.target = HandId::Cpu1; },
+                                                HandId::Cpu3 => { question.target = HandId::Cpu2; },
+                                                HandId::Player => {
+                                                    // Player cannot ask the player.
+                                                    debug_assert!(false);
+                                                }
+                                            },
+                                            Section::Suit => {
+                                                question.suit = question.suit.wrapping_dec()
+                                            },
+                                            Section::Submit => {}
+                                        },
+                                        Dir::Left => if el_i == 0 {
+                                            el_i = GRID_LEN - 1;
+                                        } else {
+                                            el_i -= 1;
+                                        },
+                                        Dir::Right => if el_i >= GRID_LEN - 1 {
+                                            el_i = 0;
+                                        } else {
+                                            el_i += 1;
+                                        },
+                                    }
+                                    state.ctx.set_next_hot(match GRID[el_i] {
+                                        // TODO? remove now unueeded ui::Id varaints.
+                                        Section::Target => Cpu1,
+                                        Section::Suit => AskSuit(Suit::ALL[0]),
+                                        Section::Submit => AskSubmit,
+                                    });
                                 } else {
-                                    el_i -= 1;
-                                },
-                                Dir::Right => if el_i >= GRID_LEN - 1 {
-                                    el_i = 0;
+                                    // do nothing
+                                }
+                            },
+                            PlayerAskingSubMenu::TwoFistedFisherman => {
+                                commands.draw_nine_slice(
+                                    gfx::NineSlice::Window,
+                                    PLAYER_TWO_FISTED_FISHERMAN_WINDOW
+                                );
+        
+                                let base_xy = PLAYER_TWO_FISTED_FISHERMAN_WINDOW.xy()
+                                    + WINDOW_CONTENT_OFFSET;
+        
+                                let card_xy = base_xy;
+        
+                                commands.draw_card(
+                                    zingers::TWO_FISTED_FISHERMAN,
+                                    card_xy
+                                );
+
+                                let text_xy = card_xy + CARD_WIDTH;
+
+                                commands.print_centered(
+                                    b"Do you want to play the\nTwo-Fisted Fisherman?",
+                                    Rect::xy_wh(
+                                        text_xy,
+                                        PLAYER_TWO_FISTED_FISHERMAN_TEXT_WH,
+                                    ),
+                                    WHITE,
+                                );
+
+                                let submit_xy = text_xy + PLAYER_TWO_FISTED_FISHERMAN_TEXT_WH.w;
+
+                                let group = new_group!();
+
+                                if do_button(
+                                    group,
+                                    ButtonSpec {
+                                        id: TwoFistedFishermanSubmit,
+                                        rect: fit_to_rest_of_window(
+                                            submit_xy,
+                                            PLAYER_TWO_FISTED_FISHERMAN_WINDOW,
+                                        ),
+                                        text: b"Submit",
+                                    }
+                                ) {
+                                    discard_two_fisted_fisherman(
+                                        &mut state.cards,
+                                        &mut state.animations,
+                                        HandId::Player,
+                                    );
+                                    state.menu = Menu::player(selected);
+                                } else if input.pressed_this_frame(Button::B) {
+                                    handle_negative_response!();
                                 } else {
-                                    el_i += 1;
-                                },
-                            }
-                            state.ctx.set_next_hot(match GRID[el_i] {
-                                // TODO? remove now unueeded ui::Id varaints.
-                                Section::Target => Cpu1,
-                                Section::Suit => AskSuit(Suit::ALL[0]),
-                                Section::Submit => AskSubmit,
-                            });
-                        } else {
-                            // do nothing
+                                    // do nothing
+                                }
+
+                                group.ctx.set_next_hot(TwoFistedFishermanSubmit);
+                            },
                         }
                     },
                     PlayerMenu::Fished{
@@ -3492,6 +3566,25 @@ const ASKING_WINDOW: unscaled::Rect = {
         w: W(command::WIDTH - OFFSET * 2),
         h: H(WIN_H),
     }
+};
+
+const PLAYER_TWO_FISTED_FISHERMAN_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 8;
+
+    const WIN_H: unscaled::Inner = CARD_HEIGHT.get()
+    + WINDOW_CONTENT_OFFSET.h.get() * 2;
+
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y((command::HEIGHT - WIN_H) / 2),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(WIN_H),
+    }
+};
+
+const PLAYER_TWO_FISTED_FISHERMAN_TEXT_WH: unscaled::WH = unscaled::WH {
+    w: W(CARD_WIDTH.get() * 3),
+    h: H(PLAYER_TWO_FISTED_FISHERMAN_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2)),
 };
 
 const CPU_ID_SELECT_TEXT_OFFSET: unscaled::WH = unscaled::WH {
