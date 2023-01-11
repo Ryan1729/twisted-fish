@@ -493,7 +493,7 @@ impl State {
         const INITIAL_HAND_SIZE: u8 = 8;//16;
         // For debugging: {
         // Gives player multiple zingers. (8)
-        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        // let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
         // Gives Cpu1 the game warden (8)
         //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
         // Gives player glass bottom boat. (8)
@@ -503,7 +503,7 @@ impl State {
         // Gives Cpu2 the dead scuba diver and no fishing. (8)
         //let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
         // Gives player the net and no fishing. (8)
-        //let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
+        let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
         // }
 
         let mut rng = xs::from_seed(seed);
@@ -2274,6 +2274,12 @@ pub fn update_and_render(
                                                         vec.extend(message);
                                                         *sub_menu = PlayerSelectingSubMenu::Message(vec);
                                                     }
+                                                },
+                                                Zinger::NoFishing => {
+                                                    let message = b"This card can only be played when someone asks you for a fish.";
+                                                    let mut vec = Vec::with_capacity(message.len());
+                                                    vec.extend(message);
+                                                    *sub_menu = PlayerSelectingSubMenu::Message(vec);
                                                 },
                                                 _ => {
                                                     // TODO add specific menus for each zinger
