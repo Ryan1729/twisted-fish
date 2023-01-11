@@ -2287,8 +2287,14 @@ pub fn update_and_render(
                                                     vec.extend(message);
                                                     *sub_menu = PlayerSelectingSubMenu::Message(vec);
                                                 },
-                                                _ => {
-                                                    // TODO add specific menus for each zinger
+                                                Zinger::TheNet => {
+                                                    todo!("Zinger::TheNet")
+                                                },
+                                                Zinger::TheLure => {
+                                                    todo!("Zinger::TheLure")
+                                                },
+                                                Zinger::DivineIntervention => {
+                                                    todo!("Zinger::DivineIntervention")
                                                 },
                                             }
                                         } else {
