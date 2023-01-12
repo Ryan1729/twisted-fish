@@ -389,6 +389,7 @@ pub enum PlayerMenu {
         question: Question,
         drew: Option<Card>
     },
+    Net,
 }
 
 impl Default for PlayerMenu {
@@ -493,7 +494,7 @@ impl State {
         const INITIAL_HAND_SIZE: u8 = 8;//16;
         // For debugging: {
         // Gives player multiple zingers. (8)
-        let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+        //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
         // Gives Cpu1 the game warden (8)
         //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
         // Gives player glass bottom boat. (8)
@@ -503,7 +504,7 @@ impl State {
         // Gives Cpu2 the dead scuba diver and no fishing. (8)
         //let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
         // Gives player the net and no fishing. (8)
-        //let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
+        let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
         // }
 
         let mut rng = xs::from_seed(seed);
@@ -784,6 +785,7 @@ mod ui {
         RankSelect,
         NoFishingSubmit,
         TwoFistedFishermanSubmit,
+        NetSubmit,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -1563,7 +1565,8 @@ fn do_play_anytime_menu(
             | AskSuit(_)
             | AskSubmit
             | NoFishingSubmit
-            | TwoFistedFishermanSubmit => None,
+            | TwoFistedFishermanSubmit
+            | NetSubmit => None,
         };
 
         let mut el_i = GRID.iter()
@@ -1851,7 +1854,8 @@ fn do_play_anytime_menu(
             | AskSuit(_)
             | AskSubmit
             | NoFishingSubmit
-            | TwoFistedFishermanSubmit => None,
+            | TwoFistedFishermanSubmit
+            | NetSubmit => None,
         };
 
         let mut el_i = GRID.iter()
@@ -2288,7 +2292,10 @@ pub fn update_and_render(
                                                     *sub_menu = PlayerSelectingSubMenu::Message(vec);
                                                 },
                                                 Zinger::TheNet => {
-                                                    todo!("Zinger::TheNet")
+                                                    state.menu = Menu::PlayerTurn {
+                                                        selected,
+                                                        menu: PlayerMenu::Net,
+                                                    };
                                                 },
                                                 Zinger::TheLure => {
                                                     todo!("Zinger::TheLure")
@@ -2364,6 +2371,57 @@ pub fn update_and_render(
                             },
                         }
                     },
+                    PlayerMenu::Net => {
+                        commands.draw_nine_slice(
+                            gfx::NineSlice::Window,
+                            PLAYER_NET_WINDOW
+                        );
+
+                        let base_xy = PLAYER_NET_WINDOW.xy()
+                            + WINDOW_CONTENT_OFFSET;
+
+                        let label_card_xy = base_xy;
+
+                        commands.draw_card(
+                            zingers::THE_NET,
+                            label_card_xy
+                        );
+
+                        let card_xy = label_card_xy + CARD_WIDTH;
+
+                        commands.draw_card(
+                            zingers::THE_NET,
+                            card_xy
+                        );
+
+                        let select_xy = card_xy + CARD_WIDTH;
+
+                        if true { todo!("draw selector") }
+
+                        let submit_xy = select_xy + PLAYER_NET_SELECT_WH.w;
+
+                        let group = new_group!();
+
+                        if do_button(
+                            group,
+                            ButtonSpec {
+                                id: NetSubmit,
+                                rect: fit_to_rest_of_window(
+                                    submit_xy,
+                                    PLAYER_NET_WINDOW,
+                                ),
+                                text: b"Submit",
+                            }
+                        ) {
+                            todo!();
+                        } else if input.pressed_this_frame(Button::B) {
+                            state.menu = Menu::player(selected);
+                        } else {
+                            // do nothing
+                        }
+
+                        group.ctx.set_next_hot(NetSubmit);
+                    },
                     PlayerMenu::Asking {
                         used,
                         ref mut question,
@@ -2404,7 +2462,6 @@ pub fn update_and_render(
 
                         match sub_menu {
                             PlayerAskingSubMenu::Root => {
-                                // TODO? handle the Net here, or elsewhere?
                                 let rank = models::get_rank(used)
                                     .expect("Asking used card should always have a rank!");
         
@@ -2713,7 +2770,7 @@ pub fn update_and_render(
                             },
                         }
                     },
-                    PlayerMenu::Fished{
+                    PlayerMenu::Fished {
                         used,
                         ref mut question,
                         drew,
@@ -3603,6 +3660,25 @@ const PLAYER_TWO_FISTED_FISHERMAN_WINDOW: unscaled::Rect = {
 const PLAYER_TWO_FISTED_FISHERMAN_TEXT_WH: unscaled::WH = unscaled::WH {
     w: W(CARD_WIDTH.get() * 3),
     h: H(PLAYER_TWO_FISTED_FISHERMAN_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2)),
+};
+
+const PLAYER_NET_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 8;
+
+    const WIN_H: unscaled::Inner = CARD_HEIGHT.get()
+    + WINDOW_CONTENT_OFFSET.h.get() * 2;
+
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y((command::HEIGHT - WIN_H) / 2),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(WIN_H),
+    }
+};
+
+const PLAYER_NET_SELECT_WH: unscaled::WH = unscaled::WH {
+    w: W(CARD_WIDTH.get() * 3),
+    h: H(PLAYER_NET_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2)),
 };
 
 const CPU_ID_SELECT_TEXT_OFFSET: unscaled::WH = unscaled::WH {
