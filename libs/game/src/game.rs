@@ -3357,7 +3357,7 @@ fn perform_game_warden(
         source.into(),
     );
 
-    None
+    Some(())
 }
 
 mod text {
