@@ -2432,8 +2432,9 @@ pub fn update_and_render(
                             card_xy
                         );
 
+                        let target_base_xy = card_xy + CARD_WIDTH;
                         // TODO replace reference to ASKING_WINDOW with something else
-                        let target_xy = card_xy + CARD_WIDTH + (ASKING_WINDOW.h / 5);
+                        let target_xy = target_base_xy + (ASKING_WINDOW.h / 5);
         
                         let group = new_group!();
 
@@ -2443,7 +2444,7 @@ pub fn update_and_render(
                             target_xy
                         );
 
-                        let predicate_select_xy = target_xy + CPU_ID_SELECT_WH.w;
+                        let predicate_select_xy = target_base_xy + CPU_ID_SELECT_WH.w;
 
                         let predicate_select_rect = Rect::xy_wh(
                             predicate_select_xy,
@@ -3798,7 +3799,7 @@ const PLAYER_NET_WINDOW: unscaled::Rect = {
 };
 
 const PLAYER_NET_PREDICATE_SELECT_WH: unscaled::WH = unscaled::WH {
-    w: W(CARD_WIDTH.get() * 3),
+    w: W(CARD_WIDTH.get() * 3 - CPU_ID_SELECT_WH.w.get()),
     h: H(PLAYER_NET_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2)),
 };
 
