@@ -376,6 +376,8 @@ impl Menu {
     }
 }
 
+type PredicateIndex = u8;
+
 #[derive(Clone)]
 pub enum PlayerMenu {
     Selecting { sub_menu: PlayerSelectingSubMenu },
@@ -384,12 +386,15 @@ pub enum PlayerMenu {
         question: Question,
         sub_menu: PlayerAskingSubMenu,
     },
-    Fished{
+    Fished {
         used: Card,
         question: Question,
         drew: Option<Card>
     },
-    Net,
+    Net {
+        target: CpuId,
+        predicate_i: PredicateIndex,
+    },
 }
 
 impl Default for PlayerMenu {
@@ -785,6 +790,8 @@ mod ui {
         RankSelect,
         NoFishingSubmit,
         TwoFistedFishermanSubmit,
+        NetSuit(Suit),
+        NetRank(Rank),
         NetSubmit,
     }
 
@@ -1566,6 +1573,8 @@ fn do_play_anytime_menu(
             | AskSubmit
             | NoFishingSubmit
             | TwoFistedFishermanSubmit
+            | NetSuit(_)
+            | NetRank(_)
             | NetSubmit => None,
         };
 
@@ -1855,6 +1864,8 @@ fn do_play_anytime_menu(
             | AskSubmit
             | NoFishingSubmit
             | TwoFistedFishermanSubmit
+            | NetSuit(_)
+            | NetRank(_)
             | NetSubmit => None,
         };
 
@@ -2294,7 +2305,10 @@ pub fn update_and_render(
                                                 Zinger::TheNet => {
                                                     state.menu = Menu::PlayerTurn {
                                                         selected,
-                                                        menu: PlayerMenu::Net,
+                                                        menu: PlayerMenu::Net {
+                                                            target: <_>::default(),
+                                                            predicate_i: <_>::default(),
+                                                        },
                                                     };
                                                 },
                                                 Zinger::TheLure => {
@@ -2371,7 +2385,31 @@ pub fn update_and_render(
                             },
                         }
                     },
-                    PlayerMenu::Net => {
+                    PlayerMenu::Net {
+                        ref mut target,
+                        ref mut predicate_i,
+                    } => {
+                        const NET_PREDICATE_IDS: [ui::Id; 18] = [
+                            NetSuit(Suit::ALL[0]),
+                            NetSuit(Suit::ALL[1]),
+                            NetSuit(Suit::ALL[2]),
+                            NetSuit(Suit::ALL[3]),
+                            NetSuit(Suit::ALL[4]),
+                            NetRank(Rank::ALL[0]),
+                            NetRank(Rank::ALL[1]),
+                            NetRank(Rank::ALL[2]),
+                            NetRank(Rank::ALL[3]),
+                            NetRank(Rank::ALL[4]),
+                            NetRank(Rank::ALL[5]),
+                            NetRank(Rank::ALL[6]),
+                            NetRank(Rank::ALL[7]),
+                            NetRank(Rank::ALL[8]),
+                            NetRank(Rank::ALL[9]),
+                            NetRank(Rank::ALL[10]),
+                            NetRank(Rank::ALL[11]),
+                            NetRank(Rank::ALL[12]),
+                        ];
+
                         commands.draw_nine_slice(
                             gfx::NineSlice::Window,
                             PLAYER_NET_WINDOW
@@ -2394,13 +2432,31 @@ pub fn update_and_render(
                             card_xy
                         );
 
-                        let select_xy = card_xy + CARD_WIDTH;
-
-                        if true { todo!("draw selector") }
-
-                        let submit_xy = select_xy + PLAYER_NET_SELECT_WH.w;
-
+                        // TODO replace reference to ASKING_WINDOW with something else
+                        let target_xy = card_xy + CARD_WIDTH + (ASKING_WINDOW.h / 5);
+        
                         let group = new_group!();
+
+                        draw_cpu_id_quick_select(
+                            group,
+                            *target,
+                            target_xy
+                        );
+
+                        let predicate_select_xy = target_xy + CPU_ID_SELECT_WH.w;
+
+                        let predicate_select_rect = Rect::xy_wh(
+                            predicate_select_xy,
+                            PLAYER_NET_PREDICATE_SELECT_WH,
+                        );
+        
+                        ui::draw_quick_select(
+                            group,
+                            predicate_select_rect,
+                            &NET_PREDICATE_IDS,
+                        );
+
+                        let submit_xy = predicate_select_xy + PLAYER_NET_PREDICATE_SELECT_WH.w;
 
                         if do_button(
                             group,
@@ -2416,11 +2472,76 @@ pub fn update_and_render(
                             todo!();
                         } else if input.pressed_this_frame(Button::B) {
                             state.menu = Menu::player(selected);
+                        } else if let Some(dir) = input.dir_pressed_this_frame() {
+                            const GRID_LEN: usize = 3;
+
+                            #[derive(Clone, Copy, PartialEq, Eq)]
+                            enum Section {
+                                Target,
+                                Predicate,
+                                Submit,
+                            }
+
+                            const GRID: [Section; GRID_LEN] = [
+                                Section::Target, Section::Predicate, Section::Submit,
+                            ];
+
+                            let old_el = match state.ctx.hot {
+                                Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
+                                NetSuit(_) | NetRank(_) => Some(Section::Predicate),
+                                NetSubmit => Some(Section::Submit),
+                                _ => None,
+                            };
+                            let mut el_i = GRID.iter()
+                                .position(|el| Some(*el) == old_el)
+                                .unwrap_or_default();
+
+                            match dir {
+                                Dir::Up => match GRID[el_i] {
+                                    Section::Target => match *target {
+                                        CpuId::One => { *target = CpuId::Two; },
+                                        CpuId::Two => { *target = CpuId::Three; },
+                                        CpuId::Three => { *target = CpuId::One; },
+                                    },
+                                    Section::Predicate => if *predicate_i >= (NET_PREDICATE_IDS.len() - 1) as _ {
+                                        *predicate_i = 0;
+                                    } else {
+                                        *predicate_i += 1;
+                                    },
+                                    Section::Submit => {}
+                                },
+                                Dir::Down => match GRID[el_i] {
+                                    Section::Target => match *target {
+                                        CpuId::One => { *target = CpuId::Three; },
+                                        CpuId::Two => { *target = CpuId::One; },
+                                        CpuId::Three => { *target = CpuId::Two; },
+                                    },
+                                    Section::Predicate => if *predicate_i == 0 {
+                                        *predicate_i = NET_PREDICATE_IDS.len() as _;
+                                    } else {
+                                        *predicate_i -= 1;
+                                    },
+                                    Section::Submit => {}
+                                },
+                                Dir::Left => if el_i == 0 {
+                                    el_i = GRID_LEN - 1;
+                                } else {
+                                    el_i -= 1;
+                                },
+                                Dir::Right => if el_i >= GRID_LEN - 1 {
+                                    el_i = 0;
+                                } else {
+                                    el_i += 1;
+                                },
+                            }
+                            state.ctx.set_next_hot(match GRID[el_i] {
+                                Section::Target => Cpu1,
+                                Section::Predicate => NET_PREDICATE_IDS[0],
+                                Section::Submit => NetSubmit,
+                            });
                         } else {
                             // do nothing
                         }
-
-                        group.ctx.set_next_hot(NetSubmit);
                     },
                     PlayerMenu::Asking {
                         used,
@@ -3676,7 +3797,7 @@ const PLAYER_NET_WINDOW: unscaled::Rect = {
     }
 };
 
-const PLAYER_NET_SELECT_WH: unscaled::WH = unscaled::WH {
+const PLAYER_NET_PREDICATE_SELECT_WH: unscaled::WH = unscaled::WH {
     w: W(CARD_WIDTH.get() * 3),
     h: H(PLAYER_NET_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2)),
 };
