@@ -888,16 +888,13 @@ mod ui {
     pub(crate) fn draw_quick_select<'commands, 'ctx, 'speaker, 'text>(
         group: &mut Group<'commands, 'ctx, 'speaker>,
         rect: Rect,
-        ids: &[Id],
+        id: Id,
     ) {
         let mut highlighted = gfx::Highlighted::No;
-        for &id in ids {
-            if group.ctx.active == id
-            || group.ctx.hot == id {
-                group.ctx.set_next_hot(id);
-                highlighted = gfx::Highlighted::Yes;
-                break
-            }
+        if group.ctx.active == id
+        || group.ctx.hot == id {
+            group.ctx.set_next_hot(id);
+            highlighted = gfx::Highlighted::Yes;
         }
 
         let x = (rect.x + (rect.w / 2)) - (gfx::CHEVRON_W / 2);
@@ -1712,7 +1709,7 @@ fn do_play_anytime_menu(
                     card_quick_select_xy,
                     CARD_QUICK_SELECT_WH,
                 ),
-                &[AnytimeCard]
+                AnytimeCard
             );
         }
     }
@@ -1754,7 +1751,7 @@ fn do_play_anytime_menu(
                         rank_xy,
                         RANK_SELECT_WH,
                     ),
-                    &[RankSelect]
+                    RankSelect
                 );
             }
 
@@ -2449,7 +2446,7 @@ pub fn update_and_render(
                         ui::draw_quick_select(
                             group,
                             predicate_select_rect,
-                            &NET_PREDICATE_IDS,
+                            NET_PREDICATE_IDS[0],
                         );
 
                         let submit_xy = predicate_select_xy + PLAYER_NET_PREDICATE_SELECT_WH.w;
@@ -2623,7 +2620,7 @@ pub fn update_and_render(
                                 ui::draw_quick_select(
                                     group,
                                     suit_quick_select_rect,
-                                    &[AskSuit]
+                                    AskSuit
                                 );
         
                                 let description_base_rect = unscaled::Rect::xy_wh(
@@ -3727,7 +3724,7 @@ fn draw_cpu_id_quick_select(
             xy,
             CPU_ID_SELECT_WH,
         ),
-        &[CpuIdSelect]
+        CpuIdSelect
     );
 }
 
