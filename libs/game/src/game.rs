@@ -376,7 +376,68 @@ impl Menu {
     }
 }
 
-type PredicateIndex = u8;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NetPredicate {
+    Suit(Suit),
+    Rank(Rank),
+}
+
+impl Default for NetPredicate {
+    fn default() -> Self {
+        Self::Suit(<_>::default())
+    }
+}
+
+impl NetPredicate {
+    const ALL: [Self; 18] = [
+        Self::Suit(Suit::ALL[0]),
+        Self::Suit(Suit::ALL[1]),
+        Self::Suit(Suit::ALL[2]),
+        Self::Suit(Suit::ALL[3]),
+        Self::Suit(Suit::ALL[4]),
+        Self::Rank(Rank::ALL[0]),
+        Self::Rank(Rank::ALL[1]),
+        Self::Rank(Rank::ALL[2]),
+        Self::Rank(Rank::ALL[3]),
+        Self::Rank(Rank::ALL[4]),
+        Self::Rank(Rank::ALL[5]),
+        Self::Rank(Rank::ALL[6]),
+        Self::Rank(Rank::ALL[7]),
+        Self::Rank(Rank::ALL[8]),
+        Self::Rank(Rank::ALL[9]),
+        Self::Rank(Rank::ALL[10]),
+        Self::Rank(Rank::ALL[11]),
+        Self::Rank(Rank::ALL[12]),
+    ];
+
+    fn wrapping_inc(&mut self) {
+        let index = self.index_of();
+        *self = Self::ALL[if index >= Self::ALL.len() - 1 {
+            0
+        } else {
+            index + 1
+        }];
+    }
+
+    fn wrapping_dec(&mut self) {
+        let index = self.index_of();
+        *self = Self::ALL[if index == 0 {
+            Self::ALL.len() - 1
+        } else {
+            index - 1
+        }];
+    }
+
+    fn index_of(&self) -> usize {
+        for i in 0..Self::ALL.len() {
+            if Self::ALL[i] == *self {
+                return i;
+            }
+        }
+
+        unreachable!()
+    }
+}
 
 #[derive(Clone)]
 pub enum PlayerMenu {
@@ -393,7 +454,7 @@ pub enum PlayerMenu {
     },
     Net {
         target: CpuId,
-        predicate_i: PredicateIndex,
+        predicate: NetPredicate,
     },
 }
 
@@ -782,14 +843,14 @@ mod ui {
         Zero,
         CpuIdSelect,
         AskSuit,
+        // TODO? merge submit varaints?
         AskSubmit,
         AnytimeCard,
         AnytimeSubmit,
         RankSelect,
         NoFishingSubmit,
         TwoFistedFishermanSubmit,
-        NetSuit(Suit),
-        NetRank(Rank),
+        NetPredicate,
         NetSubmit,
     }
 
@@ -1567,8 +1628,7 @@ fn do_play_anytime_menu(
             | AskSubmit
             | NoFishingSubmit
             | TwoFistedFishermanSubmit
-            | NetSuit(_)
-            | NetRank(_)
+            | NetPredicate
             | NetSubmit => None,
         };
 
@@ -1856,8 +1916,7 @@ fn do_play_anytime_menu(
             | AskSubmit
             | NoFishingSubmit
             | TwoFistedFishermanSubmit
-            | NetSuit(_)
-            | NetRank(_)
+            | NetPredicate
             | NetSubmit => None,
         };
 
@@ -2299,7 +2358,7 @@ pub fn update_and_render(
                                                         selected,
                                                         menu: PlayerMenu::Net {
                                                             target: <_>::default(),
-                                                            predicate_i: <_>::default(),
+                                                            predicate: <_>::default(),
                                                         },
                                                     };
                                                 },
@@ -2379,29 +2438,8 @@ pub fn update_and_render(
                     },
                     PlayerMenu::Net {
                         ref mut target,
-                        ref mut predicate_i,
+                        ref mut predicate,
                     } => {
-                        const NET_PREDICATE_IDS: [ui::Id; 18] = [
-                            NetSuit(Suit::ALL[0]),
-                            NetSuit(Suit::ALL[1]),
-                            NetSuit(Suit::ALL[2]),
-                            NetSuit(Suit::ALL[3]),
-                            NetSuit(Suit::ALL[4]),
-                            NetRank(Rank::ALL[0]),
-                            NetRank(Rank::ALL[1]),
-                            NetRank(Rank::ALL[2]),
-                            NetRank(Rank::ALL[3]),
-                            NetRank(Rank::ALL[4]),
-                            NetRank(Rank::ALL[5]),
-                            NetRank(Rank::ALL[6]),
-                            NetRank(Rank::ALL[7]),
-                            NetRank(Rank::ALL[8]),
-                            NetRank(Rank::ALL[9]),
-                            NetRank(Rank::ALL[10]),
-                            NetRank(Rank::ALL[11]),
-                            NetRank(Rank::ALL[12]),
-                        ];
-
                         commands.draw_nine_slice(
                             gfx::NineSlice::Window,
                             PLAYER_NET_WINDOW
@@ -2446,7 +2484,7 @@ pub fn update_and_render(
                         ui::draw_quick_select(
                             group,
                             predicate_select_rect,
-                            NET_PREDICATE_IDS[0],
+                            NetPredicate,
                         );
 
                         let submit_xy = predicate_select_xy + PLAYER_NET_PREDICATE_SELECT_WH.w;
@@ -2481,7 +2519,7 @@ pub fn update_and_render(
 
                             let old_el = match state.ctx.hot {
                                 CpuIdSelect => Some(Section::Target),
-                                NetSuit(_) | NetRank(_) => Some(Section::Predicate),
+                                NetPredicate => Some(Section::Predicate),
                                 NetSubmit => Some(Section::Submit),
                                 _ => None,
                             };
@@ -2496,11 +2534,7 @@ pub fn update_and_render(
                                         CpuId::Two => { *target = CpuId::Three; },
                                         CpuId::Three => { *target = CpuId::One; },
                                     },
-                                    Section::Predicate => if *predicate_i >= (NET_PREDICATE_IDS.len() - 1) as _ {
-                                        *predicate_i = 0;
-                                    } else {
-                                        *predicate_i += 1;
-                                    },
+                                    Section::Predicate => predicate.wrapping_inc(),
                                     Section::Submit => {}
                                 },
                                 Dir::Down => match GRID[el_i] {
@@ -2509,11 +2543,7 @@ pub fn update_and_render(
                                         CpuId::Two => { *target = CpuId::One; },
                                         CpuId::Three => { *target = CpuId::Two; },
                                     },
-                                    Section::Predicate => if *predicate_i == 0 {
-                                        *predicate_i = NET_PREDICATE_IDS.len() as _;
-                                    } else {
-                                        *predicate_i -= 1;
-                                    },
+                                    Section::Predicate => predicate.wrapping_dec(),
                                     Section::Submit => {}
                                 },
                                 Dir::Left => if el_i == 0 {
@@ -2529,7 +2559,7 @@ pub fn update_and_render(
                             }
                             state.ctx.set_next_hot(match GRID[el_i] {
                                 Section::Target => CpuIdSelect,
-                                Section::Predicate => NET_PREDICATE_IDS[0],
+                                Section::Predicate => NetPredicate,
                                 Section::Submit => NetSubmit,
                             });
                         } else {
