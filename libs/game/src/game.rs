@@ -783,7 +783,7 @@ mod ui {
         Cpu1,
         Cpu2,
         Cpu3,
-        AskSuit(Suit),
+        AskSuit,
         AskSubmit,
         AnytimeCard,
         AnytimeSubmit,
@@ -898,6 +898,7 @@ mod ui {
             || group.ctx.hot == id {
                 group.ctx.set_next_hot(id);
                 highlighted = gfx::Highlighted::Yes;
+                break
             }
         }
 
@@ -1569,7 +1570,7 @@ fn do_play_anytime_menu(
             | RankSelect => Some(Section::Target),
             AnytimeSubmit => Some(Section::Submit),
             Zero
-            | AskSuit(_)
+            | AskSuit
             | AskSubmit
             | NoFishingSubmit
             | TwoFistedFishermanSubmit
@@ -1860,7 +1861,7 @@ fn do_play_anytime_menu(
             | RankSelect => Some(Section::Target),
             AnytimeSubmit => Some(Section::Submit),
             Zero
-            | AskSuit(_)
+            | AskSuit
             | AskSubmit
             | NoFishingSubmit
             | TwoFistedFishermanSubmit
@@ -2450,7 +2451,7 @@ pub fn update_and_render(
                             predicate_select_xy,
                             PLAYER_NET_PREDICATE_SELECT_WH,
                         );
-        
+
                         ui::draw_quick_select(
                             group,
                             predicate_select_rect,
@@ -2628,13 +2629,7 @@ pub fn update_and_render(
                                 ui::draw_quick_select(
                                     group,
                                     suit_quick_select_rect,
-                                    &[
-                                        AskSuit(Suit::ALL[0]),
-                                        AskSuit(Suit::ALL[1]),
-                                        AskSuit(Suit::ALL[2]),
-                                        AskSuit(Suit::ALL[3]),
-                                        AskSuit(Suit::ALL[4])
-                                    ]
+                                    &[AskSuit]
                                 );
         
                                 let description_base_rect = unscaled::Rect::xy_wh(
@@ -2774,7 +2769,7 @@ pub fn update_and_render(
         
                                     let old_el = match state.ctx.hot {
                                         Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
-                                        AskSuit(_) => Some(Section::Suit),
+                                        AskSuit => Some(Section::Suit),
                                         AskSubmit => Some(Section::Submit),
                                         _ => None,
                                     };
@@ -2825,9 +2820,8 @@ pub fn update_and_render(
                                         },
                                     }
                                     state.ctx.set_next_hot(match GRID[el_i] {
-                                        // TODO? remove now unueeded ui::Id varaints.
                                         Section::Target => Cpu1,
-                                        Section::Suit => AskSuit(Suit::ALL[0]),
+                                        Section::Suit => AskSuit,
                                         Section::Submit => AskSubmit,
                                     });
                                 } else {
