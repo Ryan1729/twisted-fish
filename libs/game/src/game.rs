@@ -780,9 +780,7 @@ mod ui {
     pub enum Id {
         #[default]
         Zero,
-        Cpu1,
-        Cpu2,
-        Cpu3,
+        CpuIdSelect,
         AskSuit,
         AskSubmit,
         AnytimeCard,
@@ -1564,9 +1562,7 @@ fn do_play_anytime_menu(
 
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
-            Cpu1
-            | Cpu2
-            | Cpu3
+            CpuIdSelect
             | RankSelect => Some(Section::Target),
             AnytimeSubmit => Some(Section::Submit),
             Zero
@@ -1597,7 +1593,7 @@ fn do_play_anytime_menu(
             Section::Card => AnytimeCard,
             Section::Target => match player_selection.card {
                 AnytimeCard::GameWarden
-                | AnytimeCard::GlassBottomBoat => Cpu1,
+                | AnytimeCard::GlassBottomBoat => CpuIdSelect,
                 AnytimeCard::DeadScubaDiver => RankSelect,
             },
             Section::Submit => AnytimeSubmit,
@@ -1855,9 +1851,7 @@ fn do_play_anytime_menu(
     } else if let Some(dir) = group.input.dir_pressed_this_frame() {
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
-            Cpu1
-            | Cpu2
-            | Cpu3
+            CpuIdSelect
             | RankSelect => Some(Section::Target),
             AnytimeSubmit => Some(Section::Submit),
             Zero
@@ -1959,7 +1953,7 @@ fn do_play_anytime_menu(
             Section::Card => AnytimeCard,
             Section::Target => match player_selection.card {
                 AnytimeCard::GameWarden
-                | AnytimeCard::GlassBottomBoat => Cpu1,
+                | AnytimeCard::GlassBottomBoat => CpuIdSelect,
                 AnytimeCard::DeadScubaDiver => RankSelect,
             },
             Section::Submit => AnytimeSubmit,
@@ -2328,7 +2322,7 @@ pub fn update_and_render(
                                                     sub_menu: Default::default(),
                                                 },
                                             };
-                                            state.ctx.set_next_hot(Cpu1);
+                                            state.ctx.set_next_hot(CpuIdSelect);
                                         }
                                     }
                                 } else {
@@ -2489,7 +2483,7 @@ pub fn update_and_render(
                             ];
 
                             let old_el = match state.ctx.hot {
-                                Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
+                                CpuIdSelect => Some(Section::Target),
                                 NetSuit(_) | NetRank(_) => Some(Section::Predicate),
                                 NetSubmit => Some(Section::Submit),
                                 _ => None,
@@ -2537,7 +2531,7 @@ pub fn update_and_render(
                                 },
                             }
                             state.ctx.set_next_hot(match GRID[el_i] {
-                                Section::Target => Cpu1,
+                                Section::Target => CpuIdSelect,
                                 Section::Predicate => NET_PREDICATE_IDS[0],
                                 Section::Submit => NetSubmit,
                             });
@@ -2768,7 +2762,7 @@ pub fn update_and_render(
                                     ];
         
                                     let old_el = match state.ctx.hot {
-                                        Cpu1 | Cpu2| Cpu3 => Some(Section::Target),
+                                        CpuIdSelect => Some(Section::Target),
                                         AskSuit => Some(Section::Suit),
                                         AskSubmit => Some(Section::Submit),
                                         _ => None,
@@ -2820,7 +2814,7 @@ pub fn update_and_render(
                                         },
                                     }
                                     state.ctx.set_next_hot(match GRID[el_i] {
-                                        Section::Target => Cpu1,
+                                        Section::Target => CpuIdSelect,
                                         Section::Suit => AskSuit,
                                         Section::Submit => AskSubmit,
                                     });
@@ -3733,7 +3727,7 @@ fn draw_cpu_id_quick_select(
             xy,
             CPU_ID_SELECT_WH,
         ),
-        &[Cpu1, Cpu2, Cpu3]
+        &[CpuIdSelect]
     );
 }
 
