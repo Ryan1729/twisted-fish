@@ -841,17 +841,12 @@ mod ui {
     pub enum Id {
         #[default]
         Zero,
+        Submit,
         CpuIdSelect,
         AskSuit,
-        // TODO? merge submit varaints?
-        AskSubmit,
         AnytimeCard,
-        AnytimeSubmit,
         RankSelect,
-        NoFishingSubmit,
-        TwoFistedFishermanSubmit,
         NetPredicate,
-        NetSubmit,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -1622,14 +1617,10 @@ fn do_play_anytime_menu(
             AnytimeCard => Some(Section::Card),
             CpuIdSelect
             | RankSelect => Some(Section::Target),
-            AnytimeSubmit => Some(Section::Submit),
+            Submit => Some(Section::Submit),
             Zero
             | AskSuit
-            | AskSubmit
-            | NoFishingSubmit
-            | TwoFistedFishermanSubmit
-            | NetPredicate
-            | NetSubmit => None,
+            | NetPredicate => None,
         };
 
         let mut el_i = GRID.iter()
@@ -1653,7 +1644,7 @@ fn do_play_anytime_menu(
                 | AnytimeCard::GlassBottomBoat => CpuIdSelect,
                 AnytimeCard::DeadScubaDiver => RankSelect,
             },
-            Section::Submit => AnytimeSubmit,
+            Section::Submit => Submit,
         });
     }
 
@@ -1690,7 +1681,7 @@ fn do_play_anytime_menu(
         return if do_button(
             &mut group,
             ButtonSpec {
-                id: AnytimeSubmit,
+                id: Submit,
                 rect: fit_to_rest_of_window(
                     submit_base_xy,
                     CARD_VIEWING_WINDOW,
@@ -1836,7 +1827,7 @@ fn do_play_anytime_menu(
     && do_button(
         &mut group,
         ButtonSpec {
-            id: AnytimeSubmit,
+            id: Submit,
             rect: fit_to_rest_of_window(
                 submit_base_xy,
                 PLAYER_PLAY_ANYTIME_WINDOW,
@@ -1910,14 +1901,11 @@ fn do_play_anytime_menu(
             AnytimeCard => Some(Section::Card),
             CpuIdSelect
             | RankSelect => Some(Section::Target),
-            AnytimeSubmit => Some(Section::Submit),
+            Submit => Some(Section::Submit),
             Zero
             | AskSuit
-            | AskSubmit
-            | NoFishingSubmit
-            | TwoFistedFishermanSubmit
-            | NetPredicate
-            | NetSubmit => None,
+            | Submit
+            | NetPredicate => None,
         };
 
         let mut el_i = GRID.iter()
@@ -2012,7 +2000,7 @@ fn do_play_anytime_menu(
                 | AnytimeCard::GlassBottomBoat => CpuIdSelect,
                 AnytimeCard::DeadScubaDiver => RankSelect,
             },
-            Section::Submit => AnytimeSubmit,
+            Section::Submit => Submit,
         });
     } else {
         // do nothing
@@ -2492,7 +2480,7 @@ pub fn update_and_render(
                         if do_button(
                             group,
                             ButtonSpec {
-                                id: NetSubmit,
+                                id: Submit,
                                 rect: fit_to_rest_of_window(
                                     submit_xy,
                                     PLAYER_NET_WINDOW,
@@ -2520,7 +2508,7 @@ pub fn update_and_render(
                             let old_el = match state.ctx.hot {
                                 CpuIdSelect => Some(Section::Target),
                                 NetPredicate => Some(Section::Predicate),
-                                NetSubmit => Some(Section::Submit),
+                                Submit => Some(Section::Submit),
                                 _ => None,
                             };
                             let mut el_i = GRID.iter()
@@ -2560,7 +2548,7 @@ pub fn update_and_render(
                             state.ctx.set_next_hot(match GRID[el_i] {
                                 Section::Target => CpuIdSelect,
                                 Section::Predicate => NetPredicate,
-                                Section::Submit => NetSubmit,
+                                Section::Submit => Submit,
                             });
                         } else {
                             // do nothing
@@ -2685,7 +2673,7 @@ pub fn update_and_render(
                                 if do_button(
                                     group,
                                     ButtonSpec {
-                                        id: AskSubmit,
+                                        id: Submit,
                                         rect: fit_to_rest_of_window(
                                             submit_base_xy,
                                             ASKING_WINDOW,
@@ -2791,7 +2779,7 @@ pub fn update_and_render(
                                     let old_el = match state.ctx.hot {
                                         CpuIdSelect => Some(Section::Target),
                                         AskSuit => Some(Section::Suit),
-                                        AskSubmit => Some(Section::Submit),
+                                        Submit => Some(Section::Submit),
                                         _ => None,
                                     };
                                     let mut el_i = GRID.iter()
@@ -2843,7 +2831,7 @@ pub fn update_and_render(
                                     state.ctx.set_next_hot(match GRID[el_i] {
                                         Section::Target => CpuIdSelect,
                                         Section::Suit => AskSuit,
-                                        Section::Submit => AskSubmit,
+                                        Section::Submit => Submit,
                                     });
                                 } else {
                                     // do nothing
@@ -2883,7 +2871,7 @@ pub fn update_and_render(
                                 if do_button(
                                     group,
                                     ButtonSpec {
-                                        id: TwoFistedFishermanSubmit,
+                                        id: Submit,
                                         rect: fit_to_rest_of_window(
                                             submit_xy,
                                             PLAYER_TWO_FISTED_FISHERMAN_WINDOW,
@@ -2903,7 +2891,7 @@ pub fn update_and_render(
                                     // do nothing
                                 }
 
-                                group.ctx.set_next_hot(TwoFistedFishermanSubmit);
+                                group.ctx.set_next_hot(Submit);
                             },
                         }
                     },
@@ -3264,7 +3252,7 @@ pub fn update_and_render(
                         if do_button(
                             group,
                             ButtonSpec {
-                                id: NoFishingSubmit,
+                                id: Submit,
                                 rect: fit_to_rest_of_window(
                                     submit_base_xy,
                                     NO_FISHING_WINDOW,
@@ -3282,7 +3270,7 @@ pub fn update_and_render(
                             handle_ask!();
                         }
 
-                        group.ctx.set_next_hot(NoFishingSubmit);
+                        group.ctx.set_next_hot(Submit);
                     },
                     (_, has_no_fishing) => {
                         // If we reach this branch when the target is
