@@ -389,7 +389,9 @@ impl Default for NetPredicate {
 }
 
 impl NetPredicate {
-    const ALL: [Self; 18] = [
+    const COUNT: u8 = 18;
+
+    const ALL: [Self; Self::COUNT as usize] = [
         Self::Suit(Suit::ALL[0]),
         Self::Suit(Suit::ALL[1]),
         Self::Suit(Suit::ALL[2]),
@@ -408,6 +410,27 @@ impl NetPredicate {
         Self::Rank(Rank::ALL[10]),
         Self::Rank(Rank::ALL[11]),
         Self::Rank(Rank::ALL[12]),
+    ];
+
+    const TEXT: [&[u8]; Self::COUNT as usize] = [
+        Suit::TEXT[0],
+        Suit::TEXT[1],
+        Suit::TEXT[2],
+        Suit::TEXT[3],
+        Suit::TEXT[4],
+        Rank::TEXT[0],
+        Rank::TEXT[1],
+        Rank::TEXT[2],
+        Rank::TEXT[3],
+        Rank::TEXT[4],
+        Rank::TEXT[5],
+        Rank::TEXT[6],
+        Rank::TEXT[7],
+        Rank::TEXT[8],
+        Rank::TEXT[9],
+        Rank::TEXT[10],
+        Rank::TEXT[11],
+        Rank::TEXT[12],
     ];
 
     fn wrapping_inc(&mut self) {
@@ -2466,7 +2489,16 @@ pub fn update_and_render(
 
                         let predicate_select_rect = Rect::xy_wh(
                             predicate_select_xy,
-                            PLAYER_NET_PREDICATE_SELECT_WH,
+                            NET_PREDICATE_SELECT_WH,
+                        );
+
+                        group.commands.print_centered(
+                            NetPredicate::TEXT[predicate.index_of()],
+                            Rect::xy_wh(
+                                predicate_select_xy + NET_PREDICATE_SELECT_TEXT_OFFSET.w,
+                                NET_PREDICATE_SELECT_TEXT_WH,
+                            ),
+                            WHITE,
                         );
 
                         ui::draw_quick_select(
@@ -2475,7 +2507,7 @@ pub fn update_and_render(
                             NetPredicate,
                         );
 
-                        let submit_xy = predicate_select_xy + PLAYER_NET_PREDICATE_SELECT_WH.w;
+                        let submit_xy = predicate_select_xy + NET_PREDICATE_SELECT_WH.w;
 
                         if do_button(
                             group,
@@ -3801,9 +3833,16 @@ const PLAYER_NET_WINDOW: unscaled::Rect = {
     }
 };
 
-const PLAYER_NET_PREDICATE_SELECT_WH: unscaled::WH = unscaled::WH {
-    w: W(CARD_WIDTH.get() * 3 - CPU_ID_SELECT_WH.w.get()),
+const NET_PREDICATE_SELECT_WH: unscaled::WH = unscaled::WH {
+    w: W(CARD_WIDTH.get() * 3 - CPU_ID_SELECT_WH.w.get() * 7 / 8),
     h: H(PLAYER_NET_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2)),
+};
+
+const NET_PREDICATE_SELECT_TEXT_OFFSET: unscaled::WH = CPU_ID_SELECT_TEXT_OFFSET;
+
+const NET_PREDICATE_SELECT_TEXT_WH: unscaled::WH = unscaled::WH {
+    w: W(NET_PREDICATE_SELECT_WH.w.get() - NET_PREDICATE_SELECT_TEXT_OFFSET.w.get() * 2),
+    h: NET_PREDICATE_SELECT_WH.h,
 };
 
 const CPU_ID_SELECT_TEXT_OFFSET: unscaled::WH = unscaled::WH {
