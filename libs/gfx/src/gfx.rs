@@ -1,4 +1,4 @@
-use models::{Card, Rank, get_rank, get_suit, get_zinger, Zinger};
+use models::{Card, NetPredicate, Rank, Suit, get_rank, get_suit, get_zinger, Zinger};
 
 use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT, bytes_lines};
 
@@ -145,70 +145,17 @@ impl Commands {
         );
     }
 
-    pub fn draw_card(
-        &mut self,
-        card: Card,
-        xy: unscaled::XY,
+    const LABEL_LENGTH: u8 = 10;
+
+    fn label_lines_for(
+        suit_opt: Option<Suit>,
+        rank_opt: Option<Rank>,
+        zinger_opt: Option<Zinger>,
+    ) -> (
+        &'static [u8; Self::LABEL_LENGTH as _],
+        &'static [u8; Self::LABEL_LENGTH as _]
     ) {
-        use models::Suit;
-
-        self.draw_shadow_for_card_at(xy);
-
-        let suit_opt = get_suit(card);
-        let rank_opt = get_rank(card);
-        let zinger_opt = get_zinger(card);
-
-        self.sspr(
-            sprite::XY {
-                x: card::BACKING_SPRITE_X,
-                y: card::BACKING_SPRITE_BASE_Y
-                + card::HEIGHT.get()
-                * sprite::Inner::from(card / models::RANK_COUNT)
-            },
-            Rect::from_unscaled(unscaled::Rect {
-                x: xy.x,
-                y: xy.y,
-                w: card::WIDTH.get(),
-                h: card::HEIGHT.get(),
-            })
-        );
-
-        let image_x = match suit_opt {
-            Some(suit) => card::IMAGE_BASE_X
-                + unscaled::Inner::from(suit as u8)
-                * card::IMAGE_W.get(),
-            None => card::ZINGER_IMAGE_X,
-        };
-
-        let image_y = match rank_opt {
-            Some(rank) => card::IMAGE_BASE_Y
-                + unscaled::Inner::from(rank as u8)
-                * card::IMAGE_H.get(),
-            None => match zinger_opt {
-                Some(zinger) => card::IMAGE_BASE_Y
-                + unscaled::Inner::from(zinger as u8)
-                * card::IMAGE_H.get(),
-                None => {
-                    debug_assert!(false, "No suit or zinger for card: {card}");
-                    card::IMAGE_BASE_Y
-                }
-            },
-        };
-
-        self.sspr(
-            sprite::XY {
-                x: image_x,
-                y: image_y,
-            },
-            Rect::from_unscaled(unscaled::Rect {
-                x: xy.x + card::IMAGE_W_OFFSET.get(),
-                y: xy.y + card::IMAGE_H_OFFSET.get(),
-                w: card::IMAGE_W.get(),
-                h: card::IMAGE_H.get(),
-            })
-        );
-
-        let (line1, line2) = match (suit_opt, rank_opt, zinger_opt) {
+        match (suit_opt, rank_opt, zinger_opt) {
             (Some(Suit::Red), Some(Rank::Barnacle), None) => (
                 b"Red       ",
                 b"Barnacle  ",
@@ -501,15 +448,154 @@ impl Commands {
                 b"2-fisted  ",
                 b"fisherman ",
             ),
+            (Some(Suit::Red), None, None) => (
+                b"Red       ",
+                b"          ",
+            ),
+            (Some(Suit::Green), None, None) => (
+                b"Green     ",
+                b"          ",
+            ),
+            (Some(Suit::Blue), None, None) => (
+                b"Blue      ",
+                b"          ",
+            ),
+            (Some(Suit::Yellow), None, None) => (
+                b"Yellow    ",
+                b"          ",
+            ),
+            (Some(Suit::Purple), None, None) => (
+                b"Purple    ",
+                b"          ",
+            ),
+            (None, Some(Rank::Barnacle), None) => (
+                b"          ",
+                b"Barnacle  ",
+            ),
+            (None, Some(Rank::Crab), None) => (
+                b"          ",
+                b"Crab      ",
+            ),
+            (None, Some(Rank::Dogfish), None) => (
+                b"          ",
+                b"Dogfish   ",
+            ),
+            (None, Some(Rank::Eel), None) => (
+                b"          ",
+                b"Eel       ",
+            ),
+            (None, Some(Rank::FlyingFish), None) => (
+                b"    Flying",
+                b"fish      ",
+            ),
+            (None, Some(Rank::Hammerhead), None) => (
+                b"          ",
+                b"Hammerhead",
+            ),
+            (None, Some(Rank::Jellyfish), None) => (
+                b"          ",
+                b"Jellyfish ",
+            ),
+            (None, Some(Rank::Shrimp), None) => (
+                b"          ",
+                b"Shrimp    ",
+            ),
+            (None, Some(Rank::Blowfish), None) => (
+                b"          ",
+                b"Blowfish  ",
+            ),
+            (None, Some(Rank::Clownfish), None) => (
+                b"          ",
+                b"Clownfish ",
+            ),
+            (None, Some(Rank::Starfish), None) => (
+                b"          ",
+                b"Starfish  ",
+            ),
+            (None, Some(Rank::Whale), None) => (
+                b"          ",
+                b"Whale     ",
+            ),
+            (None, Some(Rank::CardShark), None) => (
+                b"          ",
+                b"Card Shark",
+            ),
             _ => {
-                // TODO uncomment
-                //debug_assert!(false, "No lines for card: {card}");
+                debug_assert!(false, "No lines for: {suit_opt:?} {rank_opt:?} {zinger_opt:?}");
                 (
                     b"line 1 ???",
                     b"line 2 ???",
                 )
             }
+        }
+    }
+
+    pub fn draw_card(
+        &mut self,
+        card: Card,
+        xy: unscaled::XY,
+    ) {
+        self.draw_shadow_for_card_at(xy);
+
+        let suit_opt = get_suit(card);
+        let rank_opt = get_rank(card);
+        let zinger_opt = get_zinger(card);
+
+        self.sspr(
+            sprite::XY {
+                x: card::BACKING_SPRITE_X,
+                y: card::BACKING_SPRITE_BASE_Y
+                + card::HEIGHT.get()
+                * sprite::Inner::from(card / models::RANK_COUNT)
+            },
+            Rect::from_unscaled(unscaled::Rect {
+                x: xy.x,
+                y: xy.y,
+                w: card::WIDTH.get(),
+                h: card::HEIGHT.get(),
+            })
+        );
+
+        let image_x = match suit_opt {
+            Some(suit) => card::IMAGE_BASE_X
+                + unscaled::Inner::from(suit as u8)
+                * card::IMAGE_W.get(),
+            None => card::ZINGER_IMAGE_X,
         };
+
+        let image_y = match rank_opt {
+            Some(rank) => card::IMAGE_BASE_Y
+                + unscaled::Inner::from(rank as u8)
+                * card::IMAGE_H.get(),
+            None => match zinger_opt {
+                Some(zinger) => card::IMAGE_BASE_Y
+                + unscaled::Inner::from(zinger as u8)
+                * card::IMAGE_H.get(),
+                None => {
+                    debug_assert!(false, "No suit or zinger for card: {card}");
+                    card::IMAGE_BASE_Y
+                }
+            },
+        };
+
+        self.sspr(
+            sprite::XY {
+                x: image_x,
+                y: image_y,
+            },
+            Rect::from_unscaled(unscaled::Rect {
+                x: xy.x + card::IMAGE_W_OFFSET.get(),
+                y: xy.y + card::IMAGE_H_OFFSET.get(),
+                w: card::IMAGE_W.get(),
+                h: card::IMAGE_H.get(),
+            })
+        );
+
+        let (line1, line2) = Self::label_lines_for(
+            suit_opt,
+            rank_opt,
+            zinger_opt,
+        );
 
         self.print_line(
             line1,
@@ -568,6 +654,113 @@ impl Commands {
                 w: card::WIDTH.get(),
                 h: card::HEIGHT.get(),
             })
+        );
+    }
+
+    pub fn draw_net_predicate_card(
+        &mut self,
+        predicate: NetPredicate,
+        xy: unscaled::XY,
+    ) {
+        self.draw_shadow_for_card_at(xy);
+
+        let mut suit_opt = None;
+        let mut rank_opt = None;
+
+        match predicate {
+            NetPredicate::Suit(suit) => {
+                suit_opt = Some(suit);
+
+                self.sspr(
+                    sprite::XY {
+                        x: card::BACKING_SPRITE_X,
+                        y: card::BACKING_SPRITE_BASE_Y
+                        + card::HEIGHT.get()
+                        * sprite::Inner::from(u8::from(suit))
+                    },
+                    Rect::from_unscaled(unscaled::Rect {
+                        x: xy.x,
+                        y: xy.y,
+                        w: card::WIDTH.get(),
+                        h: card::HEIGHT.get(),
+                    })
+                );
+            },
+            NetPredicate::Rank(rank) => {
+                rank_opt = Some(rank);
+
+                let stripe_count = unscaled::Inner::from(Suit::COUNT);
+                // TODO account for the fact that this division truncates some 
+                // pixels.
+                let w = card::WIDTH.get() / stripe_count;
+                // TODO account for the fact that this division truncates different 
+                // pixels than the above one.
+                let image_w = (card::IMAGE_W.get() / stripe_count);
+
+                let mut x = xy.x;
+                let mut image_x_offset = unscaled::W(0);
+                
+                for suit in Suit::ALL {
+                    let suit_u8 = u8::from(suit);
+
+                    self.sspr(
+                        sprite::XY {
+                            x: card::BACKING_SPRITE_X + image_x_offset,
+                            y: card::BACKING_SPRITE_BASE_Y
+                            + card::HEIGHT.get()
+                            * sprite::Inner::from(suit_u8)
+                        },
+                        Rect::from_unscaled(unscaled::Rect {
+                            x,
+                            y: xy.y,
+                            w,
+                            h: card::HEIGHT.get(),
+                        })
+                    );
+
+                    let image_sprite_x = card::IMAGE_BASE_X
+                        + unscaled::Inner::from(suit_u8)
+                        * card::IMAGE_W.get()
+                        + image_x_offset;
+            
+                    let image_sprite_y = card::IMAGE_BASE_Y
+                        + unscaled::Inner::from(u8::from(rank))
+                        * card::IMAGE_H.get();
+            
+                    self.sspr(
+                        sprite::XY {
+                            x: image_sprite_x,
+                            y: image_sprite_y,
+                        },
+                        Rect::from_unscaled(unscaled::Rect {
+                            x: xy.x + card::IMAGE_W_OFFSET.get() + image_x_offset,
+                            y: xy.y + card::IMAGE_H_OFFSET.get(),
+                            w: image_w,
+                            h: card::IMAGE_H.get(),
+                        })
+                    );
+
+                    x += w;
+                    image_x_offset += image_w;
+                }
+            }
+        }
+
+        let (line1, line2) = Self::label_lines_for(
+            suit_opt,
+            rank_opt,
+            None,
+        );
+
+        self.print_line(
+            line1,
+            xy + card::LINE_W_OFFSET.get() + card::LINE_H_1_OFFSET.get(),
+            card::TEXT_COLOUR,
+        );
+        self.print_line(
+            line2,
+            xy + card::LINE_W_OFFSET.get() + card::LINE_H_2_OFFSET.get(),
+            card::TEXT_COLOUR,
         );
     }
 

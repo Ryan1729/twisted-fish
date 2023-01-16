@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Suit, Rank, Zinger, DECK_SIZE, get_rank, zingers};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, NetPredicate, Rank, Suit, Zinger, DECK_SIZE, get_rank, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -373,92 +373,6 @@ impl Menu {
             next_id,
             player_selection: PlayerSelection::default(),
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NetPredicate {
-    Suit(Suit),
-    Rank(Rank),
-}
-
-impl Default for NetPredicate {
-    fn default() -> Self {
-        Self::Suit(<_>::default())
-    }
-}
-
-impl NetPredicate {
-    const COUNT: u8 = 18;
-
-    const ALL: [Self; Self::COUNT as usize] = [
-        Self::Suit(Suit::ALL[0]),
-        Self::Suit(Suit::ALL[1]),
-        Self::Suit(Suit::ALL[2]),
-        Self::Suit(Suit::ALL[3]),
-        Self::Suit(Suit::ALL[4]),
-        Self::Rank(Rank::ALL[0]),
-        Self::Rank(Rank::ALL[1]),
-        Self::Rank(Rank::ALL[2]),
-        Self::Rank(Rank::ALL[3]),
-        Self::Rank(Rank::ALL[4]),
-        Self::Rank(Rank::ALL[5]),
-        Self::Rank(Rank::ALL[6]),
-        Self::Rank(Rank::ALL[7]),
-        Self::Rank(Rank::ALL[8]),
-        Self::Rank(Rank::ALL[9]),
-        Self::Rank(Rank::ALL[10]),
-        Self::Rank(Rank::ALL[11]),
-        Self::Rank(Rank::ALL[12]),
-    ];
-
-    const TEXT: [&[u8]; Self::COUNT as usize] = [
-        Suit::TEXT[0],
-        Suit::TEXT[1],
-        Suit::TEXT[2],
-        Suit::TEXT[3],
-        Suit::TEXT[4],
-        Rank::TEXT[0],
-        Rank::TEXT[1],
-        Rank::TEXT[2],
-        Rank::TEXT[3],
-        Rank::TEXT[4],
-        Rank::TEXT[5],
-        Rank::TEXT[6],
-        Rank::TEXT[7],
-        Rank::TEXT[8],
-        Rank::TEXT[9],
-        Rank::TEXT[10],
-        Rank::TEXT[11],
-        Rank::TEXT[12],
-    ];
-
-    fn wrapping_inc(&mut self) {
-        let index = self.index_of();
-        *self = Self::ALL[if index >= Self::ALL.len() - 1 {
-            0
-        } else {
-            index + 1
-        }];
-    }
-
-    fn wrapping_dec(&mut self) {
-        let index = self.index_of();
-        *self = Self::ALL[if index == 0 {
-            Self::ALL.len() - 1
-        } else {
-            index - 1
-        }];
-    }
-
-    fn index_of(&self) -> usize {
-        for i in 0..Self::ALL.len() {
-            if Self::ALL[i] == *self {
-                return i;
-            }
-        }
-
-        unreachable!()
     }
 }
 
@@ -2466,14 +2380,7 @@ pub fn update_and_render(
                             label_card_xy
                         );
 
-                        let card_xy = label_card_xy + CARD_WIDTH;
-
-                        commands.draw_card(
-                            zingers::THE_NET,
-                            card_xy
-                        );
-
-                        let target_base_xy = card_xy + CARD_WIDTH;
+                        let target_base_xy = label_card_xy + CARD_WIDTH;
                         // TODO replace reference to ASKING_WINDOW with something else
                         let target_xy = target_base_xy + (ASKING_WINDOW.h / 5);
         
@@ -2485,7 +2392,14 @@ pub fn update_and_render(
                             target_xy
                         );
 
-                        let predicate_select_xy = target_base_xy + CPU_ID_SELECT_WH.w;
+                        let card_xy = target_base_xy + CPU_ID_SELECT_WH.w;
+
+                        group.commands.draw_net_predicate_card(
+                            *predicate,
+                            card_xy
+                        );
+
+                        let predicate_select_xy = card_xy + CARD_WIDTH;
 
                         let predicate_select_rect = Rect::xy_wh(
                             predicate_select_xy,

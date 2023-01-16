@@ -118,6 +118,12 @@ pub enum Rank {
     // }
 }
 
+impl From<Rank> for u8 {
+    fn from(rank: Rank) -> u8 {
+        rank as u8
+    }
+}
+
 impl Rank {
     pub const COUNT: u8 = 13;
 
@@ -240,6 +246,12 @@ pub enum Suit {
     Blue,
     Yellow,
     Purple,
+}
+
+impl From<Suit> for u8 {
+    fn from(suit: Suit) -> u8 {
+        suit as u8
+    }
 }
 
 impl Suit {
@@ -653,5 +665,91 @@ impl CpuId {
             CpuId::Two => CpuId::One,
             CpuId::Three => CpuId::Two,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NetPredicate {
+    Suit(Suit),
+    Rank(Rank),
+}
+
+impl Default for NetPredicate {
+    fn default() -> Self {
+        Self::Suit(<_>::default())
+    }
+}
+
+impl NetPredicate {
+    pub const COUNT: u8 = 18;
+
+    pub const ALL: [Self; Self::COUNT as usize] = [
+        Self::Suit(Suit::ALL[0]),
+        Self::Suit(Suit::ALL[1]),
+        Self::Suit(Suit::ALL[2]),
+        Self::Suit(Suit::ALL[3]),
+        Self::Suit(Suit::ALL[4]),
+        Self::Rank(Rank::ALL[0]),
+        Self::Rank(Rank::ALL[1]),
+        Self::Rank(Rank::ALL[2]),
+        Self::Rank(Rank::ALL[3]),
+        Self::Rank(Rank::ALL[4]),
+        Self::Rank(Rank::ALL[5]),
+        Self::Rank(Rank::ALL[6]),
+        Self::Rank(Rank::ALL[7]),
+        Self::Rank(Rank::ALL[8]),
+        Self::Rank(Rank::ALL[9]),
+        Self::Rank(Rank::ALL[10]),
+        Self::Rank(Rank::ALL[11]),
+        Self::Rank(Rank::ALL[12]),
+    ];
+
+    pub const TEXT: [&[u8]; Self::COUNT as usize] = [
+        Suit::TEXT[0],
+        Suit::TEXT[1],
+        Suit::TEXT[2],
+        Suit::TEXT[3],
+        Suit::TEXT[4],
+        Rank::TEXT[0],
+        Rank::TEXT[1],
+        Rank::TEXT[2],
+        Rank::TEXT[3],
+        Rank::TEXT[4],
+        Rank::TEXT[5],
+        Rank::TEXT[6],
+        Rank::TEXT[7],
+        Rank::TEXT[8],
+        Rank::TEXT[9],
+        Rank::TEXT[10],
+        Rank::TEXT[11],
+        Rank::TEXT[12],
+    ];
+
+    pub fn wrapping_inc(&mut self) {
+        let index = self.index_of();
+        *self = Self::ALL[if index >= Self::ALL.len() - 1 {
+            0
+        } else {
+            index + 1
+        }];
+    }
+
+    pub fn wrapping_dec(&mut self) {
+        let index = self.index_of();
+        *self = Self::ALL[if index == 0 {
+            Self::ALL.len() - 1
+        } else {
+            index - 1
+        }];
+    }
+
+    pub fn index_of(&self) -> usize {
+        for i in 0..Self::ALL.len() {
+            if Self::ALL[i] == *self {
+                return i;
+            }
+        }
+
+        unreachable!()
     }
 }
