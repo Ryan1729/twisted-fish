@@ -1,3 +1,11 @@
+macro_rules! compile_time_assert {
+    ($assertion: expr) => (
+        #[allow(unknown_lints, clippy::eq_op)]
+        // Based on the const_assert macro from static_assertions;
+        const _: [(); 0 - !{$assertion} as usize] = [];
+    )
+}
+
 use models::{Card, NetPredicate, Rank, Suit, get_rank, get_suit, get_zinger, Zinger};
 
 use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT, bytes_lines};
@@ -689,23 +697,60 @@ impl Commands {
             NetPredicate::Rank(rank) => {
                 rank_opt = Some(rank);
 
-                let stripe_count = unscaled::Inner::from(Suit::COUNT);
-                // TODO account for the fact that this division truncates some 
-                // pixels.
-                let w = card::WIDTH.get() / stripe_count;
-                // TODO account for the fact that this division truncates different 
-                // pixels than the above one.
-                let image_w = (card::IMAGE_W.get() / stripe_count);
+                const STRIPE_COUNT: unscaled::Inner = Suit::COUNT as _;
+
+                const BACKING_WS: [unscaled::W; Suit::COUNT as _] = [
+                    unscaled::W(15),
+                    unscaled::W(15),
+                    unscaled::W(14),
+                    unscaled::W(15),
+                    unscaled::W(15),
+                ];
+                compile_time_assert!(
+                    {
+                        let mut total = 0;
+                        let mut i = 0;
+                        while i < BACKING_WS.len() {
+                            total += BACKING_WS[i].get();
+                            i += 1;
+                        }
+
+                        total
+                    }
+                    == card::WIDTH.get().get()
+                );
+                const IMAGE_WS: [unscaled::W; Suit::COUNT as _] = [
+                    unscaled::W(14),
+                    unscaled::W(15),
+                    unscaled::W(14),
+                    unscaled::W(15),
+                    unscaled::W(14),
+                ];
+                compile_time_assert!(
+                    {
+                        let mut total = 0;
+                        let mut i = 0;
+                        while i < IMAGE_WS.len() {
+                            total += IMAGE_WS[i].get();
+                            i += 1;
+                        }
+                        total
+                    }
+                    == card::IMAGE_W.get().get()
+                );
 
                 let mut x = xy.x;
+                let mut backing_x_offset = unscaled::W(0);
                 let mut image_x_offset = unscaled::W(0);
                 
                 for suit in Suit::ALL {
                     let suit_u8 = u8::from(suit);
 
+                    let backing_w = BACKING_WS[usize::from(suit_u8)];
+
                     self.sspr(
                         sprite::XY {
-                            x: card::BACKING_SPRITE_X + image_x_offset,
+                            x: card::BACKING_SPRITE_X + backing_x_offset,
                             y: card::BACKING_SPRITE_BASE_Y
                             + card::HEIGHT.get()
                             * sprite::Inner::from(suit_u8)
@@ -713,7 +758,7 @@ impl Commands {
                         Rect::from_unscaled(unscaled::Rect {
                             x,
                             y: xy.y,
-                            w,
+                            w: backing_w,
                             h: card::HEIGHT.get(),
                         })
                     );
@@ -727,6 +772,8 @@ impl Commands {
                         + unscaled::Inner::from(u8::from(rank))
                         * card::IMAGE_H.get();
             
+                    let image_w = IMAGE_WS[usize::from(suit_u8)];
+
                     self.sspr(
                         sprite::XY {
                             x: image_sprite_x,
@@ -740,7 +787,8 @@ impl Commands {
                         })
                     );
 
-                    x += w;
+                    x += backing_w;
+                    backing_x_offset += backing_w;
                     image_x_offset += image_w;
                 }
             }
