@@ -493,7 +493,7 @@ impl Commands {
                 b"Eel       ",
             ),
             (None, Some(Rank::FlyingFish), None) => (
-                b"    Flying",
+                b"Flying    ",
                 b"fish      ",
             ),
             (None, Some(Rank::Hammerhead), None) => (
