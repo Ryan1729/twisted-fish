@@ -2993,8 +2993,6 @@ pub fn update_and_render(
                         );
                     }
 
-                    // TODO Play Zingers sometimes.
-
                     if let CpuMenu::Selecting = *menu {
                         // TODO? randomize order through the cards here to make Cpu
                         // player less predictable?
@@ -3021,6 +3019,13 @@ pub fn update_and_render(
                                     question,
                                 );
                                 break
+                            } else if let Some(zinger) = models::get_zinger(card) {
+                                // TODO Play Zingers sometimes.
+                                match zinger {
+                                    _ => { todo!() }
+                                }
+                            } else {
+                                debug_assert!(false, "Non-fish, non-zinger card!? {card}");
                             }
                         }
 
