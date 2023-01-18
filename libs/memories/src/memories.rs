@@ -1,4 +1,4 @@
-use models::{Basket, Card, CpuId, Hand, HandId, Suit, Rank, DECK_SIZE};
+use models::{Basket, Card, CpuId, Hand, HandId, Predicate, Rank, Suit, DECK_SIZE};
 
 /// It seems intuitive that counting an amount of asks larger than the amount of
 /// suits would not be needed, but I don't have an explicitly worked out reason for
@@ -125,28 +125,38 @@ impl Memory {
         best.map(|(_, out)| out)
     }
 
-    fn asked_for(&mut self, hand_id: HandId, rank: Rank, _asked_suit: Suit) {
-        // TODO? Should we treat the card that was asked for differently?
-        // The thing is one can ask for a card that one has to trip people up.
-        // Maybe another Location variant is needed for that case?
-        for suit in Suit::ALL {
-            let loc = &mut self.locations[models::fish_card(rank, suit) as usize];
-            match *loc {
-                Location::Known(_)
-                | Location::KnownGone => {},
-                Location::Incomplete(mut incomplete) => {
-                    let i = hand_id as usize;
-                    incomplete[i] = match incomplete[i] {
-                        Evidence::Unknown
-                        | Evidence::DidNotHave => Evidence::AskedForSimilar(AskCount::One),
-                        Evidence::AskedForSimilar(count) => {
-                            Evidence::AskedForSimilar(count.saturating_inc())
-                        }
-                    };
-
-                    *loc = Location::Incomplete(incomplete);
-                },
-            }
+    fn asked_for(&mut self, hand_id: HandId, predicate: Predicate) {
+        use Predicate::*;
+        match predicate {
+            RankSuit(rank, _asked_suit) => {
+                // TODO? Should we treat the card that was asked for differently?
+                // The thing is one can ask for a card that one has to trip people up.
+                // Maybe another Location variant is needed for that case?
+                for suit in Suit::ALL {
+                    let loc = &mut self.locations[models::fish_card(rank, suit) as usize];
+                    match *loc {
+                        Location::Known(_)
+                        | Location::KnownGone => {},
+                        Location::Incomplete(mut incomplete) => {
+                            let i = hand_id as usize;
+                            incomplete[i] = match incomplete[i] {
+                                Evidence::Unknown
+                                | Evidence::DidNotHave => Evidence::AskedForSimilar(AskCount::One),
+                                Evidence::AskedForSimilar(count) => {
+                                    Evidence::AskedForSimilar(count.saturating_inc())
+                                }
+                            };
+        
+                            *loc = Location::Incomplete(incomplete);
+                        },
+                    }
+                }
+            },
+            Net(net_predicate) => {
+                // TODO is the information gained here different than if the 
+                // predicate was not used?
+                todo!("asked_for net_predicate")
+            },
         }
     }
 
@@ -317,9 +327,9 @@ impl Memories {
         }
     }
 
-    pub fn asked_for(&mut self, hand_id: HandId, rank: Rank, asked_suit: Suit) {
+    pub fn asked_for(&mut self, hand_id: HandId, predicate: Predicate) {
         for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).asked_for(hand_id, rank, asked_suit);
+            self.memory_mut(cpu_id).asked_for(hand_id, predicate);
         }
     }
 

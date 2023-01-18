@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, NetPredicate, Rank, Suit, Zinger, DECK_SIZE, get_rank, zingers};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Predicate, NetPredicate, Rank, Suit, Zinger, DECK_SIZE, get_rank, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -393,6 +393,10 @@ pub enum PlayerMenu {
         target: CpuId,
         predicate: NetPredicate,
     },
+    NetFished {
+        predicate: NetPredicate,
+        drew: Option<Card>
+    }
 }
 
 impl Default for PlayerMenu {
@@ -1433,6 +1437,20 @@ fn discard_two_fisted_fisherman(
     )
 }
 
+fn discard_net(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    source: HandId,
+) {
+    discard_given_card(
+        cards,
+        animations,
+        source,
+        zingers::THE_NET,
+        AfterDiscard::Nothing,
+    )
+}
+
 fn discard_given_card(
     cards: &mut Cards,
     animations: &mut Animations,
@@ -1950,16 +1968,22 @@ fn should_use_no_fishing_against(
     memory: &memories::Memory,
     hand: &Hand,
     target: HandId,
-    rank: Rank,
-    suit: Suit,
+    predicate: Predicate,
     active_count: ActiveCardCount,
 ) -> bool {
     if let ActiveCardCount::VeryFew = active_count {
         return true
     }
 
-    hand.contains(models::fish_card(rank, suit))
-    && memory.is_likely_to_fill_rank_soon(target, rank)
+    match predicate {
+        Predicate::RankSuit(rank, suit) => {
+            hand.contains(models::fish_card(rank, suit))
+            && memory.is_likely_to_fill_rank_soon(target, rank)
+        },
+        Predicate::Net(predicate) => {
+            todo!("should_use_no_fishing_against Net(predicate)");
+        },
+    }
 }
 
 fn can_and_should_play_two_fisted_fisherman(
@@ -2434,7 +2458,103 @@ pub fn update_and_render(
                                 text: b"Submit",
                             }
                         ) {
-                            todo!();
+                            macro_rules! net_handle_negative_response {
+                                () => {
+                                    let player_len = state.cards.player.len();
+    
+                                    let drew = state.cards.deck.draw();
+    
+                                    *menu = PlayerMenu::NetFished {
+                                        predicate: core::mem::take(predicate),
+                                        drew,
+                                    };
+    
+                                    if let Some(card) = drew {
+                                        let at = DECK_XY;
+    
+                                        let target = get_card_insert_position(
+                                            spread(HandId::Player),
+                                            player_len
+                                        );
+    
+                                        state.animations.push(Animation {
+                                            card,
+                                            at,
+                                            target,
+                                            action: AnimationAction::AddToHand(HandId::Player),
+                                            .. <_>::default()
+                                        });
+                                    }
+                                }
+                            }
+
+                            discard_net(
+                                &mut state.cards,
+                                &mut state.animations,
+                                HandId::Player
+                            );
+
+                            let target_hand_id = (*target).into();
+                            if state.cards.hand(target_hand_id)
+                                .contains(zingers::NO_FISHING)
+                            && should_use_no_fishing_against(
+                                state.memories.memory(*target),
+                                state.cards.hand(target_hand_id),
+                                HandId::Player,
+                                Predicate::Net(*predicate),
+                                state.cards.active_count(),
+                            ) {
+                                discard_no_fishing(
+                                    &mut state.cards,
+                                    &mut state.animations,
+                                    target_hand_id
+                                );
+                                net_handle_negative_response!();
+                            } else {
+                                let player_len = state.cards.player.len();
+                                let target_hand = state.cards.hand_mut(target_hand_id);
+
+                                state.memories.asked_for(
+                                    HandId::Player,
+                                    Predicate::Net(*predicate)
+                                );
+
+                                let mut found = None;
+                                for i in 0..target_hand.len() {
+                                    todo!("find via NetPredicate")
+                                }
+
+                                if let Some((rank, suit, i)) = found {
+                                    state.memories.found(
+                                        HandId::Player,
+                                        rank,
+                                        suit
+                                    );
+                                    let at = get_card_position(
+                                        spread(target_hand_id),
+                                        target_hand.len(),
+                                        i,
+                                    );
+
+                                    let target = get_card_insert_position(
+                                        spread(HandId::Player),
+                                        player_len
+                                    );
+
+                                    state.animations.push(Animation {
+                                        card: models::fish_card(rank, suit),
+                                        at,
+                                        target,
+                                        action: AnimationAction::AddToHand(HandId::Player),
+                                        shown: true,
+                                        .. <_>::default()
+                                    });
+
+                                    *menu = PlayerMenu::default();
+                                } else {
+                                    net_handle_negative_response!();
+                                }
+                            }
                         } else if input.pressed_this_frame(Button::B) {
                             state.menu = Menu::player(selected);
                         } else if let Some(dir) = input.dir_pressed_this_frame() {
@@ -2500,6 +2620,12 @@ pub fn update_and_render(
                             // do nothing
                         }
                     },
+                    PlayerMenu::NetFished {
+                        predicate,
+                        drew,
+                    } => {
+                        todo!("PlayerMenu::NetFished")
+                    }
                     PlayerMenu::Asking {
                         used,
                         ref mut question,
@@ -2636,8 +2762,7 @@ pub fn update_and_render(
                                         ),
                                         state.cards.hand(question.target),
                                         HandId::Player,
-                                        rank,
-                                        question.suit,
+                                        Predicate::RankSuit(rank, question.suit),
                                         state.cards.active_count(),
                                     ) {
                                         discard_no_fishing(
@@ -2652,8 +2777,7 @@ pub fn update_and_render(
         
                                         state.memories.asked_for(
                                             HandId::Player,
-                                            rank,
-                                            question.suit
+                                            Predicate::RankSuit(rank, question.suit)
                                         );
         
                                         let target_card = models::fish_card(rank, question.suit);
@@ -3096,7 +3220,10 @@ pub fn update_and_render(
                     () => {
                         let rank = *rank;
 
-                        state.memories.asked_for(id.into(), rank, question.suit);
+                        state.memories.asked_for(
+                            id.into(),
+                            Predicate::RankSuit(rank, question.suit)
+                        );
 
                         let target_card = models::fish_card(rank, question.suit);
                         let my_len = state.cards.hand(id.into()).len();
@@ -3235,8 +3362,7 @@ pub fn update_and_render(
                             ),
                             state.cards.hand(question.target),
                             id.into(),
-                            *rank,
-                            question.suit,
+                            Predicate::RankSuit(*rank, question.suit),
                             state.cards.active_count(),
                         ) {
                             discard_no_fishing(

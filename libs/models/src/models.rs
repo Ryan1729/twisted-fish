@@ -753,3 +753,10 @@ impl NetPredicate {
         unreachable!()
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Predicate {
+    RankSuit(Rank, Suit),
+    // Lure(Rank, Suit),
+    Net(NetPredicate),
+}
