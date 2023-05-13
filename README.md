@@ -4,6 +4,8 @@ This is a single player only version of the card game [Twisted Fish](https://boa
 
 As of this writing, the implementation is not complete. This project was started from [this template](https://github.com/Ryan1729/cross-platform-template).
 
+Looking back at this after a while, I think finishing this needs a different approach than what I had been doing. In particular, it seems like a software design approach is needed to make it less complicated to support countering things with the Divine Intervention card. I think a good way to figure out how to do that properly is to experiemnt with a new game that doesn't have all the baggage.coplication of this one. The description of that game is [here](docs/Count-your-counters-README.md). That said, I am likely to work on other projects before coming back to work on this one.
+
 ## WASM version
 
 ### Running locally
