@@ -1,0 +1,32 @@
+[package]
+name = "platform"
+version = "0.1.0"
+authors = ["Ryan1729 <Ryan1729@gmail.com>"]
+edition = "2021"
+
+[lib]
+path = "src/platform.rs"
+
+[dependencies]
+softbuffer = "0.1.1"
+winit = "0.26.1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3.59"
+wasm-bindgen = "0.2.45"
+web-sys = { version = "0.3.22", features = ["HtmlCanvasElement"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rodio = { version = "0.15.0", features=["vorbis"], default-features = false }
+spin_sleep = "1.1.1"
+xs = { path = "../xs" }
+
+[dependencies.platform_types]
+path = "../platform_types"
+
+[dependencies.render]
+path = "../render"
+
+[features]
+default = []
+non-web-sound = []

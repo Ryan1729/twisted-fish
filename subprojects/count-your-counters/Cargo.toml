@@ -1,0 +1,24 @@
+[package]
+name = "count-your-counters"
+version = "0.2.0"
+authors = ["Ryan Wiedemann <Ryan1729@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.45"
+
+[dependencies.platform]
+path = "../libs/platform"
+
+[dependencies.app]
+path = "../libs/app"
+
+[dev-dependencies.platform_types]
+path = "../libs/platform_types"
+
+[features]
+default = ["platform/non-web-sound"]
+invariant-checking = ["app/invariant-checking"]
+logging = ["app/logging"]
