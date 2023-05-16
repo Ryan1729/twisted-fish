@@ -96,26 +96,12 @@ pub type AlmostCompleteBaskets = [Option<AlmostCompleteBasket>; Rank::COUNT as _
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Rank {
-    // Worth 5 points {
     #[default]
-    Barnacle,
-    Crab,
-    Dogfish,
-    Eel,
-    FlyingFish,
-    Hammerhead,
-    Jellyfish,
-    Shrimp,
-    // }
-    // Worth 10 points {
-    Blowfish,
-    Clownfish,
-    Starfish,
-    Whale,
-    // }
-    // Worth 15 points {
-    CardShark,
-    // }
+    Crab, // Red
+    Eel, // Green
+    Barnacle, // Blue
+    Jellyfish, // Yellow
+    Shrimp, // Purple
 }
 
 impl From<Rank> for u8 {
@@ -125,56 +111,32 @@ impl From<Rank> for u8 {
 }
 
 impl Rank {
-    pub const COUNT: u8 = 13;
+    pub const COUNT: u8 = 5;
 
     pub const ALL: [Rank; Rank::COUNT as usize] = [
-        Rank::Barnacle,
         Rank::Crab,
-        Rank::Dogfish,
         Rank::Eel,
-        Rank::FlyingFish,
-        Rank::Hammerhead,
+        Rank::Barnacle,
         Rank::Jellyfish,
         Rank::Shrimp,
-        Rank::Blowfish,
-        Rank::Clownfish,
-        Rank::Starfish,
-        Rank::Whale,
-        Rank::CardShark,
     ];
 
     pub const TEXT: [&[u8]; Rank::COUNT as usize] = [
-        b"Barnacle",
         b"Crab",
-        b"Dogfish",
         b"Eel",
-        b"Flying Fish",
-        b"Hammerhead",
+        b"Barnacle",
         b"Jellyfish",
         b"Shrimp",
-        b"Blowfish",
-        b"Clownfish",
-        b"Starfish",
-        b"Whale",
-        b"Card Shark",
     ];
 
     pub fn wrapping_dec(mut self, acb: AlmostCompleteBaskets) -> Self {
         for _ in 0..acb.len() {
             self = match self {
-                Rank::Barnacle => Rank::CardShark,
-                Rank::Crab => Rank::Barnacle,
-                Rank::Dogfish => Rank::Crab,
-                Rank::Eel => Rank::Dogfish,
-                Rank::FlyingFish => Rank::Eel,
-                Rank::Hammerhead => Rank::FlyingFish,
-                Rank::Jellyfish => Rank::Hammerhead,
+                Rank::Crab => Rank::Shrimp,
+                Rank::Eel => Rank::Crab,
+                Rank::Barnacle => Rank::Eel,
+                Rank::Jellyfish => Rank::Barnacle,
                 Rank::Shrimp => Rank::Jellyfish,
-                Rank::Blowfish => Rank::Shrimp,
-                Rank::Clownfish => Rank::Blowfish,
-                Rank::Starfish => Rank::Clownfish,
-                Rank::Whale => Rank::Starfish,
-                Rank::CardShark => Rank::Whale,
             };
 
             if acb[(self as u8) as usize].is_some() {
@@ -188,19 +150,11 @@ impl Rank {
     pub fn wrapping_inc(mut self, acb: AlmostCompleteBaskets) -> Self {
         for _ in 0..acb.len() {
             self = match self {
-                Rank::Barnacle => Rank::Crab,
-                Rank::Crab => Rank::Dogfish,
-                Rank::Dogfish => Rank::Eel,
-                Rank::Eel => Rank::FlyingFish,
-                Rank::FlyingFish => Rank::Hammerhead,
-                Rank::Hammerhead => Rank::Jellyfish,
+                Rank::Crab => Rank::Eel,
+                Rank::Eel => Rank::Barnacle,
+                Rank::Barnacle => Rank::Jellyfish,
                 Rank::Jellyfish => Rank::Shrimp,
-                Rank::Shrimp => Rank::Blowfish,
-                Rank::Blowfish => Rank::Clownfish,
-                Rank::Clownfish => Rank::Starfish,
-                Rank::Starfish => Rank::Whale,
-                Rank::Whale => Rank::CardShark,
-                Rank::CardShark => Rank::Barnacle,
+                Rank::Shrimp => Rank::Crab,
             };
 
             if acb[(self as u8) as usize].is_some() {
@@ -219,19 +173,11 @@ pub fn get_rank(card: Card) -> Option<Rank> {
     } else {
         use Rank::*;
         match card % RANK_COUNT {
-            0 => Some(Barnacle),
-            1 => Some(Crab),
-            2 => Some(Dogfish),
-            3 => Some(Eel),
-            4 => Some(FlyingFish),
-            5 => Some(Hammerhead),
-            6 => Some(Jellyfish),
-            7 => Some(Shrimp),
-            8 => Some(Blowfish),
-            9 => Some(Clownfish),
-            10 => Some(Starfish),
-            11 => Some(Whale),
-            12 => Some(CardShark),
+            0 => Some(Crab),
+            1 => Some(Eel),
+            2 => Some(Barnacle),
+            3 => Some(Jellyfish),
+            4 => Some(Shrimp),
             _ => None,
         }
     }
@@ -329,56 +275,6 @@ pub fn get_suit(card: Card) -> Option<Suit> {
             _ => None,
         }
     }
-}
-
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Zinger {
-    DeadScubaDiver,
-    DivineIntervention,
-    GlassBottomBoat,
-    NoFishing,
-    TheGameWarden,
-    TheLure,
-    TheNet,
-    TwoFistedFisherman,
-}
-
-pub fn get_zinger(card: Card) -> Option<Zinger> {
-    if (FISH_COUNT..DECK_SIZE).contains(&card) {
-        use Zinger::*;
-        Some(match card - FISH_COUNT {
-            0 => DeadScubaDiver,
-            1 => DivineIntervention,
-            2 => GlassBottomBoat,
-            3 => NoFishing,
-            4 => TheGameWarden,
-            5 => TheLure,
-            6 => TheNet,
-            7 => TwoFistedFisherman,
-            _ => return None,
-        })
-    } else {
-        None
-    }
-}
-
-pub mod zingers {
-    use super::*;
-
-    pub const DEAD_SCUBA_DIVER: Card = zinger_card(Zinger::DeadScubaDiver);
-    pub const DIVINE_INTERVENTION: Card = zinger_card(Zinger::DivineIntervention);
-    pub const GLASS_BOTTOM_BOAT: Card = zinger_card(Zinger::GlassBottomBoat);
-    pub const NO_FISHING: Card = zinger_card(Zinger::NoFishing);
-    pub const THE_GAME_WARDEN: Card = zinger_card(Zinger::TheGameWarden);
-    pub const THE_LURE: Card = zinger_card(Zinger::TheLure);
-    pub const THE_NET: Card = zinger_card(Zinger::TheNet);
-    pub const TWO_FISTED_FISHERMAN: Card = zinger_card(Zinger::TwoFistedFisherman);
-    
-}
-
-pub const fn zinger_card(zinger: Zinger) -> Card {
-    zinger as Card + FISH_COUNT
 }
 
 pub type HandLen = u8;
@@ -666,97 +562,4 @@ impl CpuId {
             CpuId::Three => CpuId::Two,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NetPredicate {
-    Suit(Suit),
-    Rank(Rank),
-}
-
-impl Default for NetPredicate {
-    fn default() -> Self {
-        Self::Suit(<_>::default())
-    }
-}
-
-impl NetPredicate {
-    pub const COUNT: u8 = 18;
-
-    pub const ALL: [Self; Self::COUNT as usize] = [
-        Self::Suit(Suit::ALL[0]),
-        Self::Suit(Suit::ALL[1]),
-        Self::Suit(Suit::ALL[2]),
-        Self::Suit(Suit::ALL[3]),
-        Self::Suit(Suit::ALL[4]),
-        Self::Rank(Rank::ALL[0]),
-        Self::Rank(Rank::ALL[1]),
-        Self::Rank(Rank::ALL[2]),
-        Self::Rank(Rank::ALL[3]),
-        Self::Rank(Rank::ALL[4]),
-        Self::Rank(Rank::ALL[5]),
-        Self::Rank(Rank::ALL[6]),
-        Self::Rank(Rank::ALL[7]),
-        Self::Rank(Rank::ALL[8]),
-        Self::Rank(Rank::ALL[9]),
-        Self::Rank(Rank::ALL[10]),
-        Self::Rank(Rank::ALL[11]),
-        Self::Rank(Rank::ALL[12]),
-    ];
-
-    pub const TEXT: [&[u8]; Self::COUNT as usize] = [
-        Suit::TEXT[0],
-        Suit::TEXT[1],
-        Suit::TEXT[2],
-        Suit::TEXT[3],
-        Suit::TEXT[4],
-        Rank::TEXT[0],
-        Rank::TEXT[1],
-        Rank::TEXT[2],
-        Rank::TEXT[3],
-        Rank::TEXT[4],
-        Rank::TEXT[5],
-        Rank::TEXT[6],
-        Rank::TEXT[7],
-        Rank::TEXT[8],
-        Rank::TEXT[9],
-        Rank::TEXT[10],
-        Rank::TEXT[11],
-        Rank::TEXT[12],
-    ];
-
-    pub fn wrapping_inc(&mut self) {
-        let index = self.index_of();
-        *self = Self::ALL[if index >= Self::ALL.len() - 1 {
-            0
-        } else {
-            index + 1
-        }];
-    }
-
-    pub fn wrapping_dec(&mut self) {
-        let index = self.index_of();
-        *self = Self::ALL[if index == 0 {
-            Self::ALL.len() - 1
-        } else {
-            index - 1
-        }];
-    }
-
-    pub fn index_of(&self) -> usize {
-        for i in 0..Self::ALL.len() {
-            if Self::ALL[i] == *self {
-                return i;
-            }
-        }
-
-        unreachable!()
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Predicate {
-    RankSuit(Rank, Suit),
-    // Lure(Rank, Suit),
-    Net(NetPredicate),
 }
