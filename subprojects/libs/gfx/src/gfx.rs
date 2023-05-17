@@ -10,9 +10,11 @@ use models::{Card, Rank, Suit, get_rank, get_suit};
 
 use platform_types::{ARGB, Command, sprite, unscaled, command::{self, Rect}, CHAR_W, CHAR_H, CHAR_WIDTH, CHAR_HEIGHT, FONT_WIDTH, CARD_WIDTH, CARD_HEIGHT, bytes_lines};
 
+const GFX_RANK_COUNT: u8 = 13;
+
 const FONT_OFFSET: sprite::H = unscaled::h_const_mul(
     card::IMAGE_H.get(),
-    models::RANK_COUNT as _
+    GFX_RANK_COUNT as _
 );
 
 #[derive(Default)]
@@ -347,9 +349,19 @@ impl Commands {
         };
 
         let image_y = match rank_opt {
-            Some(rank) => card::IMAGE_BASE_Y
-                + unscaled::Inner::from(rank as u8)
-                * card::IMAGE_H.get(),
+            Some(rank) => {
+                let munged_rank: u8 = match rank {
+                    models::Rank::Crab => 1,
+                    models::Rank::Eel => 3,
+                    models::Rank::Barnacle => 0,
+                    models::Rank::Jellyfish => 6,
+                    models::Rank::Shrimp => 7,
+                };
+
+                card::IMAGE_BASE_Y
+                + unscaled::Inner::from(munged_rank)
+                * card::IMAGE_H.get()
+            },
             None => {
                 debug_assert!(false, "No suit or zinger for card: {card}");
                 card::IMAGE_BASE_Y

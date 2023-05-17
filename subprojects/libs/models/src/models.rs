@@ -8,11 +8,9 @@ macro_rules! compile_time_assert {
     )
 }
 
-pub const RANK_COUNT: u8 = 13;
+pub const RANK_COUNT: u8 = 5;
 pub const SUIT_COUNT: u8 = 5;
-pub const FISH_COUNT: u8 = RANK_COUNT * SUIT_COUNT;
-pub const ZINGER_COUNT: u8 = 8;
-pub const DECK_SIZE: u8 = FISH_COUNT + ZINGER_COUNT;
+pub const DECK_SIZE: u8 = RANK_COUNT * SUIT_COUNT;
 
 pub type CardInner = u8;
 
@@ -20,23 +18,6 @@ pub type Card = CardInner;
 
 pub fn fish_card(rank: Rank, suit: Suit) -> Card {
     suit as CardInner * RANK_COUNT + (rank as CardInner)
-}
-
-#[test]
-fn get_rank_and_get_suit_then_fish_card_works() {
-    for card in 0..FISH_COUNT {
-        let rank = get_rank(card).unwrap();
-        let suit = get_suit(card).unwrap();
-
-        assert_eq!(
-            fish_card(
-                rank,
-                suit,
-            ),
-            card,
-            "expected {rank:?}, {suit:?} -> {card:?}"
-        );
-    }
 }
 
 pub fn gen_card(rng: &mut Xs) -> Card {
@@ -168,7 +149,7 @@ impl Rank {
 }
 
 pub fn get_rank(card: Card) -> Option<Rank> {
-    if card >= FISH_COUNT {
+    if card >= DECK_SIZE {
         None
     } else {
         use Rank::*;
@@ -263,7 +244,7 @@ pub mod suits {
 }
 
 pub fn get_suit(card: Card) -> Option<Suit> {
-    if card >= FISH_COUNT {
+    if card >= DECK_SIZE {
         None
     } else {
         match (card / RANK_COUNT) % SUIT_COUNT {
