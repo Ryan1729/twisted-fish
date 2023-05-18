@@ -464,7 +464,7 @@ impl HandId {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CpuId {
     #[default]
     One,

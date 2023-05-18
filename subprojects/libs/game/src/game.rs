@@ -190,7 +190,7 @@ pub enum AnimationAction {
 mod question {
     use super::*;
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     pub struct Question {
         pub target: HandId,
         pub suit: Suit,
@@ -335,7 +335,7 @@ mod question {
 }
 use question::Question;
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct PlayerSelection {
     target: CpuId,
     card: AnytimeCard,
@@ -344,7 +344,7 @@ pub struct PlayerSelection {
     rank: Rank,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Menu {
     PlayerTurn { selected: CardIndex, menu: PlayerMenu },
     CpuTurn{ id: CpuId, menu: CpuMenu },
@@ -376,7 +376,7 @@ impl Menu {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PlayerMenu {
     Selecting { sub_menu: PlayerSelectingSubMenu },
     Asking {
@@ -397,7 +397,7 @@ impl Default for PlayerMenu {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum PlayerSelectingSubMenu {
     #[default]
     Root,
@@ -405,14 +405,14 @@ pub enum PlayerSelectingSubMenu {
     Message(Vec<u8>),
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum PlayerAskingSubMenu {
     #[default]
     Root,
     TwoFistedFisherman,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum CpuMenu {
     #[default]
     Selecting,
@@ -423,7 +423,7 @@ pub enum CpuMenu {
     WaitingWhenPlayedTwoFistedFisherman,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Cards {
     pub deck: Hand,
     pub player: Hand,
@@ -910,7 +910,7 @@ mod ui {
 
 use ui::{ButtonSpec, Id::*, do_button};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum PlayAnytimeFlags {
@@ -976,7 +976,7 @@ fn almost_complete_basket_count(baskets: AlmostCompleteBaskets) -> RankCount {
     count
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct AvailablePlayAnytime {
     flags: PlayAnytimeFlags,
     warden_i: CardIndex,
@@ -1137,7 +1137,7 @@ fn find_almost_complete_baskets_works_on_this_smaller_example() {
     );
 }
 
-#[derive(Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 enum AnytimeCard {
     #[default]
     GameWarden,
@@ -1336,6 +1336,8 @@ pub fn update_and_render(
 
     state.tick(speaker);
 
+    // DRAW
+
     if !state.cards.deck.is_empty() {
         commands.draw_card_back(DECK_XY);
     }
@@ -1399,7 +1401,67 @@ pub fn update_and_render(
                 get_card_position(spread(id), len, i)
             );
         }
+
+        if let Some((selected, player_card)) = selected
+            .and_then(|selected| hand.get(selected).map(|card| (selected, card)))
+        {
+            let selected_pos = get_card_position(
+                spread(id),
+                len,
+                selected
+            );
+    
+            commands.draw_card(
+                player_card,
+                selected_pos
+            );
+    
+            commands.draw_selectrum(selected_pos);
+        }
     }
+
+    // UPDATE
+
+    match state.menu {
+        Menu::PlayerTurn {
+            selected,
+            menu: PlayerMenu::Selecting { .. }
+        } => {
+            if input.pressed_this_frame(Button::LEFT) {
+                state.menu = Menu::player(
+                    if selected > 0 {
+                        selected - 1
+                    } else {
+                        state.cards.player.len().saturating_sub(1)
+                    }
+                );
+            } else if input.pressed_this_frame(Button::RIGHT) {
+                state.menu = Menu::player(
+                    if selected < state.cards.player.len().saturating_sub(1) {
+                        selected + 1
+                    } else {
+                        0
+                    }
+                );
+            } else if input.pressed_this_frame(Button::A) {
+                if !state.cards.player.is_empty() {
+                    let player_card = state.cards.player.get(selected)
+                        .expect("selected index should always be valid");
+                    state.menu = Menu::PlayerTurn {
+                        selected,
+                        menu: PlayerMenu::Asking{
+                            used: player_card,
+                            question: Default::default(),
+                            sub_menu: Default::default(),
+                        },
+                    };
+                }
+            } else {
+                // do nothing
+            }
+        },
+        _ => { dbg!(&state.menu); },
+    };
 }
 
 fn draw_dead_in_the_water(commands: &mut Commands) {
