@@ -3,9 +3,8 @@ use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Rank, Suit, DECK_SIZE
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
-    unscaled::{self, X, Y, XY, W, H, WH, Rect, x_const_add_w, w_const_sub},
+    unscaled::{self, X, Y, XY, W, H, Rect, x_const_add_w, w_const_sub},
     Button,
-    Dir,
     Input,
     Speaker,
     SFX,
@@ -333,7 +332,7 @@ mod question {
         }
     }
 }
-use question::Question;
+
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PlayerSelection {
@@ -430,7 +429,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(seed: Seed) -> State {
+    pub fn new(_seed: Seed) -> State {
         const INITIAL_HAND_SIZE: u8 = 8;//16;
         // For debugging: {
         // Gives player multiple zingers. (8)
@@ -841,7 +840,7 @@ mod ui {
     }
 }
 
-use ui::{ButtonSpec, Id::*, do_button};
+use ui::{Id::*};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
@@ -1376,7 +1375,7 @@ pub fn update_and_render(
                 );
             } else if input.pressed_this_frame(Button::A) {
                 if !state.cards.player.is_empty() {
-                    let player_card = state.cards.player.get(selected)
+                    let _player_card = state.cards.player.get(selected)
                         .expect("selected index should always be valid");
                     state.menu = Menu::player(selected);
                     dbg!("TODO: Note attempt to win here");
@@ -1411,7 +1410,7 @@ fn draw_dead_in_the_water(commands: &mut Commands) {
     );
 }
 
-fn next_turn_menu(mut id: CpuId, player_hand: &Hand) -> Menu {
+fn next_turn_menu(mut id: CpuId, _player_hand: &Hand) -> Menu {
     match id.next() {
         Some(next_id) => Menu::CpuTurn{
             id: next_id.into(),
