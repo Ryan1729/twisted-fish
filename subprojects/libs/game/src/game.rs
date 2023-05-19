@@ -346,12 +346,8 @@ pub struct PlayerSelection {
 
 #[derive(Clone, Debug)]
 pub enum Menu {
-    PlayerTurn { selected: CardIndex, menu: PlayerMenu },
-    CpuTurn{ id: CpuId, menu: CpuMenu },
-    BetweenTurns {
-        next_id: HandId,
-        player_selection: PlayerSelection,
-    },
+    PlayerTurn { selected: CardIndex },
+    CpuTurn{ id: CpuId },
 }
 
 impl Default for Menu {
@@ -364,63 +360,8 @@ impl Menu {
     fn player(selected: CardIndex) -> Self {
         Menu::PlayerTurn {
             selected,
-            menu: PlayerMenu::default(),
         }
     }
-
-    fn between_turns(next_id: HandId) -> Self {
-        Menu::BetweenTurns {
-            next_id,
-            player_selection: PlayerSelection::default(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum PlayerMenu {
-    Selecting { sub_menu: PlayerSelectingSubMenu },
-    Asking {
-        used: Card,
-        question: Question,
-        sub_menu: PlayerAskingSubMenu,
-    },
-    Fished {
-        used: Card,
-        question: Question,
-        drew: Option<Card>
-    },
-}
-
-impl Default for PlayerMenu {
-    fn default() -> PlayerMenu {
-        PlayerMenu::Selecting { sub_menu: <_>::default() }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum PlayerSelectingSubMenu {
-    #[default]
-    Root,
-    Anytime(PlayerSelection, AvailablePlayAnytime),
-    Message(Vec<u8>),
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum PlayerAskingSubMenu {
-    #[default]
-    Root,
-    TwoFistedFisherman,
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum CpuMenu {
-    #[default]
-    Selecting,
-    Asking(Rank, Question),
-    DeadInTheWater,
-    WaitingForSuccesfulAsk,
-    WaitingWhenGotWhatWasFishingFor,
-    WaitingWhenPlayedTwoFistedFisherman,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -610,7 +551,6 @@ impl State {
                             Err(_) => match self.menu {
                                 Menu::PlayerTurn {
                                     ref mut selected,
-                                    menu: _
                                 } => {
                                     *selected = hand.len() - 1;
                                 },
@@ -619,15 +559,8 @@ impl State {
                             Ok(cpu_id) => match self.menu {
                                 Menu::CpuTurn {
                                     id,
-                                    ref mut menu,
-                                } if cpu_id == id
-                                && matches!(
-                                    *menu,
-                                    CpuMenu::WaitingForSuccesfulAsk
-                                    | CpuMenu::WaitingWhenGotWhatWasFishingFor
-                                    | CpuMenu::WaitingWhenPlayedTwoFistedFisherman
-                                ) => {
-                                    *menu = CpuMenu::Selecting;
+                                } if cpu_id == id => {
+                                    dbg!("TODO is this case useful?");
                                 },
                                 _ => {},
                             }
@@ -1389,7 +1322,6 @@ pub fn update_and_render(
         let selected = match state.menu {
             Menu::PlayerTurn {
                 selected,
-                menu: PlayerMenu::Selecting { .. }
             } => Some(selected),
             _ => None,
         };
@@ -1425,7 +1357,6 @@ pub fn update_and_render(
     match state.menu {
         Menu::PlayerTurn {
             selected,
-            menu: PlayerMenu::Selecting { .. }
         } => {
             if input.pressed_this_frame(Button::LEFT) {
                 state.menu = Menu::player(
@@ -1447,14 +1378,8 @@ pub fn update_and_render(
                 if !state.cards.player.is_empty() {
                     let player_card = state.cards.player.get(selected)
                         .expect("selected index should always be valid");
-                    state.menu = Menu::PlayerTurn {
-                        selected,
-                        menu: PlayerMenu::Asking{
-                            used: player_card,
-                            question: Default::default(),
-                            sub_menu: Default::default(),
-                        },
-                    };
+                    state.menu = Menu::player(selected);
+                    dbg!("TODO: Note attempt to win here");
                 }
             } else {
                 // do nothing
@@ -1488,11 +1413,11 @@ fn draw_dead_in_the_water(commands: &mut Commands) {
 
 fn next_turn_menu(mut id: CpuId, player_hand: &Hand) -> Menu {
     match id.next() {
-        Some(next_id) => Menu::between_turns(
-            next_id.into()
-        ),
-        None => Menu::between_turns(
-            HandId::Player
+        Some(next_id) => Menu::CpuTurn{
+            id: next_id.into(),
+        },
+        None => Menu::player(
+            CardIndex::default()
         )
     }
 }
