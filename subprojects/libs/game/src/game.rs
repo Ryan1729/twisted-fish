@@ -3,8 +3,9 @@ use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Rank, Suit, DECK_SIZE
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
-    unscaled::{self, X, Y, XY, W, H, Rect, x_const_add_w, w_const_sub},
+    unscaled::{self, X, Y, XY, W, H, WH, Rect, x_const_add_w, w_const_sub},
     Button,
+    Dir,
     Input,
     Speaker,
     SFX,
@@ -332,7 +333,7 @@ mod question {
         }
     }
 }
-
+use question::Question;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PlayerSelection {
@@ -359,6 +360,13 @@ impl Menu {
     fn player(selected: CardIndex) -> Self {
         Menu::PlayerTurn {
             selected,
+        }
+    }
+
+    fn id(&self) -> HandId {
+        match self {
+            Menu::PlayerTurn { .. } => HandId::Player,
+            Menu::CpuTurn { id, .. } => HandId::from(id),
         }
     }
 }
@@ -417,19 +425,31 @@ enum ActiveCardCount {
     VeryFew
 }
 
+// TODO inidcate which card is being countered.
+type Target = ();
+
+#[derive(Clone, Debug)]
+pub enum Action {
+    AttemptToWin {},
+    ChanceToCounter { id: HandId },
+    Counter { id: HandId, target: Target },
+}
+use Action::*;
+
 #[derive(Clone, Default)]
 pub struct State {
     pub rng: Xs,
     pub cards: Cards,
     pub animations: Animations,
     pub menu: Menu,
+    pub actions: Vec<Action>,
     pub ctx: ui::Context,
     pub memories: Memories,
     pub has_started: bool,
 }
 
 impl State {
-    pub fn new(_seed: Seed) -> State {
+    pub fn new(seed: Seed) -> State {
         const INITIAL_HAND_SIZE: u8 = 8;//16;
         // For debugging: {
         // Gives player multiple zingers. (8)
@@ -840,7 +860,7 @@ mod ui {
     }
 }
 
-use ui::{Id::*};
+use ui::{ButtonSpec, Id::*, do_button};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
@@ -1353,39 +1373,62 @@ pub fn update_and_render(
 
     // UPDATE
 
-    match state.menu {
-        Menu::PlayerTurn {
-            selected,
-        } => {
-            if input.pressed_this_frame(Button::LEFT) {
-                state.menu = Menu::player(
-                    if selected > 0 {
-                        selected - 1
-                    } else {
-                        state.cards.player.len().saturating_sub(1)
-                    }
-                );
-            } else if input.pressed_this_frame(Button::RIGHT) {
-                state.menu = Menu::player(
-                    if selected < state.cards.player.len().saturating_sub(1) {
-                        selected + 1
-                    } else {
-                        0
-                    }
-                );
-            } else if input.pressed_this_frame(Button::A) {
-                if !state.cards.player.is_empty() {
-                    let _player_card = state.cards.player.get(selected)
-                        .expect("selected index should always be valid");
-                    state.menu = Menu::player(selected);
-                    dbg!("TODO: Note attempt to win here");
-                }
-            } else {
-                // do nothing
+    match state.actions.pop() {
+        Some(AttemptToWin {}) => {
+            for id in state.menu.id().next_to_current() {
+                state.actions.push(
+                    ChanceToCounter { id }
+                )
             }
         },
-        _ => { dbg!(&state.menu); },
-    };
+        Some(ChanceToCounter { id }) => match CpuId::try_from(id) {
+            // Player
+            Err(()) => {
+                todo!("ChanceToCounter Player")
+            },
+            Ok(cpu_id) => {
+                todo!("ChanceToCounter {:?}", cpu_id)
+            }
+        },
+        Some(Counter {id: _, target: _}) => {
+            todo!("Counter")
+        },
+        Nothing => {
+            match state.menu {
+                Menu::PlayerTurn {
+                    selected,
+                } => {
+                    if input.pressed_this_frame(Button::LEFT) {
+                        state.menu = Menu::player(
+                            if selected > 0 {
+                                selected - 1
+                            } else {
+                                state.cards.player.len().saturating_sub(1)
+                            }
+                        );
+                    } else if input.pressed_this_frame(Button::RIGHT) {
+                        state.menu = Menu::player(
+                            if selected < state.cards.player.len().saturating_sub(1) {
+                                selected + 1
+                            } else {
+                                0
+                            }
+                        );
+                    } else if input.pressed_this_frame(Button::A) {
+                        if !state.cards.player.is_empty() {
+                            let player_card = state.cards.player.get(selected)
+                                .expect("selected index should always be valid");
+                            state.menu = Menu::player(selected);
+                            state.actions.push(AttemptToWin {});
+                        }
+                    } else {
+                        // do nothing
+                    }
+                },
+                _ => { dbg!(&state.menu); },
+            };
+        }
+    }
 }
 
 fn draw_dead_in_the_water(commands: &mut Commands) {
@@ -1410,7 +1453,7 @@ fn draw_dead_in_the_water(commands: &mut Commands) {
     );
 }
 
-fn next_turn_menu(mut id: CpuId, _player_hand: &Hand) -> Menu {
+fn next_turn_menu(mut id: CpuId, player_hand: &Hand) -> Menu {
     match id.next() {
         Some(next_id) => Menu::CpuTurn{
             id: next_id.into(),

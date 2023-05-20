@@ -461,6 +461,12 @@ impl HandId {
             ],
         }
     }
+
+    pub fn next_to_current(self) -> [HandId; Self::COUNT as usize] {
+        let [a, b, c] = self.besides();
+
+        [a, b, c, self]
+    }
 }
 
 #[repr(u8)]
