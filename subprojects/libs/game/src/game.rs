@@ -1361,12 +1361,12 @@ pub fn update_and_render(
                 len,
                 selected
             );
-    
+
             commands.draw_card(
                 player_card,
                 selected_pos
             );
-    
+
             commands.draw_selectrum(selected_pos);
         }
     }
@@ -1375,19 +1375,48 @@ pub fn update_and_render(
 
     match state.actions.pop() {
         Some(AttemptToWin {}) => {
-            for id in state.menu.id().next_to_current() {
+            for &id in state.menu.id().next_to_current().iter().rev() {
                 state.actions.push(
                     ChanceToCounter { id }
                 )
             }
         },
+        // After writing most of the below comments I realized that if you don't
+        // have restrictions on what you can counter, then it's not clear whether
+        // you really would ever want to do anything other than counter the
+        // top card or pass, since targeting a different card often just effectively
+        // moves the top of the counter chain to the new spot, and if you target a
+        // card that is set to be countered in a different way, then you could have
+        // just waited.
+        //
+        // But, if you do have restricions then it seems like sometimes you might
+        // want to counter something below the top of the stack only because you
+        // cannot counter the top of the stack.
+        //
+        // That said, I'm currently not sure whether this gameplay would be
+        // interesting enough to bother with best-effort AI for.
         Some(ChanceToCounter { id }) => match CpuId::try_from(id) {
             // Player
             Err(()) => {
+                // Menu that lets the player select whether to counter or pass
                 todo!("ChanceToCounter Player")
             },
             Ok(cpu_id) => {
-                todo!("ChanceToCounter {:?}", cpu_id)
+                // TODO? Actually have cards that can only counter certain flavours?
+                if true /* && attempter == id*/ {
+                    // Only try to counter things that would prevent me from winning.
+                    // So counter things that counter my attempt or things that
+                    // counter a counter that is targeting something that counters
+                    // my attempt. AKA things countering something I would have played
+                    // Attempt <-- C1 <-- C2 <-- C3 ...
+                    // Want to counter C1, C3, C5 etc.
+                    todo!("counter C1, C3, C5 etc.")
+                } else {
+                    // Only try to counter things that would make the attempter win
+                    // Attempt <-- C1 <-- C2 <-- C3 <-- C4 ...
+                    // Want to counter Attempt, C2, C4 etc.
+                    todo!("counter Attempt, C2, C4 etc.")
+                }
             }
         },
         Some(Counter {id: _, target: _}) => {
