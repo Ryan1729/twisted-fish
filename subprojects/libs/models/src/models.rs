@@ -382,8 +382,9 @@ impl Hand {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum HandId {
+    #[default]
     Player,
     Cpu1,
     Cpu2,

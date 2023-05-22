@@ -429,12 +429,11 @@ enum ActiveCardCount {
 type Target = ();
 
 #[derive(Clone, Debug)]
-pub enum Action {
+pub enum Play {
     AttemptToWin {},
-    ChanceToCounter { id: HandId },
     Counter { id: HandId, target: Target },
 }
-use Action::*;
+use Play::*;
 
 #[derive(Clone, Default)]
 pub struct State {
@@ -442,10 +441,11 @@ pub struct State {
     pub cards: Cards,
     pub animations: Animations,
     pub menu: Menu,
-    pub actions: Vec<Action>,
     pub ctx: ui::Context,
     pub memories: Memories,
     pub has_started: bool,
+    pub turn_id: HandId,
+    pub stack: Vec<Play>,
 }
 
 impl State {
@@ -475,6 +475,7 @@ impl State {
                 .. <_>::default()
             },
             // TODO Randomize starting turn
+            turn_id: HandId::Player,
             .. <_>::default()
         };
 
@@ -1373,91 +1374,120 @@ pub fn update_and_render(
 
     // UPDATE
 
-    match state.actions.pop() {
-        Some(AttemptToWin {}) => {
-            for &id in state.menu.id().next_to_current().iter().rev() {
-                state.actions.push(
-                    ChanceToCounter { id }
-                )
-            }
-        },
-        // After writing most of the below comments I realized that if you don't
-        // have restrictions on what you can counter, then it's not clear whether
-        // you really would ever want to do anything other than counter the
-        // top card or pass, since targeting a different card often just effectively
-        // moves the top of the counter chain to the new spot, and if you target a
-        // card that is set to be countered in a different way, then you could have
-        // just waited.
-        //
-        // But, if you do have restricions then it seems like sometimes you might
-        // want to counter something below the top of the stack only because you
-        // cannot counter the top of the stack.
-        //
-        // That said, I'm currently not sure whether this gameplay would be
-        // interesting enough to bother with best-effort AI for.
-        Some(ChanceToCounter { id }) => match CpuId::try_from(id) {
-            // Player
-            Err(()) => {
-                // Menu that lets the player select whether to counter or pass
-                todo!("ChanceToCounter Player")
-            },
-            Ok(cpu_id) => {
-                // TODO? Actually have cards that can only counter certain flavours?
-                if true /* && attempter == id*/ {
-                    // Only try to counter things that would prevent me from winning.
-                    // So counter things that counter my attempt or things that
-                    // counter a counter that is targeting something that counters
-                    // my attempt. AKA things countering something I would have played
-                    // Attempt <-- C1 <-- C2 <-- C3 ...
-                    // Want to counter C1, C3, C5 etc.
-                    todo!("counter C1, C3, C5 etc.")
-                } else {
-                    // Only try to counter things that would make the attempter win
-                    // Attempt <-- C1 <-- C2 <-- C3 <-- C4 ...
-                    // Want to counter Attempt, C2, C4 etc.
-                    todo!("counter Attempt, C2, C4 etc.")
-                }
-            }
-        },
-        Some(Counter {id: _, target: _}) => {
-            todo!("Counter")
-        },
-        Nothing => {
-            match state.menu {
-                Menu::PlayerTurn {
-                    selected,
-                } => {
-                    if input.pressed_this_frame(Button::LEFT) {
-                        state.menu = Menu::player(
-                            if selected > 0 {
-                                selected - 1
-                            } else {
-                                state.cards.player.len().saturating_sub(1)
-                            }
-                        );
-                    } else if input.pressed_this_frame(Button::RIGHT) {
-                        state.menu = Menu::player(
-                            if selected < state.cards.player.len().saturating_sub(1) {
-                                selected + 1
-                            } else {
-                                0
-                            }
-                        );
-                    } else if input.pressed_this_frame(Button::A) {
-                        if !state.cards.player.is_empty() {
-                            let player_card = state.cards.player.get(selected)
-                                .expect("selected index should always be valid");
-                            state.menu = Menu::player(selected);
-                            state.actions.push(AttemptToWin {});
-                        }
-                    } else {
-                        // do nothing
-                    }
-                },
-                _ => { dbg!(&state.menu); },
-            };
-        }
-    }
+    // Relevant state:
+    // `stack` (of plays, which contain cards)
+    // `sub_turn_ids`
+    // `sub_turn_index`
+    // `turn_id`
+
+    /*
+    if the sub_turn_index is valid, then give that player a chance to counter.
+        if they do counter then set up the sub_turn_ids and sub_turn_index again
+        else increment the sub_turn_index
+    else 
+        if the stack is empty, then the turn_id player gets to attempt to win.
+            push a play to that effect onto the stack
+            set up the sub_turn_ids and sub_turn_index.
+        else
+            to get here, the sub turn index is invalid, and the stack has a card on it.
+            resolve the card on the top of the stack
+                counter : remove target play from the stack
+                attempt : that player wins!
+    */
+    
+
+    //match state.actions.pop() {
+        //Some(AttemptToWin {}) => {
+            //for &id in state.menu.id().next_to_current().iter().rev() {
+                //state.actions.push(
+                    //ChanceToCounter { id }
+                //)
+            //}
+        //},
+        //Some(ChanceToCounter { id }) => match CpuId::try_from(id) {
+            //// Player
+            //Err(()) => {
+                //// Menu that lets the player select whether to counter or pass
+                //todo!("ChanceToCounter Player")
+            //},
+            //Ok(cpu_id) => {
+                //// TODO? Actually have cards that can only counter certain flavours?
+                //// TODO? Better CPU player decision making?
+                //if state.turn_id == id {
+                    //// Only try to counter things that would prevent me from winning.
+                    //// So counter things that counter my attempt or things that
+                    //// counter a counter that is targeting something that counters
+                    //// my attempt. AKA things countering something I would have played
+                    //// Attempt <-- C1 <-- C2 <-- C3 ...
+                    //// Want to counter C1, C3, C5 etc.
+                    //if state.stack.len() % 2 == 1 {
+                        //match hand.pop() {
+                            //Some(card) => {
+                                //state.stack.push(
+                                    //Play::Counter {card, target: state.stack.len() - 1}
+                                //);
+                            //}
+                        //}
+                    //} else {
+                        //// Pass to next player
+                    //}
+                //} else {
+                    //// Only try to counter things that would make the attempter win
+                    //// Attempt <-- C1 <-- C2 <-- C3 <-- C4 ...
+                    //// Want to counter Attempt, C2, C4 etc.
+                    //if state.stack.len() % 2 == 0 {
+                        //match hand.pop() {
+                            //Some(card) => {
+                                //state.stack.push(
+                                    //Play::Counter {card, target: state.stack.len() - 1}
+                                //);
+                            //}
+                        //}
+                    //} else {
+                        //// Pass to next player
+                    //}
+                //}
+            //}
+        //},
+        //Some(Counter {card: _, target: _}) => {
+            //todo!("Counter")
+        //},
+        //Nothing => {
+            //match state.menu {
+                //Menu::PlayerTurn {
+                    //selected,
+                //} => {
+                    //if input.pressed_this_frame(Button::LEFT) {
+                        //state.menu = Menu::player(
+                            //if selected > 0 {
+                                //selected - 1
+                            //} else {
+                                //state.cards.player.len().saturating_sub(1)
+                            //}
+                        //);
+                    //} else if input.pressed_this_frame(Button::RIGHT) {
+                        //state.menu = Menu::player(
+                            //if selected < state.cards.player.len().saturating_sub(1) {
+                                //selected + 1
+                            //} else {
+                                //0
+                            //}
+                        //);
+                    //} else if input.pressed_this_frame(Button::A) {
+                        //if !state.cards.player.is_empty() {
+                            //let player_card = state.cards.player.get(selected)
+                                //.expect("selected index should always be valid");
+                            //state.menu = Menu::player(selected);
+                            //state.actions.push(AttemptToWin {});
+                        //}
+                    //} else {
+                        //// do nothing
+                    //}
+                //},
+                //_ => { dbg!(&state.menu); },
+            //};
+        //}
+    //}
 }
 
 fn draw_dead_in_the_water(commands: &mut Commands) {
