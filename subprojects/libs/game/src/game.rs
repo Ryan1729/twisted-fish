@@ -425,8 +425,8 @@ enum ActiveCardCount {
     VeryFew
 }
 
-// TODO inidcate which card is being countered.
-type Target = ();
+/// An index indicating which card in the stack is being countered.
+type Target = u8;
 
 #[derive(Clone, Debug)]
 pub enum Play {
@@ -445,6 +445,8 @@ pub struct State {
     pub memories: Memories,
     pub has_started: bool,
     pub turn_id: HandId,
+    pub sub_turn_ids: [HandId; HandId::COUNT as usize],
+    pub sub_turn_index: u8,
     pub stack: Vec<Play>,
 }
 
@@ -1374,27 +1376,61 @@ pub fn update_and_render(
 
     // UPDATE
 
-    // Relevant state:
-    // `stack` (of plays, which contain cards)
-    // `sub_turn_ids`
-    // `sub_turn_index`
-    // `turn_id`
+    match state.sub_turn_ids.get(state.sub_turn_index as usize) {
+        Some(&chance_to_counter_id) => {
+            // Give this player a chance to counter.
+            enum Selection {
+                Counter(Card, Target),
+                Nothing,
+                Pending,
+            }
 
-    /*
-    if the sub_turn_index is valid, then give that player a chance to counter.
-        if they do counter then set up the sub_turn_ids and sub_turn_index again
-        else increment the sub_turn_index
-    else 
-        if the stack is empty, then the turn_id player gets to attempt to win.
-            push a play to that effect onto the stack
-            set up the sub_turn_ids and sub_turn_index.
-        else
-            to get here, the sub turn index is invalid, and the stack has a card on it.
-            resolve the card on the top of the stack
-                counter : remove target play from the stack
-                attempt : that player wins!
-    */
-    
+            let hand = state.cards.hand(chance_to_counter_id);
+
+            let selection = if hand.is_empty() {
+                Selection::Nothing
+            } else if chance_to_counter_id == HandId::Player {
+                todo!("draw a menu for the player")
+            } else {
+                // TODO? Smarter CPU decision here?
+                let card = hand.last()
+                    .expect("We just checked that the hand wasn't empty!");
+                Selection::Counter(
+                    card,
+                    (state.stack.len() - 1)
+                        .try_into()
+                        .expect("stack has more elements then there are cards?!")
+                )
+            };
+
+            match selection {
+                Selection::Counter(card, target) => {
+                    todo!("do counter then set up the sub_turn_ids and sub_turn_index again")
+                },
+                Selection::Nothing => {
+                    // Passing the chance to counter
+                    state.sub_turn_index += 1;
+                },
+                Selection::Pending => {
+                    assert_eq!(chance_to_counter_id, HandId::Player);
+                    // Keep drawing the menu for the player until they choose
+                }
+            }
+        },
+        None => {
+            todo!(r#"
+            if the stack is empty, then the turn_id player gets to attempt to win.
+                push a play to that effect onto the stack
+                set up the sub_turn_ids and sub_turn_index.
+            else
+                to get here, the sub turn index is invalid, and the stack has a card on it.
+                resolve the card on the top of the stack
+                    counter : remove target play from the stack
+                    attempt : that player wins!
+            "#)
+        }
+    }
+
 
     //match state.actions.pop() {
         //Some(AttemptToWin {}) => {
