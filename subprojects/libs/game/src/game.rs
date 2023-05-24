@@ -146,6 +146,10 @@ impl Animations {
             }
         }
     }
+
+    fn all_done(&self) -> bool {
+        self.iter().count() == 0
+    }
 }
 
 pub type Frames = u8;
@@ -430,7 +434,7 @@ type Target = u8;
 
 #[derive(Clone, Debug)]
 pub enum Play {
-    AttemptToWin {},
+    AttemptToWin { id: HandId },
     Counter { id: HandId, target: Target },
 }
 use Play::*;
@@ -478,6 +482,9 @@ impl State {
             },
             // TODO Randomize starting turn
             turn_id: HandId::Player,
+            sub_turn_ids: HandId::ALL,
+            // Don't start in a sub turn
+            sub_turn_index: HandId::COUNT + 1,
             .. <_>::default()
         };
 
@@ -1376,58 +1383,109 @@ pub fn update_and_render(
 
     // UPDATE
 
-    match state.sub_turn_ids.get(state.sub_turn_index as usize) {
-        Some(&chance_to_counter_id) => {
-            // Give this player a chance to counter.
-            enum Selection {
-                Counter(Card, Target),
-                Nothing,
-                Pending,
-            }
-
-            let hand = state.cards.hand(chance_to_counter_id);
-
-            let selection = if hand.is_empty() {
-                Selection::Nothing
-            } else if chance_to_counter_id == HandId::Player {
-                todo!("draw a menu for the player")
-            } else {
-                // TODO? Smarter CPU decision here?
-                let card = hand.last()
-                    .expect("We just checked that the hand wasn't empty!");
-                Selection::Counter(
-                    card,
-                    (state.stack.len() - 1)
-                        .try_into()
-                        .expect("stack has more elements then there are cards?!")
-                )
-            };
-
-            match selection {
-                Selection::Counter(card, target) => {
-                    todo!("do counter then set up the sub_turn_ids and sub_turn_index again")
-                },
-                Selection::Nothing => {
-                    // Passing the chance to counter
-                    state.sub_turn_index += 1;
-                },
-                Selection::Pending => {
-                    assert_eq!(chance_to_counter_id, HandId::Player);
-                    // Keep drawing the menu for the player until they choose
+    if state.animations.all_done() {
+        match state.sub_turn_ids.get(state.sub_turn_index as usize) {
+            Some(&chance_to_counter_id) => {
+                // Give this player a chance to counter.
+                enum Selection {
+                    Counter(Card, Target),
+                    Nothing,
+                    Pending,
                 }
+
+                let hand = state.cards.hand(chance_to_counter_id);
+
+                let selection = if hand.is_empty() {
+                    Selection::Nothing
+                } else if chance_to_counter_id == HandId::Player {
+                    todo!("draw a counter menu for the player")
+                } else {
+                    // TODO? Smarter CPU decision here?
+                    let card = hand.last()
+                        .expect("We just checked that the hand wasn't empty!");
+                    Selection::Counter(
+                        card,
+                        (state.stack.len() - 1)
+                            .try_into()
+                            .expect("stack has more elements then there are cards?!")
+                    )
+                };
+
+                match selection {
+                    Selection::Counter(card, target) => {
+                        todo!("do counter then set up the sub_turn_ids and sub_turn_index again")
+                    },
+                    Selection::Nothing => {
+                        // Passing the chance to counter
+                        state.sub_turn_index += 1;
+                    },
+                    Selection::Pending => {
+                        assert_eq!(chance_to_counter_id, HandId::Player);
+                        // Keep drawing the menu for the player until they choose
+                    }
+                }
+            },
+            None => {
+                match state.stack.pop() {
+                    None => {
+                        // Since the stack is empty, the turn_id player gets to attempt
+                        // to win.
+                        enum Selection {
+                            AttetmptToWin(Card),
+                            Nothing,
+                            Pending,
+                        }
+
+                        let turn_id = state.turn_id;
+
+                        let hand = state.cards.hand(turn_id);
+
+                        let selection = if hand.is_empty() {
+                            Selection::Nothing
+                        } else if turn_id == HandId::Player {
+                            todo!("draw a attempt-to-win menu for the player")
+                        } else {
+                            // TODO? Smarter CPU decision here?
+                            let card = hand.last()
+                                .expect("We just checked that the hand wasn't empty!");
+                            Selection::AttetmptToWin(
+                                card,
+                            )
+                        };
+
+                        match selection {
+                            Selection::AttetmptToWin(card) => {
+                                discard_given_card(
+                                    &mut state.cards,
+                                    &mut state.animations,
+                                    turn_id,
+                                    card,
+                                    AfterDiscard::Nothing,
+                                );
+                                state.stack.push(Play::AttemptToWin{id: turn_id});
+                                todo!("set up the sub_turn_ids and sub_turn_index.")
+                            }
+                            Selection::Nothing => {
+                                // Passing the chance to attempt to win.
+                                state.turn_id = state.turn_id.next_looping();
+                            },
+                            Selection::Pending => {
+                                assert_eq!(turn_id, HandId::Player);
+                                // Keep drawing the menu for the player until they choose
+                            }
+                        }
+                    }
+                    Some(play) => {
+                        todo!(r#"
+                            to get here, the sub turn index is invalid, and the stack has a card on it.
+                            resolve the card on the top of the stack
+                                counter : remove target play from the stack
+                                attempt : that player wins!
+                        "#)
+                    }
+                }
+
             }
-        },
-        None => {
-            todo!(r#"
-            if the stack is empty, then the turn_id player gets to attempt to win.
-                push a play to that effect onto the stack
-                set up the sub_turn_ids and sub_turn_index.
-            else
-                to get here, the sub turn index is invalid, and the stack has a card on it.
-                resolve the card on the top of the stack
-                    counter : remove target play from the stack
-                    attempt : that player wins!
-            "#)
         }
     }
 
