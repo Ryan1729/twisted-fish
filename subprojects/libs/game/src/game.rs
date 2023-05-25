@@ -452,6 +452,7 @@ pub struct State {
     pub sub_turn_ids: [HandId; HandId::COUNT as usize],
     pub sub_turn_index: u8,
     pub stack: Vec<Play>,
+    pub selected: u8,
 }
 
 impl State {
@@ -577,13 +578,8 @@ impl State {
                         };
 
                         match CpuId::try_from($id) {
-                            Err(_) => match self.menu {
-                                Menu::PlayerTurn {
-                                    ref mut selected,
-                                } => {
-                                    *selected = hand.len() - 1;
-                                },
-                                _ => {},
+                            Err(_) => {
+                                self.selected = hand.len().saturating_sub(1);
                             },
                             Ok(cpu_id) => match self.menu {
                                 Menu::CpuTurn {
@@ -1348,14 +1344,8 @@ pub fn update_and_render(
             break 'player_hand
         }
 
-        let selected = match state.menu {
-            Menu::PlayerTurn {
-                selected,
-            } => Some(selected),
-            _ => None,
-        };
         for (i, card) in hand.enumerated_iter() {
-            if selected == Some(i) { continue }
+            if state.selected == i { continue }
 
             commands.draw_card(
                 card,
@@ -1363,13 +1353,12 @@ pub fn update_and_render(
             );
         }
 
-        if let Some((selected, player_card)) = selected
-            .and_then(|selected| hand.get(selected).map(|card| (selected, card)))
+        if let Some(player_card) = hand.get(state.selected)
         {
             let selected_pos = get_card_position(
                 spread(id),
                 len,
-                selected
+                state.selected
             );
 
             commands.draw_card(
@@ -1443,7 +1432,37 @@ pub fn update_and_render(
                         let selection = if hand.is_empty() {
                             Selection::Nothing
                         } else if turn_id == HandId::Player {
-                            todo!("draw a attempt-to-win menu for the player")
+                            'player_attempt: {
+                                if input.pressed_this_frame(Button::LEFT) {
+                                    state.selected = if state.selected > 0 {
+                                        state.selected - 1
+                                    } else {
+                                        state.cards.player.len().saturating_sub(1)
+                                    };
+                                } else if input.pressed_this_frame(Button::RIGHT) {
+                                    state.selected = if state.selected < state.cards.player.len().saturating_sub(1) {
+                                        state.selected + 1
+                                    } else {
+                                        0
+                                    };
+                                } else if input.pressed_this_frame(Button::A) {
+                                    // We have already checked that the hand was not empty
+                                    match hand.get(state.selected) {
+                                        Some(card) => {
+                                            break 'player_attempt Selection::AttetmptToWin(
+                                                card,
+                                            );
+                                        }
+                                        Nothing => {
+                                            state.selected = state.cards.player.len().saturating_sub(1);
+                                        }
+                                    }
+                                } else {
+                                    // do nothing
+                                }
+
+                                Selection::Pending
+                            }
                         } else {
                             // TODO? Smarter CPU decision here?
                             let card = hand.last()
@@ -1463,7 +1482,8 @@ pub fn update_and_render(
                                     AfterDiscard::Nothing,
                                 );
                                 state.stack.push(Play::AttemptToWin{id: turn_id});
-                                todo!("set up the sub_turn_ids and sub_turn_index.")
+                                state.sub_turn_ids = turn_id.next_to_current();
+                                state.sub_turn_index = 0;
                             }
                             Selection::Nothing => {
                                 // Passing the chance to attempt to win.
@@ -1551,32 +1571,6 @@ pub fn update_and_render(
                 //Menu::PlayerTurn {
                     //selected,
                 //} => {
-                    //if input.pressed_this_frame(Button::LEFT) {
-                        //state.menu = Menu::player(
-                            //if selected > 0 {
-                                //selected - 1
-                            //} else {
-                                //state.cards.player.len().saturating_sub(1)
-                            //}
-                        //);
-                    //} else if input.pressed_this_frame(Button::RIGHT) {
-                        //state.menu = Menu::player(
-                            //if selected < state.cards.player.len().saturating_sub(1) {
-                                //selected + 1
-                            //} else {
-                                //0
-                            //}
-                        //);
-                    //} else if input.pressed_this_frame(Button::A) {
-                        //if !state.cards.player.is_empty() {
-                            //let player_card = state.cards.player.get(selected)
-                                //.expect("selected index should always be valid");
-                            //state.menu = Menu::player(selected);
-                            //state.actions.push(AttemptToWin {});
-                        //}
-                    //} else {
-                        //// do nothing
-                    //}
                 //},
                 //_ => { dbg!(&state.menu); },
             //};
