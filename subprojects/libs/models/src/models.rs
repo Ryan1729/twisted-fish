@@ -258,6 +258,7 @@ pub fn get_suit(card: Card) -> Option<Suit> {
     }
 }
 
+pub type HandIndex = u8;
 pub type HandLen = u8;
 
 /// An ordered collection of cards that can hold at leat one copy of each card.
@@ -305,6 +306,10 @@ impl Hand {
                     .get(i as usize)
                     .and_then(|o: &CardOption| o.option())
             })
+    }
+
+    pub fn last_index(&self) -> HandIndex {
+        self.len().saturating_sub(1)
     }
 
     pub fn push(&mut self, card: Card) {

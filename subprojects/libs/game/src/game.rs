@@ -179,6 +179,7 @@ pub enum AfterDiscard {
     #[default]
     Nothing,
     BackToSelecting(HandId),
+    PushAttemptToWin(HandId),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -429,13 +430,15 @@ enum ActiveCardCount {
     VeryFew
 }
 
-/// An index indicating which card in the stack is being countered.
+/// An index indicating which element in the stack is being countered.
 type Target = u8;
+/// An index indicating which element in the discard pile the play corresponds to.
+type DiscardIndex = u8;
 
 #[derive(Clone, Debug)]
 pub enum Play {
-    AttemptToWin { id: HandId },
-    Counter { id: HandId, target: Target },
+    AttemptToWin { id: HandId, card_index: DiscardIndex },
+    Counter { id: HandId, card_index: DiscardIndex, target: Target },
 }
 use Play::*;
 
@@ -579,7 +582,7 @@ impl State {
 
                         match CpuId::try_from($id) {
                             Err(_) => {
-                                self.selected = hand.len().saturating_sub(1);
+                                self.selected = hand.last_index();
                             },
                             Ok(cpu_id) => match self.menu {
                                 Menu::CpuTurn {
@@ -689,6 +692,14 @@ impl State {
                         match after_discard {
                             AfterDiscard::BackToSelecting(id)
                                 => back_to_selecting!(id),
+                            AfterDiscard::PushAttemptToWin(id) => {
+                                self.stack.push(Play::AttemptToWin{
+                                    id,
+                                    card_index: self.cards.discard.last_index()
+                                });
+                                self.sub_turn_ids = id.next_to_current();
+                                self.sub_turn_index = 0;
+                            },
                             AfterDiscard::Nothing => {}
                         }
                     }
@@ -1437,10 +1448,10 @@ pub fn update_and_render(
                                     state.selected = if state.selected > 0 {
                                         state.selected - 1
                                     } else {
-                                        state.cards.player.len().saturating_sub(1)
+                                        state.cards.player.last_index()
                                     };
                                 } else if input.pressed_this_frame(Button::RIGHT) {
-                                    state.selected = if state.selected < state.cards.player.len().saturating_sub(1) {
+                                    state.selected = if state.selected < state.cards.player.last_index() {
                                         state.selected + 1
                                     } else {
                                         0
@@ -1454,7 +1465,7 @@ pub fn update_and_render(
                                             );
                                         }
                                         Nothing => {
-                                            state.selected = state.cards.player.len().saturating_sub(1);
+                                            state.selected = state.cards.player.last_index();
                                         }
                                     }
                                 } else {
@@ -1479,11 +1490,8 @@ pub fn update_and_render(
                                     &mut state.animations,
                                     turn_id,
                                     card,
-                                    AfterDiscard::Nothing,
+                                    AfterDiscard::PushAttemptToWin(turn_id),
                                 );
-                                state.stack.push(Play::AttemptToWin{id: turn_id});
-                                state.sub_turn_ids = turn_id.next_to_current();
-                                state.sub_turn_index = 0;
                             }
                             Selection::Nothing => {
                                 // Passing the chance to attempt to win.
