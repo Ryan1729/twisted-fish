@@ -3,9 +3,8 @@ use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Rank, Suit, DECK_SIZE
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
-    unscaled::{self, X, Y, XY, W, H, WH, Rect, x_const_add_w, w_const_sub},
+    unscaled::{self, X, Y, XY, W, H, Rect, x_const_add_w, w_const_sub},
     Button,
-    Dir,
     Input,
     Speaker,
     SFX,
@@ -180,6 +179,7 @@ pub enum AfterDiscard {
     Nothing,
     BackToSelecting(HandId),
     PushAttemptToWin(HandId),
+    PushCounter(HandId, Target),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -338,7 +338,6 @@ mod question {
         }
     }
 }
-use question::Question;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PlayerSelection {
@@ -693,9 +692,18 @@ impl State {
                             AfterDiscard::BackToSelecting(id)
                                 => back_to_selecting!(id),
                             AfterDiscard::PushAttemptToWin(id) => {
-                                self.stack.push(Play::AttemptToWin{
+                                self.stack.push(AttemptToWin{
                                     id,
                                     card_index: self.cards.discard.last_index()
+                                });
+                                self.sub_turn_ids = id.next_to_current();
+                                self.sub_turn_index = 0;
+                            },
+                            AfterDiscard::PushCounter(id, target) => {
+                                self.stack.push(Counter{
+                                    id,
+                                    card_index: self.cards.discard.last_index(),
+                                    target,
                                 });
                                 self.sub_turn_ids = id.next_to_current();
                                 self.sub_turn_index = 0;
@@ -877,7 +885,7 @@ mod ui {
     }
 }
 
-use ui::{ButtonSpec, Id::*, do_button};
+use ui::Id::*;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
@@ -1290,17 +1298,6 @@ pub fn update_and_render(
     input: Input,
     speaker: &mut Speaker
 ) {
-    macro_rules! new_group {
-        () => {
-            &mut ui::Group {
-                commands,
-                ctx: &mut state.ctx,
-                input,
-                speaker,
-            }
-        }
-    }
-
     state.ctx.frame_init();
 
     state.tick(speaker);
@@ -1413,7 +1410,13 @@ pub fn update_and_render(
 
                 match selection {
                     Selection::Counter(card, target) => {
-                        todo!("do counter then set up the sub_turn_ids and sub_turn_index again")
+                        discard_given_card(
+                            &mut state.cards,
+                            &mut state.animations,
+                            chance_to_counter_id,
+                            card,
+                            AfterDiscard::PushCounter(chance_to_counter_id, target),
+                        );
                     },
                     Selection::Nothing => {
                         // Passing the chance to counter
@@ -1546,7 +1549,7 @@ pub fn update_and_render(
                         //match hand.pop() {
                             //Some(card) => {
                                 //state.stack.push(
-                                    //Play::Counter {card, target: state.stack.len() - 1}
+                                    //Counter {card, target: state.stack.len() - 1}
                                 //);
                             //}
                         //}
@@ -1561,7 +1564,7 @@ pub fn update_and_render(
                         //match hand.pop() {
                             //Some(card) => {
                                 //state.stack.push(
-                                    //Play::Counter {card, target: state.stack.len() - 1}
+                                    //Counter {card, target: state.stack.len() - 1}
                                 //);
                             //}
                         //}
