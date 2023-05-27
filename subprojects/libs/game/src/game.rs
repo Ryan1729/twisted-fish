@@ -1423,6 +1423,8 @@ pub fn update_and_render(
                                     state.selected = state.cards.player.last_index();
                                 }
                             }
+                        } else if input.pressed_this_frame(Button::B) {
+                            break 'player_counter Selection::Nothing
                         } else {
                             // do nothing
                         }
@@ -1431,14 +1433,18 @@ pub fn update_and_render(
                     }
                 } else {
                     // TODO? Smarter CPU decision here?
-                    let card = hand.last()
-                        .expect("We just checked that the hand wasn't empty!");
-                    Selection::Counter(
-                        card,
-                        (state.stack.len() - 1)
-                            .try_into()
-                            .expect("stack has more elements then there are cards?!")
-                    )
+                    if xs::range(&mut state.rng, 0..2) > 0 {
+                        let card = hand.last()
+                            .expect("We just checked that the hand wasn't empty!");
+                        Selection::Counter(
+                            card,
+                            (state.stack.len() - 1)
+                                .try_into()
+                                .expect("stack has more elements then there are cards?!")
+                        )
+                    } else {
+                        Selection::Nothing
+                    }
                 };
 
                 match selection {
@@ -1504,6 +1510,8 @@ pub fn update_and_render(
                                             state.selected = state.cards.player.last_index();
                                         }
                                     }
+                                } else if input.pressed_this_frame(Button::B) {
+                                    break 'player_attempt Selection::Nothing
                                 } else {
                                     // do nothing
                                 }
@@ -1512,11 +1520,15 @@ pub fn update_and_render(
                             }
                         } else {
                             // TODO? Smarter CPU decision here?
-                            let card = hand.last()
-                                .expect("We just checked that the hand wasn't empty!");
-                            Selection::AttetmptToWin(
-                                card,
-                            )
+                            if xs::range(&mut state.rng, 0..2) > 0 {
+                                let card = hand.last()
+                                        .expect("We just checked that the hand wasn't empty!");
+                                Selection::AttetmptToWin(
+                                    card,
+                                )
+                            } else {
+                                Selection::Nothing
+                            }
                         };
 
                         match selection {
