@@ -570,7 +570,7 @@ impl State {
             };
 
             if anim.is_done() {
-                macro_rules! back_to_selecting {
+                macro_rules! freshen_selection {
                     ($id: ident) => ({
                         let hand = match $id {
                             HandId::Player => &mut self.cards.player,
@@ -581,16 +581,13 @@ impl State {
 
                         match CpuId::try_from($id) {
                             Err(_) => {
-                                self.selected = hand.last_index();
+                                self.selected =
+                                    core::cmp::min(
+                                        self.selected,
+                                        hand.last_index()
+                                );
                             },
-                            Ok(cpu_id) => match self.menu {
-                                Menu::CpuTurn {
-                                    id,
-                                } if cpu_id == id => {
-                                    dbg!("TODO is this case useful?");
-                                },
-                                _ => {},
-                            }
+                            Ok(_cpu_id) => {}
                         }
                     })
                 }
@@ -674,7 +671,7 @@ impl State {
 
                         speaker.request_sfx(SFX::CardPlace);
 
-                        back_to_selecting!(id);
+                        freshen_selection!(id);
                     },
                     AnimationAction::PerformGameWarden => {
                         // TODO Animate all cards in deck moving to random targets
@@ -690,7 +687,7 @@ impl State {
 
                         match after_discard {
                             AfterDiscard::BackToSelecting(id)
-                                => back_to_selecting!(id),
+                                => freshen_selection!(id),
                             AfterDiscard::PushAttemptToWin(id) => {
                                 self.stack.push(AttemptToWin{
                                     id,
@@ -698,6 +695,7 @@ impl State {
                                 });
                                 self.sub_turn_ids = id.next_to_current();
                                 self.sub_turn_index = 0;
+                                freshen_selection!(id);
                             },
                             AfterDiscard::PushCounter(id, target) => {
                                 self.stack.push(Counter{
@@ -707,6 +705,7 @@ impl State {
                                 });
                                 self.sub_turn_ids = id.next_to_current();
                                 self.sub_turn_index = 0;
+                                freshen_selection!(id);
                             },
                             AfterDiscard::Nothing => {}
                         }
@@ -1395,7 +1394,41 @@ pub fn update_and_render(
                 let selection = if hand.is_empty() {
                     Selection::Nothing
                 } else if chance_to_counter_id == HandId::Player {
-                    todo!("draw a counter menu for the player")
+                    // TODO? Indicate that we are countering now?
+                    'player_counter: {
+                        if input.pressed_this_frame(Button::LEFT) {
+                            state.selected = if state.selected > 0 {
+                                state.selected - 1
+                            } else {
+                                state.cards.player.last_index()
+                            };
+                        } else if input.pressed_this_frame(Button::RIGHT) {
+                            state.selected = if state.selected < state.cards.player.last_index() {
+                                state.selected + 1
+                            } else {
+                                0
+                            };
+                        } else if input.pressed_this_frame(Button::A) {
+                            // We have already checked that the hand was not empty
+                            match hand.get(state.selected) {
+                                Some(card) => {
+                                    break 'player_counter Selection::Counter(
+                                        card,
+                                        (state.stack.len() - 1)
+                                            .try_into()
+                                            .expect("stack has more elements then there are cards?!")
+                                    );
+                                }
+                                None => {
+                                    state.selected = state.cards.player.last_index();
+                                }
+                            }
+                        } else {
+                            // do nothing
+                        }
+
+                        Selection::Pending
+                    }
                 } else {
                     // TODO? Smarter CPU decision here?
                     let card = hand.last()
@@ -1467,7 +1500,7 @@ pub fn update_and_render(
                                                 card,
                                             );
                                         }
-                                        Nothing => {
+                                        None => {
                                             state.selected = state.cards.player.last_index();
                                         }
                                     }
