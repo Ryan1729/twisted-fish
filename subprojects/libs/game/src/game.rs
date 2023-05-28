@@ -190,6 +190,7 @@ pub enum AnimationAction {
     PerformGameWarden,
     AddToDiscard(AfterDiscard),
     AnimateBackToHand(HandId),
+    AfterCounter,
 }
 
 mod question {
@@ -724,6 +725,11 @@ impl State {
                             .. <_>::default()
                         })
                     }
+                    AnimationAction::AfterCounter => {
+                        self.cards.deck.push(anim.card);
+
+                        speaker.request_sfx(SFX::CardPlace);
+                    }
                 }
             }
         }
@@ -1225,6 +1231,36 @@ fn discard_given_card(
     debug_assert!(false, "Didn't find card {}!", card);
 }
 
+fn counter_given_card(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    card: Card,
+) {
+    let mut remove_at = None;
+    for (i, current_card) in cards.discard.enumerated_iter() {
+        if current_card == card {
+            remove_at = Some(i);
+            break
+        }
+    }
+
+    if let Some(i) = remove_at {
+        if let Some(card) = cards.discard.remove(i) {
+            animations.push(Animation {
+                card,
+                at: DISCARD_XY,
+                target: DECK_XY,
+                action: AnimationAction::AfterCounter,
+                shown: true,
+                .. <_>::default()
+            });
+
+            return
+        }
+    }
+    debug_assert!(false, "Didn't find card {}!", card);
+}
+
 fn play_dead_scuba_diver(
     cards: &mut Cards,
     id: HandId,
@@ -1551,13 +1587,52 @@ pub fn update_and_render(
                             }
                         }
                     }
-                    Some(play) => {
-                        todo!(r#"
-                            to get here, the sub turn index is invalid, and the stack has a card on it.
-                            resolve the card on the top of the stack
-                                counter : remove target play from the stack
-                                attempt : that player wins!
-                        "#)
+                    // Resolve the card on the top of the stack
+                    Some(play) => match play {
+                        AttemptToWin { id, .. } => {
+                            println!("{id:?} wins!");
+                            // Stay in this same state so we can see the victory card
+                            state.stack.push(play);
+                        }
+                        Counter { target, card_index, .. } => {
+                            match state.cards.discard.remove(card_index) {
+                                Some(countering_card) => {
+                                    match state.stack.get(usize::from(target)) {
+                                        Some(Counter { card_index, .. })
+                                        | Some(AttemptToWin { card_index, .. }) => {
+                                            // Given counter targeting that is more complicated than
+                                            // always targeting the top of the stack, then using
+                                            // just a plain index won't work properly.
+                                            // Options for making that include generational indexes 
+                                            // plus fixing up old indexes, or somehow uniquely 
+                                            // identinfying the target such that a linear search can
+                                            // be done.
+                                            match state.cards.discard.get(*card_index) {
+                                                Some(card) => {
+                                                    counter_given_card(
+                                                        &mut state.cards,
+                                                        &mut state.animations,
+                                                        card,
+                                                    );
+
+                                                    state.animations.push(Animation {
+                                                        card: countering_card,
+                                                        at: DISCARD_XY,
+                                                        target: DECK_XY,
+                                                        action: AnimationAction::AfterCounter,
+                                                        shown: true,
+                                                        .. <_>::default()
+                                                    });
+                                                }
+                                                None => {}
+                                            }
+                                        },
+                                        None => {}
+                                    }
+                                }
+                                None => {}
+                            }
+                        }
                     }
                 }
 
