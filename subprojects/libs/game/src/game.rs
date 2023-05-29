@@ -1635,78 +1635,9 @@ pub fn update_and_render(
                         }
                     }
                 }
-
             }
         }
     }
-
-
-    //match state.actions.pop() {
-        //Some(AttemptToWin {}) => {
-            //for &id in state.menu.id().next_to_current().iter().rev() {
-                //state.actions.push(
-                    //ChanceToCounter { id }
-                //)
-            //}
-        //},
-        //Some(ChanceToCounter { id }) => match CpuId::try_from(id) {
-            //// Player
-            //Err(()) => {
-                //// Menu that lets the player select whether to counter or pass
-                //todo!("ChanceToCounter Player")
-            //},
-            //Ok(cpu_id) => {
-                //// TODO? Actually have cards that can only counter certain flavours?
-                //// TODO? Better CPU player decision making?
-                //if state.turn_id == id {
-                    //// Only try to counter things that would prevent me from winning.
-                    //// So counter things that counter my attempt or things that
-                    //// counter a counter that is targeting something that counters
-                    //// my attempt. AKA things countering something I would have played
-                    //// Attempt <-- C1 <-- C2 <-- C3 ...
-                    //// Want to counter C1, C3, C5 etc.
-                    //if state.stack.len() % 2 == 1 {
-                        //match hand.pop() {
-                            //Some(card) => {
-                                //state.stack.push(
-                                    //Counter {card, target: state.stack.len() - 1}
-                                //);
-                            //}
-                        //}
-                    //} else {
-                        //// Pass to next player
-                    //}
-                //} else {
-                    //// Only try to counter things that would make the attempter win
-                    //// Attempt <-- C1 <-- C2 <-- C3 <-- C4 ...
-                    //// Want to counter Attempt, C2, C4 etc.
-                    //if state.stack.len() % 2 == 0 {
-                        //match hand.pop() {
-                            //Some(card) => {
-                                //state.stack.push(
-                                    //Counter {card, target: state.stack.len() - 1}
-                                //);
-                            //}
-                        //}
-                    //} else {
-                        //// Pass to next player
-                    //}
-                //}
-            //}
-        //},
-        //Some(Counter {card: _, target: _}) => {
-            //todo!("Counter")
-        //},
-        //Nothing => {
-            //match state.menu {
-                //Menu::PlayerTurn {
-                    //selected,
-                //} => {
-                //},
-                //_ => { dbg!(&state.menu); },
-            //};
-        //}
-    //}
 }
 
 fn draw_dead_in_the_water(commands: &mut Commands) {

@@ -146,6 +146,10 @@ impl Animations {
             }
         }
     }
+
+    fn all_done(&self) -> bool {
+        self.iter().count() == 0
+    }
 }
 
 pub type Frames = u8;
@@ -485,6 +489,20 @@ enum ActiveCardCount {
     VeryFew
 }
 
+/// This stores all the possible selections that a player can make as part of their
+/// turn, including ones that only make sense when playing a particualr card. It is
+/// expected that upon transitioning to a game state where the player can make a
+/// choice this will be cleared to a sensible default state for that game state.
+#[derive(Clone, Default)]
+pub struct Selection {
+    card_index: CardIndex,
+}
+
+#[derive(Clone)]
+pub enum Play {
+    TBD
+}
+
 #[derive(Clone, Default)]
 pub struct State {
     pub rng: Xs,
@@ -494,6 +512,11 @@ pub struct State {
     pub ctx: ui::Context,
     pub memories: Memories,
     pub has_started: bool,
+    pub use_old_version: bool,
+    pub selection: Selection,
+    pub sub_turn_ids: [HandId; HandId::COUNT as usize],
+    pub sub_turn_index: u8,
+    pub stack: Vec<Play>,
 }
 
 impl State {
@@ -522,6 +545,7 @@ impl State {
                 deck: Hand::fresh_deck(&mut rng),
                 .. <_>::default()
             },
+            //use_old_version: true,
             // TODO Randomize starting turn
             .. <_>::default()
         };
@@ -2081,6 +2105,64 @@ pub fn update_and_render(
         }
     }
 
+    if !state.use_old_version {
+        'player_hand: {
+            let id = HandId::Player;
+            let hand = state.cards.hand(id);
+            let len = hand.len();
+
+            if len == 0 {
+                break 'player_hand
+            }
+
+            for (i, card) in hand.enumerated_iter() {
+                if state.selection.card_index == i { continue }
+
+                commands.draw_card(
+                    card,
+                    get_card_position(spread(id), len, i)
+                );
+            }
+
+            if let Some(player_card) = hand.get(state.selection.card_index)
+            {
+                let selected_pos = get_card_position(
+                    spread(id),
+                    len,
+                    state.selection.card_index
+                );
+
+                commands.draw_card(
+                    player_card,
+                    selected_pos
+                );
+
+                commands.draw_selectrum(selected_pos);
+            }
+        }
+
+        if state.animations.all_done() {
+            match state.sub_turn_ids.get(state.sub_turn_index as usize) {
+                Some(_sub_turn_id) => {
+                    // Give this player a chance to respond.
+                }
+                None => {
+                    match state.stack.pop() {
+                        None => {
+                            // Since the stack is empty, the turn_id player gets to play
+                        }
+                        // Resolve the card on the top of the stack
+                        Some(play) => match play {
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        return
+    }
+
     'player_hand: {
         let id = HandId::Player;
         let hand = state.cards.hand(id);
@@ -2407,7 +2489,7 @@ pub fn update_and_render(
                         let target_base_xy = label_card_xy + CARD_WIDTH;
                         // TODO replace reference to ASKING_WINDOW with something else
                         let target_xy = target_base_xy + (ASKING_WINDOW.h / 5);
-        
+
                         let group = new_group!();
 
                         draw_cpu_id_quick_select(
@@ -2461,22 +2543,22 @@ pub fn update_and_render(
                             macro_rules! net_handle_negative_response {
                                 () => {
                                     let player_len = state.cards.player.len();
-    
+
                                     let drew = state.cards.deck.draw();
-    
+
                                     *menu = PlayerMenu::NetFished {
                                         predicate: core::mem::take(predicate),
                                         drew,
                                     };
-    
+
                                     if let Some(card) = drew {
                                         let at = DECK_XY;
-    
+
                                         let target = get_card_insert_position(
                                             spread(HandId::Player),
                                             player_len
                                         );
-    
+
                                         state.animations.push(Animation {
                                             card,
                                             at,
@@ -2668,35 +2750,35 @@ pub fn update_and_render(
                             PlayerAskingSubMenu::Root => {
                                 let rank = models::get_rank(used)
                                     .expect("Asking used card should always have a rank!");
-        
+
                                 commands.draw_nine_slice(gfx::NineSlice::Window, ASKING_WINDOW);
-        
+
                                 let base_xy = ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-        
+
                                 let card_xy = base_xy;
-        
+
                                 commands.draw_card(
                                     used,
                                     card_xy
                                 );
-        
+
                                 let target_xy = card_xy + CARD_WIDTH + (ASKING_WINDOW.h / 5);
-        
+
                                 let group = new_group!();
-        
+
                                 draw_cpu_id_quick_select(
                                     group,
                                     question.target.try_into().unwrap_or(CpuId::One),
                                     target_xy
                                 );
-        
+
                                 let suit_base_xy = target_xy + CPU_ID_SELECT_WH.w;
-        
+
                                 let suit_quick_select_rect = Rect::xy_wh(
                                     suit_base_xy,
                                     ASKING_SUIT_WH,
                                 );
-        
+
                                 // TODO? Display the target card instead of text?
                                 group.commands.print_centered(
                                     Suit::TEXT[question.suit as u8 as usize],
@@ -2706,13 +2788,13 @@ pub fn update_and_render(
                                     ),
                                     WHITE,
                                 );
-        
+
                                 ui::draw_quick_select(
                                     group,
                                     suit_quick_select_rect,
                                     AskSuit
                                 );
-        
+
                                 let description_base_rect = unscaled::Rect::xy_wh(
                                     unscaled::XY {
                                         x: base_xy.x,
@@ -2724,9 +2806,9 @@ pub fn update_and_render(
                                         - (suit_base_xy.y + ASKING_SUIT_WH.h),
                                     }
                                 );
-        
+
                                 let description = question.fresh_ask_description(rank);
-        
+
                                 let description_xy = gfx::center_line_in_rect(
                                     description.len() as _,
                                     description_base_rect,
@@ -2736,12 +2818,12 @@ pub fn update_and_render(
                                     description_xy,
                                     WHITE,
                                 );
-        
+
                                 let submit_base_xy = unscaled::XY {
                                     x: suit_base_xy.x + ASKING_SUIT_WH.w,
                                     y: base_xy.y
                                 };
-        
+
                                 if do_button(
                                     group,
                                     ButtonSpec {
@@ -2774,14 +2856,14 @@ pub fn update_and_render(
                                     } else {
                                         let player_len = state.cards.player.len();
                                         let target_hand = state.cards.hand_mut(question.target);
-        
+
                                         state.memories.asked_for(
                                             HandId::Player,
                                             Predicate::RankSuit(rank, question.suit)
                                         );
-        
+
                                         let target_card = models::fish_card(rank, question.suit);
-        
+
                                         let mut found = None;
                                         for i in 0..target_hand.len() {
                                             let was_found = target_hand.get(i)
@@ -2792,11 +2874,11 @@ pub fn update_and_render(
                                                     target_hand.remove(i).expect("We just looked at it! (player)"),
                                                     i
                                                 ));
-        
+
                                                 break
                                             }
                                         }
-        
+
                                         if let Some((card, i)) = found {
                                             state.memories.found(
                                                 HandId::Player,
@@ -2808,12 +2890,12 @@ pub fn update_and_render(
                                                 target_hand.len(),
                                                 i,
                                             );
-        
+
                                             let target = get_card_insert_position(
                                                 spread(HandId::Player),
                                                 player_len
                                             );
-        
+
                                             state.animations.push(Animation {
                                                 card,
                                                 at,
@@ -2822,7 +2904,7 @@ pub fn update_and_render(
                                                 shown: true,
                                                 .. <_>::default()
                                             });
-        
+
                                             *menu = PlayerMenu::default();
                                         } else if state.cards.player.contains(zingers::TWO_FISTED_FISHERMAN) {
                                             *sub_menu = PlayerAskingSubMenu::TwoFistedFisherman;
@@ -2834,18 +2916,18 @@ pub fn update_and_render(
                                     state.menu = Menu::player(selected);
                                 } else if let Some(dir) = input.dir_pressed_this_frame() {
                                     const GRID_LEN: usize = 3;
-        
+
                                     #[derive(Clone, Copy, PartialEq, Eq)]
                                     enum Section {
                                         Target,
                                         Suit,
                                         Submit,
                                     }
-        
+
                                     const GRID: [Section; GRID_LEN] = [
                                         Section::Target, Section::Suit, Section::Submit,
                                     ];
-        
+
                                     let old_el = match state.ctx.hot {
                                         CpuIdSelect => Some(Section::Target),
                                         AskSuit => Some(Section::Suit),
@@ -2855,7 +2937,7 @@ pub fn update_and_render(
                                     let mut el_i = GRID.iter()
                                         .position(|el| Some(*el) == old_el)
                                         .unwrap_or_default();
-        
+
                                     match dir {
                                         Dir::Up => match GRID[el_i] {
                                             Section::Target => match question.target {
@@ -2912,12 +2994,12 @@ pub fn update_and_render(
                                     gfx::NineSlice::Window,
                                     PLAYER_TWO_FISTED_FISHERMAN_WINDOW
                                 );
-        
+
                                 let base_xy = PLAYER_TWO_FISTED_FISHERMAN_WINDOW.xy()
                                     + WINDOW_CONTENT_OFFSET;
-        
+
                                 let card_xy = base_xy;
-        
+
                                 commands.draw_card(
                                     zingers::TWO_FISTED_FISHERMAN,
                                     card_xy
