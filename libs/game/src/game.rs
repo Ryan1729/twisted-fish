@@ -490,12 +490,13 @@ enum ActiveCardCount {
 }
 
 /// This stores all the possible selections that a player can make as part of their
-/// turn, including ones that only make sense when playing a particualr card. It is
+/// turn, including ones that only make sense when playing a particular card. It is
 /// expected that upon transitioning to a game state where the player can make a
 /// choice this will be cleared to a sensible default state for that game state.
 #[derive(Clone, Default)]
 pub struct Selection {
     card_index: CardIndex,
+    player_selection: PlayerSelection,
 }
 
 #[derive(Clone)]
@@ -545,6 +546,9 @@ impl State {
                 deck: Hand::fresh_deck(&mut rng),
                 .. <_>::default()
             },
+            sub_turn_ids: HandId::ALL,
+            // Don't start in a sub turn
+            sub_turn_index: HandId::COUNT + 1,
             //use_old_version: true,
             // TODO Randomize starting turn
             .. <_>::default()
@@ -942,7 +946,7 @@ mod ui {
 
 use ui::{ButtonSpec, Id::*, do_button};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum PlayAnytimeFlags {
@@ -1008,7 +1012,7 @@ fn almost_complete_basket_count(baskets: AlmostCompleteBaskets) -> RankCount {
     count
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct AvailablePlayAnytime {
     flags: PlayAnytimeFlags,
     warden_i: CardIndex,
@@ -2143,8 +2147,56 @@ pub fn update_and_render(
 
         if state.animations.all_done() {
             match state.sub_turn_ids.get(state.sub_turn_index as usize) {
-                Some(_sub_turn_id) => {
-                    // Give this player a chance to respond.
+                Some(&responder_id) => {
+                    // Give this participant a chance to respond.
+
+                    enum Selection {
+                        Response(()),
+                        Nothing,
+                        Pending,
+                    }
+    
+                    let hand = state.cards.hand(responder_id);
+
+                    let selection = if hand.is_empty() {
+                        Selection::Nothing
+                    } else if responder_id == HandId::Player {
+                        if let (Some(available), false) = (
+                            AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
+                            state.selection.player_selection.declined
+                        ) {
+                            match do_play_anytime_menu(
+                                new_group!(),
+                                &mut state.cards,
+                                &mut state.animations,
+                                &mut state.rng,
+                                &mut state.selection.player_selection,
+                                available,
+                            ) {
+                                AnytimeOutcome::Done => Selection::Response(()),
+                                AnytimeOutcome::Hold => Selection::Pending,
+                            }
+                        } else {
+                            Selection::Nothing
+                        }
+                    } else {
+                        // TODO CPU responses
+                        Selection::Nothing
+                    };
+    
+                    match selection {
+                        Selection::Response(()) => {
+                            // TODO trigger an animation that will get us out of this state
+                        },
+                        Selection::Nothing => {
+                            // Passing the chance to counter
+                            state.sub_turn_index += 1;
+                        },
+                        Selection::Pending => {
+                            assert_eq!(responder_id, HandId::Player);
+                            // Keep drawing the menu for the player until they choose
+                        }
+                    }
                 }
                 None => {
                     match state.stack.pop() {
@@ -2162,6 +2214,8 @@ pub fn update_and_render(
 
         return
     }
+
+    // OLD VERSION
 
     'player_hand: {
         let id = HandId::Player;
