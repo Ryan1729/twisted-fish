@@ -585,6 +585,22 @@ impl HandId {
             ],
         }
     }
+
+    pub fn next_to_current(self) -> [HandId; Self::COUNT as usize] {
+        let [a, b, c] = self.besides();
+
+        [a, b, c, self]
+    }
+
+    pub fn next_looping(self) -> Self {
+        let mut i = 0;
+        loop {
+            if Self::ALL[i] == self {
+                return Self::ALL[(i + 1) % Self::ALL.len()];
+            }
+            i += 1;
+        }
+    }
 }
 
 #[repr(u8)]
