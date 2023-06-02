@@ -798,6 +798,13 @@ impl State {
     }
 }
 
+macro_rules! allow_to_respond {
+    ($state: ident) => {
+        $state.sub_turn_ids = $state.turn_id.next_to_current();
+        $state.sub_turn_index = 0;
+    }
+}
+
 mod ui {
     use super::*;
 
@@ -3044,8 +3051,7 @@ pub fn update_and_render(
                                                         state.selection.card_index = state.cards.player.len().saturating_sub(1);
                                                         state.selection.player_menu = PlayerMenu::default();
                                                     } else {
-                                                        state.sub_turn_ids = HandId::Player.next_to_current();
-                                                        state.sub_turn_index = 0;
+                                                        allow_to_respond!(state);
                                                     };
                                                 }
                                             }
@@ -3143,10 +3149,11 @@ pub fn update_and_render(
                                                             );
                                                             break
                                                         } else if let Some(zinger) = models::get_zinger(card) {
+                                                            continue
                                                             // TODO Play Zingers sometimes.
-                                                            match zinger {
-                                                                _ => { todo!() }
-                                                            }
+                                                            //match zinger {
+                                                                //_ => { todo!() }
+                                                            //}
                                                         } else {
                                                             debug_assert!(false, "Non-fish, non-zinger card!? {card}");
                                                         }
@@ -3172,10 +3179,7 @@ pub fn update_and_render(
                                                             &mut state.animations,
                                                             id.into(),
                                                         );
-                                                        state.menu = Menu::CpuTurn{
-                                                            id,
-                                                            menu: CpuMenu::WaitingWhenPlayedTwoFistedFisherman,
-                                                        };
+                                                        *menu = CpuMenu::WaitingWhenPlayedTwoFistedFisherman;
                                                     } else {
                                                         let rank = *rank;
                                                         let target_card = models::fish_card(rank, question.suit);
@@ -3202,15 +3206,12 @@ pub fn update_and_render(
                                                             if card == target_card {
                                                                 state.memories.fished_for(id.into(), rank, question.suit);
                             
-                                                                state.menu = Menu::CpuTurn{
-                                                                    id,
-                                                                    menu: CpuMenu::WaitingWhenGotWhatWasFishingFor,
-                                                                };
+                                                                *menu = CpuMenu::WaitingWhenGotWhatWasFishingFor;
                                                             } else {
-                                                                state.menu = next_turn_menu(id, &state.cards.player);
+                                                                allow_to_respond!(state);
                                                             }
                                                         } else {
-                                                            state.menu = next_turn_menu(id, &state.cards.player);
+                                                            allow_to_respond!(state);
                                                         }
                                                     }
                                                 }
