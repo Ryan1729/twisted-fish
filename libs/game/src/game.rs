@@ -672,6 +672,22 @@ impl State {
                                 _ => {},
                             }
                         }
+
+                        match CpuId::try_from($id) {
+                            Err(_) => {
+                                self.selection.card_index = hand.len() - 1;
+                            },
+                            Ok(_) => {
+                                if matches!(
+                                    self.cpu_menu,
+                                    CpuMenu::WaitingForSuccesfulAsk
+                                    | CpuMenu::WaitingWhenGotWhatWasFishingFor
+                                    | CpuMenu::WaitingWhenPlayedTwoFistedFisherman
+                                ) {
+                                    self.cpu_menu = CpuMenu::Selecting;
+                                }
+                            }
+                        }
                     })
                 }
 
@@ -2165,6 +2181,7 @@ pub fn update_and_render(
                         // Time for the next turn.
                         state.turn_id = state.turn_id.next_looping();
                         state.sub_turn_index += 1;
+                        state.selection.player_menu = Default::default();
                         state.cpu_menu = CpuMenu::default();
                     } else {
                         // Give this participant a chance to respond.
