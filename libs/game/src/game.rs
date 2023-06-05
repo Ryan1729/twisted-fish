@@ -2183,8 +2183,70 @@ pub fn update_and_render(
                         } else {
                             Selection::Nothing
                         }
+                    } else if let Some(AnytimePlay { source, selection })
+                    = anytime_play(
+                        &mut state.rng,
+                        &state.cards,
+                        &state.memories,
+                        state.turn_id.next_looping()
+                    ) {
+                        match selection {
+                            AnytimePlaySelection::GameWarden(target) => {
+                                if let Some(()) = perform_game_warden(
+                                    &mut state.cards,
+                                    &mut state.animations,
+                                    &mut state.rng,
+                                    Targeting {
+                                        source: source.into(),
+                                        target,
+                                    },
+                                ) {
+                                    Selection::Response(())
+                                } else {
+                                    debug_assert!(false, "perform_game_warden failed");
+                                    Selection::Nothing
+                                }
+                            },
+                            AnytimePlaySelection::GlassBottomBoat(target) => {
+                                let target_hand = state.cards.hand_mut(target);
+                                let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
+                                let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
+        
+                                state.memories.memory_mut(source).known(target, card);
+        
+                                let at = get_card_position(
+                                    spread(target),
+                                    target_hand.len(),
+                                    i,
+                                );
+        
+                                state.animations.push(Animation {
+                                    card,
+                                    at,
+                                    target: in_front_of(source.into()),
+                                    action: AnimationAction::AnimateBackToHand(target),
+                                    .. <_>::default()
+                                });
+        
+                                discard_glass_bottom_boat(
+                                    &mut state.cards,
+                                    &mut state.animations,
+                                    source.into()
+                                );
+
+                                Selection::Response(())
+                            },
+                            AnytimePlaySelection::DeadScubaDiver(almost_basket, scuba_i) => {
+                                play_dead_scuba_diver(
+                                    &mut state.cards,
+                                    source.into(),
+                                    almost_basket,
+                                    scuba_i
+                                );
+                                Selection::Response(())
+                            }
+                        }
                     } else {
-                        // TODO CPU responses
                         Selection::Nothing
                     };
 
