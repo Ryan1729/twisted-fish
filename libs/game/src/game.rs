@@ -3194,11 +3194,13 @@ pub fn update_and_render(
                                                         );
                                                         break
                                                     } else if let Some(zinger) = models::get_zinger(card) {
-                                                        continue
-                                                        // TODO Play Zingers sometimes.
-                                                        //match zinger {
-                                                            //_ => { todo!() }
-                                                        //}
+                                                        match zinger {
+                                                            Zinger::TheNet => {
+                                                                todo!("Play Net")
+                                                            }
+                                                            // TODO Play other Zingers sometimes.
+                                                            _ => { todo!("Attempted to play {zinger:?}") }
+                                                        }
                                                     } else {
                                                         debug_assert!(false, "Non-fish, non-zinger card!? {card}");
                                                     }
