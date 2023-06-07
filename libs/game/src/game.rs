@@ -1282,6 +1282,8 @@ impl AnytimeCard {
 
 #[derive(Copy, Clone)]
 enum AnytimePlaySelection {
+    // Arguably we don't actually want to be able to represent a player targeting
+    // themselves. But maybe we won't make those errors in practice.
     GameWarden(HandId),
     GlassBottomBoat(HandId),
     DeadScubaDiver(AlmostCompleteBasket, CardIndex)
@@ -1289,119 +1291,111 @@ enum AnytimePlaySelection {
 
 #[derive(Copy, Clone)]
 struct AnytimePlay {
-    // Arguably we don't actually want to be able to represent a player targeting
-    // themselves. But maybe we won't make those errors in practice.
-    source: CpuId,
     selection: AnytimePlaySelection,
 }
 
 fn anytime_play(
     rng: &mut Xs,
+    stack: &[Play],
     cards: &Cards,
     memories: &Memories,
-    next_id: HandId,
+    responder_id: CpuId,
 ) -> Option<AnytimePlay> {
-    let mut cpu_ids = CpuId::ALL;
+    let hand_id = responder_id.into();
+    let hand = cards.hand(hand_id);
 
-    xs::shuffle(rng, &mut cpu_ids);
+    for (card_i, card) in hand.enumerated_iter() {
+        // TODO? are the conditions for wanting to play these two cards really
+        // equal? In particular I suspect that the timing for the glass bottom
+        // boat could be improved, or at least more justification for making it
+        // the same as the game warden could be described.
+        macro_rules! play_perhaps {
+            ($card: ident) => {
+                let mut others = hand_id.besides();
+                xs::shuffle(rng, &mut others);
 
-    for cpu_id in cpu_ids {
-        let hand_id = cpu_id.into();
-        let hand = cards.hand(hand_id);
+                for target in others {
+                    // Note: It's not fair to look at other's cards besides
+                    // counting how many of them there are.
+                    let len = cards.hand(target).len();
+                    if len == 1 {
+                        return Some(AnytimePlay {
+                            selection: AnytimePlaySelection::$card(
+                                target
+                            ),
+                        });
+                    }
+                }
 
-        for (card_i, card) in hand.enumerated_iter() {
-            // TODO? are the conditions for wanting to play these two cards really
-            // equal? In particular I suspect that the timing for the glass bottom
-            // boat could be improved, or at least more justification for making it
-            // the same as the game warden could be described.
-            macro_rules! play_perhaps {
-                ($card: ident) => {
-                    let mut others = hand_id.besides();
-                    xs::shuffle(rng, &mut others);
-
+                if let ActiveCardCount::VeryFew = cards.active_count() {
                     for target in others {
                         // Note: It's not fair to look at other's cards besides
                         // counting how many of them there are.
-                        let len = cards.hand(target).len();
-                        if len == 1 {
+                        if !cards.hand(target).is_empty() {
                             return Some(AnytimePlay {
-                                source: cpu_id,
                                 selection: AnytimePlaySelection::$card(
                                     target
                                 ),
                             });
                         }
                     }
-
-                    if let ActiveCardCount::VeryFew = cards.active_count() {
-                        for target in others {
-                            // Note: It's not fair to look at other's cards besides
-                            // counting how many of them there are.
-                            if !cards.hand(target).is_empty() {
-                                return Some(AnytimePlay {
-                                    source: cpu_id,
-                                    selection: AnytimePlaySelection::$card(
-                                        target
-                                    ),
-                                });
-                            }
-                        }
-                    }
-
-                    if next_id != hand_id {
-                        if let Some(_) = memories
-                            .memory(cpu_id)
-                            .likely_to_fill_basket_soon(next_id) {
-                            return Some(AnytimePlay {
-                                source: cpu_id,
-                                selection: AnytimePlaySelection::$card(
-                                    next_id
-                                ),
-                            });
-                        }
-                    }
                 }
-            }
 
-            if card == zingers::THE_GAME_WARDEN {
-                play_perhaps!(GameWarden);
-            }
-
-            if card == zingers::GLASS_BOTTOM_BOAT {
-                play_perhaps!(GlassBottomBoat);
-            }
-
-            if card == zingers::DEAD_SCUBA_DIVER {
-                let hand = cards.hand(cpu_id.into());
-                if let Some(almost_complete) = find_almost_complete_baskets(hand) {
-                    // TODO? Think more carefully about how to make this decision?
-                    let count = almost_complete_basket_count(almost_complete);
-                    // For testing; remove later
-                    if count >= 1
-                    //if count >= 2
-                    || cards.active_count() == ActiveCardCount::VeryFew {
-                        let mut best_basket = None;
-
-                        // Choose the highest scoring basket
-                        for basket in almost_complete.iter().rev() {
-                            if let Some(basket) = basket {
-                                best_basket = Some(*basket);
-                                break
-                            }
-                        }
-
+                for target in others {
+                    if let Some(_) = memories
+                        .memory(responder_id)
+                        .likely_to_fill_basket_soon(target) {
                         return Some(AnytimePlay {
-                            source: cpu_id,
-                            selection: AnytimePlaySelection::DeadScubaDiver(
-                                best_basket.expect("There should be a basket available!"),
-                                card_i
+                            selection: AnytimePlaySelection::$card(
+                                target
                             ),
                         });
                     }
                 }
             }
         }
+
+        if card == zingers::THE_GAME_WARDEN {
+            play_perhaps!(GameWarden);
+        }
+
+        if card == zingers::GLASS_BOTTOM_BOAT {
+            play_perhaps!(GlassBottomBoat);
+        }
+
+        if card == zingers::DEAD_SCUBA_DIVER {
+            if let Some(almost_complete) = find_almost_complete_baskets(hand) {
+                // TODO? Think more carefully about how to make this decision?
+                let count = almost_complete_basket_count(almost_complete);
+                // For testing; remove later
+                if count >= 1
+                //if count >= 2
+                || cards.active_count() == ActiveCardCount::VeryFew {
+                    let mut best_basket = None;
+
+                    // Choose the highest scoring basket
+                    for basket in almost_complete.iter().rev() {
+                        if let Some(basket) = basket {
+                            best_basket = Some(*basket);
+                            break
+                        }
+                    }
+
+                    return Some(AnytimePlay {
+                        selection: AnytimePlaySelection::DeadScubaDiver(
+                            best_basket.expect("There should be a basket available!"),
+                            card_i
+                        ),
+                    });
+                }
+            }
+        }
+
+        if card == zingers::DIVINE_INTERVENTION {
+            todo!("zingers::DIVINE_INTERVENTION")
+        }
     }
+
 
     None
 }
@@ -2153,7 +2147,6 @@ pub fn update_and_render(
                     state.cpu_menu = CpuMenu::default();
                 } else {
                     // Give this participant a chance to respond.
-
                     enum Selection {
                         Response(()),
                         Nothing,
@@ -2164,90 +2157,98 @@ pub fn update_and_render(
 
                     let selection = if hand.is_empty() {
                         Selection::Nothing
-                    } else if responder_id == HandId::Player {
-                        if let (Some(available), false) = (
-                            AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
-                            state.selection.player_selection.declined
-                        ) {
-                            match do_play_anytime_menu(
-                                new_group!(),
-                                &mut state.cards,
-                                &mut state.animations,
-                                &mut state.rng,
-                                &mut state.selection.player_selection,
-                                available,
-                            ) {
-                                AnytimeOutcome::Done => Selection::Response(()),
-                                AnytimeOutcome::Hold => Selection::Pending,
-                            }
-                        } else {
-                            Selection::Nothing
-                        }
-                    } else if let Some(AnytimePlay { source, selection })
-                    = anytime_play(
-                        &mut state.rng,
-                        &state.cards,
-                        &state.memories,
-                        state.turn_id.next_looping()
-                    ) {
-                        match selection {
-                            AnytimePlaySelection::GameWarden(target) => {
-                                if let Some(()) = perform_game_warden(
-                                    &mut state.cards,
-                                    &mut state.animations,
-                                    &mut state.rng,
-                                    Targeting {
-                                        source: source.into(),
-                                        target,
-                                    },
+                    } else {
+                        match CpuId::try_from(responder_id) {
+                            Err(()) => {
+                                if let (Some(available), false) = (
+                                    AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
+                                    state.selection.player_selection.declined
                                 ) {
-                                    Selection::Response(())
+                                    match do_play_anytime_menu(
+                                        new_group!(),
+                                        &mut state.cards,
+                                        &mut state.animations,
+                                        &mut state.rng,
+                                        &mut state.selection.player_selection,
+                                        available,
+                                    ) {
+                                        AnytimeOutcome::Done => Selection::Response(()),
+                                        AnytimeOutcome::Hold => Selection::Pending,
+                                    }
                                 } else {
-                                    debug_assert!(false, "perform_game_warden failed");
                                     Selection::Nothing
                                 }
-                            },
-                            AnytimePlaySelection::GlassBottomBoat(target) => {
-                                let target_hand = state.cards.hand_mut(target);
-                                let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
-                                let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
-        
-                                state.memories.memory_mut(source).known(target, card);
-        
-                                let at = get_card_position(
-                                    spread(target),
-                                    target_hand.len(),
-                                    i,
-                                );
-        
-                                state.animations.push(Animation {
-                                    card,
-                                    at,
-                                    target: in_front_of(source.into()),
-                                    action: AnimationAction::AnimateBackToHand(target),
-                                    .. <_>::default()
-                                });
-        
-                                discard_glass_bottom_boat(
-                                    &mut state.cards,
-                                    &mut state.animations,
-                                    source.into()
-                                );
-
-                                Selection::Response(())
-                            },
-                            AnytimePlaySelection::DeadScubaDiver(almost_basket, scuba_i) => {
-                                play_dead_scuba_diver(
-                                    &mut state.cards,
-                                    source.into(),
-                                    almost_basket,
-                                    scuba_i
-                                );
-                                Selection::Response(())
+                            }
+                            Ok(source) => {
+                                if let Some(AnytimePlay { selection })
+                                = anytime_play(
+                                    &mut state.rng,
+                                    &state.stack,
+                                    &state.cards,
+                                    &state.memories,
+                                    source
+                                ) {
+                                    match selection {
+                                        AnytimePlaySelection::GameWarden(target) => {
+                                            if let Some(()) = perform_game_warden(
+                                                &mut state.cards,
+                                                &mut state.animations,
+                                                &mut state.rng,
+                                                Targeting {
+                                                    source: responder_id,
+                                                    target,
+                                                },
+                                            ) {
+                                                Selection::Response(())
+                                            } else {
+                                                debug_assert!(false, "perform_game_warden failed");
+                                                Selection::Nothing
+                                            }
+                                        },
+                                        AnytimePlaySelection::GlassBottomBoat(target) => {
+                                            let target_hand = state.cards.hand_mut(target);
+                                            let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
+                                            let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
+                    
+                                            state.memories.memory_mut(source).known(target, card);
+                    
+                                            let at = get_card_position(
+                                                spread(target),
+                                                target_hand.len(),
+                                                i,
+                                            );
+                    
+                                            state.animations.push(Animation {
+                                                card,
+                                                at,
+                                                target: in_front_of(responder_id),
+                                                action: AnimationAction::AnimateBackToHand(target),
+                                                .. <_>::default()
+                                            });
+                    
+                                            discard_glass_bottom_boat(
+                                                &mut state.cards,
+                                                &mut state.animations,
+                                                source.into()
+                                            );
+            
+                                            Selection::Response(())
+                                        },
+                                        AnytimePlaySelection::DeadScubaDiver(almost_basket, scuba_i) => {
+                                            play_dead_scuba_diver(
+                                                &mut state.cards,
+                                                responder_id,
+                                                almost_basket,
+                                                scuba_i
+                                            );
+                                            Selection::Response(())
+                                        }
+                                    }
+                                } else {
+                                    Selection::Nothing
+                                }
                             }
                         }
-                    } else {
-                        Selection::Nothing
                     };
 
                     match selection {
