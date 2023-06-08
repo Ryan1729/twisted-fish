@@ -15,6 +15,13 @@ use platform_types::{
 };
 use xs::{Xs, Seed};
 
+macro_rules! allow_to_respond {
+    ($state: ident) => {
+        $state.sub_turn_ids = $state.turn_id.next_to_current();
+        $state.sub_turn_index = 0;
+    }
+}
+
 const DECK_XY: XY = XY {
     x: X((command::WIDTH - CARD_WIDTH.get()) / 2),
     y: Y((command::HEIGHT - CARD_HEIGHT.get()) / 2),
@@ -179,6 +186,7 @@ pub enum AfterDiscard {
     #[default]
     Nothing,
     BackToSelecting(HandId),
+    PushNoFishing(HandId),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -502,7 +510,12 @@ pub struct Selection {
 
 #[derive(Clone)]
 pub enum Play {
-    TBD
+    NoFishing {
+        source: HandId,
+    },
+    TwoFistedFisherman {
+        source: HandId,
+    }
 }
 
 #[derive(Clone, Default)]
@@ -758,6 +771,14 @@ impl State {
                             AfterDiscard::BackToSelecting(id)
                                 => back_to_selecting!(id),
                             AfterDiscard::Nothing => {}
+                            AfterDiscard::PushNoFishing(source) => {
+                                self.stack.push(
+                                    Play::NoFishing {
+                                        source,
+                                    }
+                                );
+                                allow_to_respond!(self);
+                            }
                         }
                     }
                     AnimationAction::AnimateBackToHand(id) => {
@@ -781,13 +802,6 @@ impl State {
         for anim in push_after {
             self.animations.push(anim);
         }
-    }
-}
-
-macro_rules! allow_to_respond {
-    ($state: ident) => {
-        $state.sub_turn_ids = $state.turn_id.next_to_current();
-        $state.sub_turn_index = 0;
     }
 }
 
@@ -1392,7 +1406,16 @@ fn anytime_play(
         }
 
         if card == zingers::DIVINE_INTERVENTION {
-            todo!("zingers::DIVINE_INTERVENTION")
+            match stack.last() {
+                Some(_) => {
+                    todo!("zingers::DIVINE_INTERVENTION Actually play")
+                }
+                None => {
+                    // Nothing to respond to, and since it is not the start of the 
+                    // turn we cann ot discard it.
+                }
+            }
+            
         }
     }
 
@@ -1438,7 +1461,7 @@ fn discard_no_fishing(
         animations,
         source,
         zingers::NO_FISHING,
-        AfterDiscard::Nothing,
+        AfterDiscard::PushNoFishing(source),
     )
 }
 
@@ -3098,6 +3121,7 @@ pub fn update_and_render(
                                                     state.selection.card_index = state.cards.player.len().saturating_sub(1);
                                                     state.selection.player_menu = PlayerMenu::default();
                                                 } else {
+                                                    // TODO should something be pushed onto the stack here?
                                                     allow_to_respond!(state);
                                                 };
                                             }
@@ -3199,6 +3223,23 @@ pub fn update_and_render(
                                                             Zinger::TheNet => {
                                                                 todo!("Play Net")
                                                             }
+                                                            Zinger::DivineIntervention => {
+                                                                // TODO does `anytime_play` cover all scenarions besides discarding?                                                                                                                                      // TODO does `anytime_play` cover all scenarios besides discarding?
+                                                                enum DivineInterventionDiscardDecision {
+                                                                    CanNot,
+                                                                    ShouldNot,
+                                                                    Should,
+                                                                }
+                                                                use DivineInterventionDiscardDecision::*;
+                                            
+                                                                match todo!("discard decision") {
+                                                                    CanNot => {},
+                                                                    ShouldNot => {},
+                                                                    Should => {
+                                                                        
+                                                                    },
+                                                                }
+                                                            }
                                                             // TODO Play other Zingers sometimes.
                                                             _ => { todo!("Attempted to play {zinger:?}") }
                                                         }
@@ -3228,6 +3269,13 @@ pub fn update_and_render(
                                                         id.into(),
                                                     );
                                                     *menu = CpuMenu::WaitingWhenPlayedTwoFistedFisherman;
+
+                                                    state.stack.push(
+                                                        Play::TwoFistedFisherman {
+                                                            source: id.into(),
+                                                        }
+                                                    );
+                                                    allow_to_respond!(state);
                                                 } else {
                                                     let rank = *rank;
                                                     let target_card = models::fish_card(rank, question.suit);
@@ -3256,9 +3304,11 @@ pub fn update_and_render(
                         
                                                             *menu = CpuMenu::WaitingWhenGotWhatWasFishingFor;
                                                         } else {
+                                                            // TODO should something be pushed onto the stack here?
                                                             allow_to_respond!(state);
                                                         }
                                                     } else {
+                                                        // TODO should something be pushed onto the stack here?
                                                         allow_to_respond!(state);
                                                     }
                                                 }
@@ -3388,7 +3438,6 @@ pub fn update_and_render(
                                                         &mut state.animations,
                                                         question.target
                                                     );
-                                                    handle_negative_response!();
                                                 } else if input.pressed_this_frame(Button::B) {
                                                     handle_ask!();
                                                 }
@@ -3543,7 +3592,12 @@ pub fn update_and_render(
                     }
                     // Resolve the card on the top of the stack
                     Some(play) => match play {
-                        _ => {}
+                        Play::NoFishing{ source: _ } => {
+                            todo!("probably move handle_negative_response!(); here")
+                        }
+                        Play::TwoFistedFisherman{ source: _ } => {
+                            todo!("Play::TwoFistedFisherman")
+                        }
                     }
                 }
             }
