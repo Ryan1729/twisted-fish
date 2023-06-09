@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Predicate, NetPredicate, Rank, Suit, Zinger, DECK_SIZE, get_rank, zingers};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, Predicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, get_rank, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -186,7 +186,7 @@ pub enum AfterDiscard {
     #[default]
     Nothing,
     BackToSelecting(HandId),
-    PushNoFishing(HandId),
+    PushNoFishing(Targeting),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -511,7 +511,7 @@ pub struct Selection {
 #[derive(Clone)]
 pub enum Play {
     NoFishing {
-        source: HandId,
+        targeting: Targeting,
     },
     TwoFistedFisherman {
         source: HandId,
@@ -771,10 +771,10 @@ impl State {
                             AfterDiscard::BackToSelecting(id)
                                 => back_to_selecting!(id),
                             AfterDiscard::Nothing => {}
-                            AfterDiscard::PushNoFishing(source) => {
+                            AfterDiscard::PushNoFishing(targeting) => {
                                 self.stack.push(
                                     Play::NoFishing {
-                                        source,
+                                        targeting
                                     }
                                 );
                                 allow_to_respond!(self);
@@ -1454,14 +1454,14 @@ fn discard_glass_bottom_boat(
 fn discard_no_fishing(
     cards: &mut Cards,
     animations: &mut Animations,
-    source: HandId,
+    targeting: Targeting,
 ) {
     discard_given_card(
         cards,
         animations,
-        source,
+        targeting.source,
         zingers::NO_FISHING,
-        AfterDiscard::PushNoFishing(source),
+        AfterDiscard::PushNoFishing(targeting),
     )
 }
 
@@ -2583,7 +2583,7 @@ pub fn update_and_render(
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
-                                                        target_hand_id
+                                                        target_hand_id.with_target(HandId::Player)
                                                     );
                                                     net_handle_negative_response!();
                                                 } else {
@@ -2710,7 +2710,7 @@ pub fn update_and_render(
                                         } => {
                                             let used = *used;
 
-                                            macro_rules! handle_negative_response {
+                                            macro_rules! p_handle_negative_response {
                                                 () => {
                                                     let player_len = state.cards.player.len();
 
@@ -2845,9 +2845,8 @@ pub fn update_and_render(
                                                             discard_no_fishing(
                                                                 &mut state.cards,
                                                                 &mut state.animations,
-                                                                question.target
+                                                                question.target.with_target(HandId::Player)
                                                             );
-                                                            handle_negative_response!();
                                                         } else {
                                                             let player_len = state.cards.player.len();
                                                             let target_hand = state.cards.hand_mut(question.target);
@@ -2904,7 +2903,7 @@ pub fn update_and_render(
                                                             } else if state.cards.player.contains(zingers::TWO_FISTED_FISHERMAN) {
                                                                 *sub_menu = PlayerAskingSubMenu::TwoFistedFisherman;
                                                             } else {
-                                                                handle_negative_response!();
+                                                                p_handle_negative_response!();
                                                             }
                                                         }
                                                     } else if input.pressed_this_frame(Button::B) {
@@ -3035,7 +3034,7 @@ pub fn update_and_render(
                                                         state.selection.card_index = selected;
                                                         state.selection.player_menu = PlayerMenu::default();
                                                     } else if input.pressed_this_frame(Button::B) {
-                                                        handle_negative_response!();
+                                                        p_handle_negative_response!();
                                                     } else {
                                                         // do nothing
                                                     }
@@ -3255,7 +3254,7 @@ pub fn update_and_render(
                                         }
                                     },
                                     CpuMenu::Asking(rank, ref mut question) => {
-                                        macro_rules! handle_negative_response {
+                                        macro_rules! cpu_handle_negative_response {
                                             () => {
                                                 if can_and_should_play_two_fisted_fisherman(
                                                     &state.memories,
@@ -3371,7 +3370,7 @@ pub fn update_and_render(
 
                                                     state.cpu_menu = CpuMenu::WaitingForSuccesfulAsk;
                                                 } else {
-                                                    handle_negative_response!();
+                                                    cpu_handle_negative_response!();
                                                 }
                                             }
                                         }
@@ -3436,7 +3435,7 @@ pub fn update_and_render(
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
-                                                        question.target
+                                                        question.target.with_target(id.into())
                                                     );
                                                 } else if input.pressed_this_frame(Button::B) {
                                                     handle_ask!();
@@ -3462,9 +3461,8 @@ pub fn update_and_render(
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
-                                                        question.target
+                                                        question.target.with_target(id.into())
                                                     );
-                                                    handle_negative_response!();
                                                 } else {
                                                     commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
                         
@@ -3592,8 +3590,15 @@ pub fn update_and_render(
                     }
                     // Resolve the card on the top of the stack
                     Some(play) => match play {
-                        Play::NoFishing{ source: _ } => {
-                            todo!("probably move handle_negative_response!(); here")
+                        Play::NoFishing{ targeting: Targeting{ source, target }, } => {
+                            match CpuId::try_from(target) {
+                                Err(()) => {
+                                    todo!("probably move p_handle_negative_response!(); here")
+                                }
+                                Ok(asker_id) => {
+                                    todo!("probably move cpu_handle_negative_response!(); here")
+                                }
+                            }
                         }
                         Play::TwoFistedFisherman{ source: _ } => {
                             todo!("Play::TwoFistedFisherman")
@@ -3679,11 +3684,6 @@ fn get_card_position(spread: Spread, len: u8, index: models::CardIndex) -> XY {
             }
         },
     }
-}
-
-struct Targeting {
-    source: HandId,
-    target: HandId,
 }
 
 fn perform_game_warden(

@@ -601,6 +601,20 @@ impl HandId {
             i += 1;
         }
     }
+
+    pub fn with_target(self, target: HandId) -> Targeting {
+        Targeting {
+            source: self,
+            target,
+        }
+    }
+}
+
+// TODO? Prevent self-targeting from being representable?
+#[derive(Clone, Copy)]
+pub struct Targeting {
+    pub source: HandId,
+    pub target: HandId,
 }
 
 #[repr(u8)]
