@@ -22,6 +22,68 @@ macro_rules! allow_to_respond {
     }
 }
 
+macro_rules! cpu_handle_negative_response {
+    ($state: ident, $menu: ident, $id: ident, $rank: ident, $suit: expr) => {
+        let hand_id = $id.into();
+
+        if can_and_should_play_two_fisted_fisherman(
+            &$state.memories,
+            $state.cards.hand(hand_id),
+            $id,
+            $state.cards.active_count(),
+        ) {
+            discard_two_fisted_fisherman(
+                &mut $state.cards,
+                &mut $state.animations,
+                hand_id,
+            );
+            *$menu = CpuMenu::WaitingWhenPlayedTwoFistedFisherman;
+
+            $state.stack.push(
+                Play::TwoFistedFisherman {
+                    source: hand_id,
+                }
+            );
+            allow_to_respond!($state);
+        } else {
+            let suit = $suit;
+            let target_card = models::fish_card($rank, suit);
+            let my_len = $state.cards.hand(hand_id).len();
+
+            let card_option = $state.cards.deck.draw();
+
+            if let Some(card) = card_option {
+                let at = DECK_XY;
+
+                let target = get_card_insert_position(
+                    spread(hand_id),
+                    my_len
+                );
+
+                $state.animations.push(Animation {
+                    card,
+                    at,
+                    target,
+                    action: AnimationAction::AddToHand(hand_id),
+                    .. <_>::default()
+                });
+
+                if card == target_card {
+                    $state.memories.fished_for(hand_id, $rank, suit);
+
+                    *$menu = CpuMenu::WaitingWhenGotWhatWasFishingFor;
+                } else {
+                    // TODO should something be pushed onto the stack here?
+                    allow_to_respond!($state);
+                }
+            } else {
+                // TODO should something be pushed onto the stack here?
+                allow_to_respond!($state);
+            }
+        }
+    }
+}
+
 const DECK_XY: XY = XY {
     x: X((command::WIDTH - CARD_WIDTH.get()) / 2),
     y: Y((command::HEIGHT - CARD_HEIGHT.get()) / 2),
@@ -186,7 +248,7 @@ pub enum AfterDiscard {
     #[default]
     Nothing,
     BackToSelecting(HandId),
-    PushNoFishing(Targeting),
+    PushPlay(Play),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -508,10 +570,11 @@ pub struct Selection {
     player_menu: PlayerMenu,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum Play {
     NoFishing {
         targeting: Targeting,
+        predicate: Predicate,
     },
     TwoFistedFisherman {
         source: HandId,
@@ -771,12 +834,8 @@ impl State {
                             AfterDiscard::BackToSelecting(id)
                                 => back_to_selecting!(id),
                             AfterDiscard::Nothing => {}
-                            AfterDiscard::PushNoFishing(targeting) => {
-                                self.stack.push(
-                                    Play::NoFishing {
-                                        targeting
-                                    }
-                                );
+                            AfterDiscard::PushPlay(play) => {
+                                self.stack.push(play);
                                 allow_to_respond!(self);
                             }
                         }
@@ -1455,13 +1514,17 @@ fn discard_no_fishing(
     cards: &mut Cards,
     animations: &mut Animations,
     targeting: Targeting,
+    predicate: Predicate
 ) {
     discard_given_card(
         cards,
         animations,
         targeting.source,
         zingers::NO_FISHING,
-        AfterDiscard::PushNoFishing(targeting),
+        AfterDiscard::PushPlay(Play::NoFishing {
+            targeting,
+            predicate,
+        }),
     )
 }
 
@@ -2162,6 +2225,13 @@ pub fn update_and_render(
         match state.sub_turn_ids.get(state.sub_turn_index as usize) {
             Some(&responder_id) => {
                 if state.turn_id == responder_id {
+                    // TODO this is wrong. We need to allow everyone to respond to responses.
+                    // Move the `sub_turn_ids` to the `Play`s on the stack, and allow 
+                    // responding to card A after card B was played in response to card A.
+                    // If we don't allow that, then Glass bottom boat could be used to prevent
+                    // Divine intervention from being played, depending on turn order, which 
+                    // seems weird and probably unintended by the designers.
+                    //
                     // We've looped around to the partipcant whose turn it is.
                     // Time for the next turn.
                     state.turn_id = state.turn_id.next_looping();
@@ -2534,7 +2604,7 @@ pub fn update_and_render(
                                                     text: b"Submit",
                                                 }
                                             ) {
-                                                macro_rules! net_handle_negative_response {
+                                                macro_rules! p_net_handle_negative_response {
                                                     () => {
                                                         let player_len = state.cards.player.len();
 
@@ -2583,9 +2653,10 @@ pub fn update_and_render(
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
-                                                        target_hand_id.with_target(HandId::Player)
+                                                        target_hand_id.with_target(HandId::Player),
+                                                        Predicate::Net(*predicate)
                                                     );
-                                                    net_handle_negative_response!();
+                                                    p_net_handle_negative_response!();
                                                 } else {
                                                     let player_len = state.cards.player.len();
                                                     let target_hand = state.cards.hand_mut(target_hand_id);
@@ -2628,7 +2699,7 @@ pub fn update_and_render(
 
                                                         *menu = PlayerMenu::default();
                                                     } else {
-                                                        net_handle_negative_response!();
+                                                        p_net_handle_negative_response!();
                                                     }
                                                 }
                                             } else if input.pressed_this_frame(Button::B) {
@@ -2845,7 +2916,8 @@ pub fn update_and_render(
                                                             discard_no_fishing(
                                                                 &mut state.cards,
                                                                 &mut state.animations,
-                                                                question.target.with_target(HandId::Player)
+                                                                question.target.with_target(HandId::Player),
+                                                                Predicate::RankSuit(rank, question.suit)
                                                             );
                                                         } else {
                                                             let player_len = state.cards.player.len();
@@ -3254,65 +3326,6 @@ pub fn update_and_render(
                                         }
                                     },
                                     CpuMenu::Asking(rank, ref mut question) => {
-                                        macro_rules! cpu_handle_negative_response {
-                                            () => {
-                                                if can_and_should_play_two_fisted_fisherman(
-                                                    &state.memories,
-                                                    state.cards.hand(id.into()),
-                                                    id,
-                                                    state.cards.active_count(),
-                                                ) {
-                                                    discard_two_fisted_fisherman(
-                                                        &mut state.cards,
-                                                        &mut state.animations,
-                                                        id.into(),
-                                                    );
-                                                    *menu = CpuMenu::WaitingWhenPlayedTwoFistedFisherman;
-
-                                                    state.stack.push(
-                                                        Play::TwoFistedFisherman {
-                                                            source: id.into(),
-                                                        }
-                                                    );
-                                                    allow_to_respond!(state);
-                                                } else {
-                                                    let rank = *rank;
-                                                    let target_card = models::fish_card(rank, question.suit);
-                                                    let my_len = state.cards.hand(id.into()).len();
-                        
-                                                    let card_option = state.cards.deck.draw();
-                        
-                                                    if let Some(card) = card_option {
-                                                        let at = DECK_XY;
-                        
-                                                        let target = get_card_insert_position(
-                                                            spread(id.into()),
-                                                            my_len
-                                                        );
-                        
-                                                        state.animations.push(Animation {
-                                                            card,
-                                                            at,
-                                                            target,
-                                                            action: AnimationAction::AddToHand(id.into()),
-                                                            .. <_>::default()
-                                                        });
-                        
-                                                        if card == target_card {
-                                                            state.memories.fished_for(id.into(), rank, question.suit);
-                        
-                                                            *menu = CpuMenu::WaitingWhenGotWhatWasFishingFor;
-                                                        } else {
-                                                            // TODO should something be pushed onto the stack here?
-                                                            allow_to_respond!(state);
-                                                        }
-                                                    } else {
-                                                        // TODO should something be pushed onto the stack here?
-                                                        allow_to_respond!(state);
-                                                    }
-                                                }
-                                            }
-                                        }
                                         macro_rules! handle_ask {
                                             () => {
                                                 let rank = *rank;
@@ -3370,7 +3383,7 @@ pub fn update_and_render(
 
                                                     state.cpu_menu = CpuMenu::WaitingForSuccesfulAsk;
                                                 } else {
-                                                    cpu_handle_negative_response!();
+                                                    cpu_handle_negative_response!(state, menu, id, rank, question.suit);
                                                 }
                                             }
                                         }
@@ -3435,7 +3448,8 @@ pub fn update_and_render(
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
-                                                        question.target.with_target(id.into())
+                                                        question.target.with_target(id.into()),
+                                                        Predicate::RankSuit(*rank, question.suit)
                                                     );
                                                 } else if input.pressed_this_frame(Button::B) {
                                                     handle_ask!();
@@ -3461,7 +3475,8 @@ pub fn update_and_render(
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
-                                                        question.target.with_target(id.into())
+                                                        question.target.with_target(id.into()),
+                                                        Predicate::RankSuit(*rank, question.suit)
                                                     );
                                                 } else {
                                                     commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
@@ -3590,13 +3605,21 @@ pub fn update_and_render(
                     }
                     // Resolve the card on the top of the stack
                     Some(play) => match play {
-                        Play::NoFishing{ targeting: Targeting{ source, target }, } => {
+                        Play::NoFishing{ targeting: Targeting{ source, target }, predicate } => {
                             match CpuId::try_from(target) {
                                 Err(()) => {
                                     todo!("probably move p_handle_negative_response!(); here")
                                 }
                                 Ok(asker_id) => {
-                                    todo!("probably move cpu_handle_negative_response!(); here")
+                                    match predicate {
+                                        Predicate::RankSuit(rank, suit) => {
+                                            let menu = &mut state.cpu_menu;
+                                            cpu_handle_negative_response!(state, menu, asker_id, rank, suit);
+                                        },
+                                        Predicate::Net(_predicate) => {
+                                            todo!("implement cpu_net_handle_negative_response!(); here")
+                                        }
+                                    }
                                 }
                             }
                         }
