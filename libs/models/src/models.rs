@@ -611,7 +611,7 @@ impl HandId {
 }
 
 // TODO? Prevent self-targeting from being representable?
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Targeting {
     pub source: HandId,
     pub target: HandId,

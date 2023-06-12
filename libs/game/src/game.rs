@@ -39,11 +39,13 @@ macro_rules! cpu_handle_negative_response {
             );
             *$menu = CpuMenu::WaitingWhenPlayedTwoFistedFisherman;
 
-            $state.stack.push(
-                Play::TwoFistedFisherman {
+            $state.stack.push(Play {
+                sub_turn_ids: hand_id.next_to_current(),
+                sub_turn_index: 0,
+                kind: PlayKind::TwoFistedFisherman {
                     source: hand_id,
-                }
-            );
+                },
+            });
             allow_to_respond!($state);
         } else {
             let suit = $suit;
@@ -81,6 +83,16 @@ macro_rules! cpu_handle_negative_response {
                 allow_to_respond!($state);
             }
         }
+    }
+}
+
+macro_rules! to_next_turn {
+    ($state: ident) => {
+        // Time for the next turn.
+        $state.turn_id = $state.turn_id.next_looping();
+        $state.sub_turn_index = HandId::COUNT + 1;
+        $state.selection.player_menu = Default::default();
+        $state.cpu_menu = CpuMenu::default();
     }
 }
 
@@ -570,8 +582,11 @@ pub struct Selection {
     player_menu: PlayerMenu,
 }
 
-#[derive(Clone, Copy)]
-pub enum Play {
+#[derive(Clone, Copy, Debug)]
+pub enum PlayKind {
+    FishedUnsuccessfully {
+        source: HandId,
+    },
     NoFishing {
         targeting: Targeting,
         predicate: Predicate,
@@ -579,6 +594,26 @@ pub enum Play {
     TwoFistedFisherman {
         source: HandId,
     }
+}
+
+impl PlayKind {
+    fn source(&self) -> HandId {
+        *match self {
+            Self::FishedUnsuccessfully { source } => source,
+            Self::NoFishing {
+                targeting: Targeting { source, .. },
+                ..
+            } => source,
+            Self::TwoFistedFisherman { source } => source,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Play {
+    pub sub_turn_ids: [HandId; HandId::COUNT as usize],
+    pub sub_turn_index: u8,
+    pub kind: PlayKind,
 }
 
 #[derive(Clone, Default)]
@@ -1466,12 +1501,13 @@ fn anytime_play(
 
         if card == zingers::DIVINE_INTERVENTION {
             match stack.last() {
-                Some(_) => {
-                    todo!("zingers::DIVINE_INTERVENTION Actually play")
-                }
-                None => {
+                Some(Play { kind: PlayKind::FishedUnsuccessfully { .. }, .. })
+                | None => {
                     // Nothing to respond to, and since it is not the start of the 
-                    // turn we cann ot discard it.
+                    // turn we cannot discard it.
+                }
+                Some(Play { kind, .. }) => {
+                    todo!("zingers::DIVINE_INTERVENTION Actually play: {kind:?}")
                 }
             }
             
@@ -1521,9 +1557,13 @@ fn discard_no_fishing(
         animations,
         targeting.source,
         zingers::NO_FISHING,
-        AfterDiscard::PushPlay(Play::NoFishing {
-            targeting,
-            predicate,
+        AfterDiscard::PushPlay(Play {
+            sub_turn_ids: targeting.source.next_to_current(),
+            sub_turn_index: 0,
+            kind: PlayKind::NoFishing {
+                targeting,
+                predicate,
+            }
         }),
     )
 }
@@ -2222,22 +2262,34 @@ pub fn update_and_render(
     }
 
     if state.animations.all_done() {
-        match state.sub_turn_ids.get(state.sub_turn_index as usize) {
+        // TODO Look at sub_turn_ids on top of the stack if there are any. See note below.
+        match {
+            match state.stack.last() {
+                Some(Play {sub_turn_ids, sub_turn_index, ..}) => {
+                    sub_turn_ids.get(*sub_turn_index as usize)
+                },
+                None => state.sub_turn_ids.get(state.sub_turn_index as usize),
+            }
+        } {
             Some(&responder_id) => {
-                if state.turn_id == responder_id {
-                    // TODO this is wrong. We need to allow everyone to respond to responses.
-                    // Move the `sub_turn_ids` to the `Play`s on the stack, and allow 
-                    // responding to card A after card B was played in response to card A.
-                    // If we don't allow that, then Glass bottom boat could be used to prevent
-                    // Divine intervention from being played, depending on turn order, which 
-                    // seems weird and probably unintended by the designers.
-                    //
-                    // We've looped around to the partipcant whose turn it is.
-                    // Time for the next turn.
-                    state.turn_id = state.turn_id.next_looping();
-                    state.sub_turn_index += 1;
-                    state.selection.player_menu = Default::default();
-                    state.cpu_menu = CpuMenu::default();
+                
+                if {
+                    match state.stack.last() {
+                        Some(Play {kind, ..}) => kind.source() == responder_id,
+                        None => false,
+                    }
+                } {
+                    // We've looped around to the participant whose played the top of
+                    // the stack. We don't want to allow them to respond to 
+                    // themselves, at least at the moment.
+                    match state.stack.last_mut() {
+                        Some(Play { sub_turn_index, ..}) => {
+                            *sub_turn_index += 1;
+                        },
+                        None => {
+                            state.sub_turn_index += 1;
+                        },
+                    }
                 } else {
                     // Give this participant a chance to respond.
                     enum Selection {
@@ -2350,7 +2402,14 @@ pub fn update_and_render(
                         },
                         Selection::Nothing => {
                             // Passing the chance to counter
-                            state.sub_turn_index += 1;
+                            match state.stack.last_mut() {
+                                Some(Play { sub_turn_index, ..}) => {
+                                    *sub_turn_index += 1;
+                                },
+                                None => {
+                                    state.sub_turn_index += 1;
+                                },
+                            }
                         },
                         Selection::Pending => {
                             assert_eq!(responder_id, HandId::Player);
@@ -3192,7 +3251,13 @@ pub fn update_and_render(
                                                     state.selection.card_index = state.cards.player.len().saturating_sub(1);
                                                     state.selection.player_menu = PlayerMenu::default();
                                                 } else {
-                                                    // TODO should something be pushed onto the stack here?
+                                                    state.stack.push(Play {
+                                                        sub_turn_ids: HandId::Player.next_to_current(),
+                                                        sub_turn_index: 0,
+                                                        kind: PlayKind::FishedUnsuccessfully {
+                                                            source: HandId::Player,
+                                                        }
+                                                    });
                                                     allow_to_respond!(state);
                                                 };
                                             }
@@ -3604,27 +3669,38 @@ pub fn update_and_render(
                         }
                     }
                     // Resolve the card on the top of the stack
-                    Some(play) => match play {
-                        Play::NoFishing{ targeting: Targeting{ source, target }, predicate } => {
-                            match CpuId::try_from(target) {
-                                Err(()) => {
-                                    todo!("probably move p_handle_negative_response!(); here")
-                                }
-                                Ok(asker_id) => {
-                                    match predicate {
-                                        Predicate::RankSuit(rank, suit) => {
-                                            let menu = &mut state.cpu_menu;
-                                            cpu_handle_negative_response!(state, menu, asker_id, rank, suit);
-                                        },
-                                        Predicate::Net(_predicate) => {
-                                            todo!("implement cpu_net_handle_negative_response!(); here")
+                    Some(play) => {
+                        match play.kind {
+                            PlayKind::FishedUnsuccessfully{ .. } => {
+                                assert!(state.stack.is_empty());
+                                // Just move to the next turn
+                            },
+                            PlayKind::NoFishing{ targeting: Targeting{ source, target }, predicate } => {
+                                match CpuId::try_from(target) {
+                                    Err(()) => {
+                                        todo!("probably move p_handle_negative_response!(); here")
+                                    }
+                                    Ok(asker_id) => {
+                                        match predicate {
+                                            Predicate::RankSuit(rank, suit) => {
+                                                let menu = &mut state.cpu_menu;
+                                                cpu_handle_negative_response!(state, menu, asker_id, rank, suit);
+                                            },
+                                            Predicate::Net(_predicate) => {
+                                                todo!("implement cpu_net_handle_negative_response!(); here")
+                                            }
                                         }
                                     }
                                 }
                             }
+                            PlayKind::TwoFistedFisherman{ source: _ } => {
+                                todo!("Play::TwoFistedFisherman")
+                            }
                         }
-                        Play::TwoFistedFisherman{ source: _ } => {
-                            todo!("Play::TwoFistedFisherman")
+
+                        if state.stack.is_empty() {
+                            // We've resolved the whole stack.
+                            to_next_turn!(state);
                         }
                     }
                 }
