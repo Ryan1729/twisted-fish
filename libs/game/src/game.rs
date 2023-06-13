@@ -1394,7 +1394,8 @@ enum AnytimePlaySelection {
     // themselves. But maybe we won't make those errors in practice.
     GameWarden(HandId),
     GlassBottomBoat(HandId),
-    DeadScubaDiver(AlmostCompleteBasket, CardIndex)
+    DeadScubaDiver(AlmostCompleteBasket, CardIndex),
+    DivineIntervention,
 }
 
 #[derive(Copy, Clone)]
@@ -1503,14 +1504,58 @@ fn anytime_play(
             match stack.last() {
                 Some(Play { kind: PlayKind::FishedUnsuccessfully { .. }, .. })
                 | None => {
-                    // Nothing to respond to, and since it is not the start of the 
+                    // Nothing to respond to, and since it is not the start of the
                     // turn we cannot discard it.
+                }
+                Some(Play {
+                    kind: PlayKind::NoFishing {
+                        targeting: Targeting { target, source },
+                        ..
+                    },
+                    ..
+                }) => {
+                    if *source == hand_id {
+                        // Don't cancel our own play.
+                    } else if *target == hand_id {
+                        // Targeting me, so they almost certainly have something
+                        // I want.
+                        // TODO random chance to skip to reduce exploitabilty?
+                        return Some(AnytimePlay {
+                            selection: AnytimePlaySelection::DivineIntervention,
+                        });
+                    } else {
+                        let mut zingers_in_hand = 0;
+                        for card in hand.iter() {
+                            if models::get_zinger(card).is_some() {
+                                zingers_in_hand += 1;
+                            }
+                        }
+                        
+
+                        let zingers_remaining =
+                            models::ZINGER_COUNT
+                                .saturating_sub(
+                                    zingers_in_hand
+                                    // Only zingers end up in the discard pile
+                                    + cards.discard.len()
+                                    // + 1 because we know that No Fishing
+                                    // is on the stack.
+                                    + 1
+                                );
+                        if zingers_remaining <= 1 {
+                            // It's probably time to use this up. Let's avoid
+                            // needing to skip our own turn.
+                            return Some(AnytimePlay {
+                                selection: AnytimePlaySelection::DivineIntervention,
+                            });
+                        }
+                    };
                 }
                 Some(Play { kind, .. }) => {
                     todo!("zingers::DIVINE_INTERVENTION Actually play: {kind:?}")
                 }
             }
-            
+
         }
     }
 
@@ -1542,6 +1587,20 @@ fn discard_glass_bottom_boat(
         animations,
         source,
         zingers::GLASS_BOTTOM_BOAT,
+        AfterDiscard::Nothing,
+    )
+}
+
+fn discard_divine_intervention(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    source: HandId,
+) {
+    discard_given_card(
+        cards,
+        animations,
+        source,
+        zingers::DIVINE_INTERVENTION,
         AfterDiscard::Nothing,
     )
 }
@@ -2272,7 +2331,6 @@ pub fn update_and_render(
             }
         } {
             Some(&responder_id) => {
-                
                 if {
                     match state.stack.last() {
                         Some(Play {kind, ..}) => kind.source() == responder_id,
@@ -2280,7 +2338,7 @@ pub fn update_and_render(
                     }
                 } {
                     // We've looped around to the participant whose played the top of
-                    // the stack. We don't want to allow them to respond to 
+                    // the stack. We don't want to allow them to respond to
                     // themselves, at least at the moment.
                     match state.stack.last_mut() {
                         Some(Play { sub_turn_index, ..}) => {
@@ -2354,15 +2412,15 @@ pub fn update_and_render(
                                             let target_hand = state.cards.hand_mut(target);
                                             let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
                                             let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
-                    
+
                                             state.memories.memory_mut(source).known(target, card);
-                    
+
                                             let at = get_card_position(
                                                 spread(target),
                                                 target_hand.len(),
                                                 i,
                                             );
-                    
+
                                             state.animations.push(Animation {
                                                 card,
                                                 at,
@@ -2370,13 +2428,13 @@ pub fn update_and_render(
                                                 action: AnimationAction::AnimateBackToHand(target),
                                                 .. <_>::default()
                                             });
-                    
+
                                             discard_glass_bottom_boat(
                                                 &mut state.cards,
                                                 &mut state.animations,
                                                 source.into()
                                             );
-            
+
                                             Selection::Response(())
                                         },
                                         AnytimePlaySelection::DeadScubaDiver(almost_basket, scuba_i) => {
@@ -2386,6 +2444,18 @@ pub fn update_and_render(
                                                 almost_basket,
                                                 scuba_i
                                             );
+                                            Selection::Response(())
+                                        },
+                                        AnytimePlaySelection::DivineIntervention => {
+                                            discard_divine_intervention(
+                                                &mut state.cards,
+                                                &mut state.animations,
+                                                source.into()
+                                            );
+                                            // Cancel the card we by removing it from
+                                            // the stack.
+                                            state.stack.pop();
+
                                             Selection::Response(())
                                         }
                                     }
@@ -3309,7 +3379,7 @@ pub fn update_and_render(
                                             gfx::NineSlice::Window,
                                             CPU_SELECTING_WINDOW
                                         );
-                        
+
                                         let hand_id = HandId::from(id);
                                         let hand = state.cards.hand(hand_id);
                                         if hand.is_empty() {
@@ -3318,16 +3388,16 @@ pub fn update_and_render(
                                             if let Some((rank, suit, target)) = state.memories.memory(id)
                                                 .informed_question(hand, hand_id) {
                                                 let mut question = Question::default();
-                        
+
                                                 question.suit = suit;
                                                 question.target = target;
-                        
+
                                                 *menu = CpuMenu::Asking(
                                                     rank,
                                                     question,
                                                 );
                                             }
-                        
+
                                             if let CpuMenu::Selecting = *menu {
                                                 // TODO? randomize order through the cards here to make Cpu
                                                 // player less predictable?
@@ -3337,18 +3407,18 @@ pub fn update_and_render(
                                                         let target_id = besides[
                                                             xs::range(&mut state.rng, 0..besides.len() as u32) as usize
                                                         ];
-                        
+
                                                         // TODO? Decide what suit to ask for intelligently
                                                         // in this case? Does it matter given that asking
                                                         // for a card you have as a distraction is viable?
                                                         // Maybe only ask for a card you have when your
                                                         // have 4 in your hand already?
                                                         let suit = Suit::from_rng(&mut state.rng);
-                        
+
                                                         let mut question = Question::default();
                                                         question.target = target_id;
                                                         question.suit = suit;
-                        
+
                                                         *menu = CpuMenu::Asking(
                                                             rank,
                                                             question,
@@ -3367,12 +3437,12 @@ pub fn update_and_render(
                                                                     Should,
                                                                 }
                                                                 use DivineInterventionDiscardDecision::*;
-                                            
+
                                                                 match todo!("discard decision") {
                                                                     CanNot => {},
                                                                     ShouldNot => {},
                                                                     Should => {
-                                                                        
+
                                                                     },
                                                                 }
                                                             }
@@ -3383,7 +3453,7 @@ pub fn update_and_render(
                                                         debug_assert!(false, "Non-fish, non-zinger card!? {card}");
                                                     }
                                                 }
-                        
+
                                                 if let CpuMenu::Selecting = *menu {
                                                     *menu = CpuMenu::DeadInTheWater;
                                                 }
@@ -3394,17 +3464,17 @@ pub fn update_and_render(
                                         macro_rules! handle_ask {
                                             () => {
                                                 let rank = *rank;
-                        
+
                                                 state.memories.asked_for(
                                                     id.into(),
                                                     Predicate::RankSuit(rank, question.suit)
                                                 );
-                        
+
                                                 let target_card = models::fish_card(rank, question.suit);
                                                 let my_len = state.cards.hand(id.into()).len();
-                        
+
                                                 let target_hand = state.cards.hand_mut(question.target);
-                        
+
                                                 let mut found = None;
                                                 // TODO? randomize order here to make it harder to learn their
                                                 // whole hand with glass bottom boat
@@ -3418,25 +3488,25 @@ pub fn update_and_render(
                                                                 .expect("We just looked at it! (cpu)"),
                                                             i
                                                         ));
-                        
+
                                                         break
                                                     }
                                                 }
-                        
+
                                                 if let Some((card, i)) = found {
                                                     state.memories.found(id.into(), rank, question.suit);
-                        
+
                                                     let at = get_card_position(
                                                         spread(question.target),
                                                         target_hand.len(),
                                                         i,
                                                     );
-                        
+
                                                     let target = get_card_insert_position(
                                                         spread(id.into()),
                                                         my_len
                                                     );
-                        
+
                                                     state.animations.push(Animation {
                                                         card,
                                                         at,
@@ -3452,26 +3522,26 @@ pub fn update_and_render(
                                                 }
                                             }
                                         }
-                        
+
                                         match (
                                             question.target,
                                             state.cards.hand(question.target).contains(zingers::NO_FISHING),
                                         ) {
                                             (HandId::Player, true) => {
                                                 commands.draw_nine_slice(gfx::NineSlice::Window, NO_FISHING_WINDOW);
-                        
+
                                                 let base_xy = NO_FISHING_WINDOW.xy()
                                                     + WINDOW_CONTENT_OFFSET;
-                        
+
                                                 let card_xy = base_xy;
-                        
+
                                                 commands.draw_card(
                                                     zingers::NO_FISHING,
                                                     card_xy,
                                                 );
-                        
+
                                                 let description_base_xy = card_xy + CARD_WIDTH;
-                        
+
                                                 let description_base_rect = unscaled::Rect::xy_wh(
                                                     description_base_xy,
                                                     unscaled::WH {
@@ -3479,26 +3549,26 @@ pub fn update_and_render(
                                                         h: NO_FISHING_WINDOW.h - WINDOW_CONTENT_OFFSET.h * 2,
                                                     }
                                                 );
-                        
+
                                                 let description = question.fresh_cpu_ask_description(
                                                     *rank,
                                                     id.into(),
                                                     description_base_rect.w,
                                                 );
-                        
+
                                                 commands.print_centered(
                                                     description,
                                                     description_base_rect,
                                                     WHITE,
                                                 );
-                        
+
                                                 let submit_base_xy = NO_FISHING_WINDOW.xy()
                                                     + WINDOW_CONTENT_OFFSET.h
                                                     + NO_FISHING_WINDOW.w
                                                     - (CARD_WIDTH + WINDOW_CONTENT_OFFSET.w);
-                        
+
                                                 let group = new_group!();
-                        
+
                                                 if do_button(
                                                     group,
                                                     ButtonSpec {
@@ -3519,7 +3589,7 @@ pub fn update_and_render(
                                                 } else if input.pressed_this_frame(Button::B) {
                                                     handle_ask!();
                                                 }
-                        
+
                                                 group.ctx.set_next_hot(Submit);
                                             },
                                             (_, has_no_fishing) => {
@@ -3545,28 +3615,28 @@ pub fn update_and_render(
                                                     );
                                                 } else {
                                                     commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
-                        
+
                                                     let base_xy = CPU_ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-                        
+
                                                     let description_base_xy = base_xy;
-                        
+
                                                     let description_base_rect = fit_to_rest_of_window(
                                                         description_base_xy,
                                                         CPU_ASKING_WINDOW,
                                                     );
-                        
+
                                                     let description = question.fresh_cpu_ask_description(
                                                         *rank,
                                                         id.into(),
                                                         description_base_rect.w,
                                                     );
-                        
+
                                                     commands.print_centered(
                                                         description,
                                                         description_base_rect,
                                                         WHITE,
                                                     );
-                        
+
                                                     if input.pressed_this_frame(Button::A)
                                                     | input.pressed_this_frame(Button::B) {
                                                         handle_ask!();
@@ -3577,26 +3647,26 @@ pub fn update_and_render(
                                     },
                                     CpuMenu::DeadInTheWater => {
                                         draw_dead_in_the_water(commands);
-                        
+
                                         // Just wait until player acknowledges turn.
                                         if input.pressed_this_frame(Button::A)
                                         | input.pressed_this_frame(Button::B) {
                                             let drew = state.cards.deck.draw();
                                             let hand_id = id.into();
                                             let len = state.cards.hand(hand_id).len();
-                        
+
                                             state.selection.card_index = state.cards.player.len().saturating_sub(1);
                                             state.selection.player_menu = PlayerMenu::default();
                                             state.cpu_menu = CpuMenu::default();
-                        
+
                                             if let Some(card) = drew {
                                                 let at = DECK_XY;
-                        
+
                                                 let target = get_card_insert_position(
                                                     spread(hand_id),
                                                     len
                                                 );
-                        
+
                                                 state.animations.push(Animation {
                                                     card,
                                                     at,
@@ -3610,16 +3680,16 @@ pub fn update_and_render(
                                     // TODO? retain their target card for this message?
                                     CpuMenu::WaitingForSuccesfulAsk => {
                                         commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_ASK_WINDOW);
-                        
+
                                         let base_xy = CPU_SUCCESFUL_ASK_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-                        
+
                                         let description_base_xy = base_xy;
-                        
+
                                         let description_base_rect = fit_to_rest_of_window(
                                             description_base_xy,
                                             CPU_SUCCESFUL_ASK_WINDOW,
                                         );
-                        
+
                                         commands.print_centered(
                                             b"They got what they were asking for!",
                                             description_base_rect,
@@ -3629,16 +3699,16 @@ pub fn update_and_render(
                                     // TODO? retain their target card for this message?
                                     CpuMenu::WaitingWhenGotWhatWasFishingFor => {
                                         commands.draw_nine_slice(gfx::NineSlice::Window, CPU_SUCCESFUL_FISH_WINDOW);
-                        
+
                                         let base_xy = CPU_SUCCESFUL_FISH_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
-                        
+
                                         let description_base_xy = base_xy;
-                        
+
                                         let description_base_rect = fit_to_rest_of_window(
                                             description_base_xy,
                                             CPU_SUCCESFUL_FISH_WINDOW,
                                         );
-                        
+
                                         commands.print_centered(
                                             b"They got what they fished for!",
                                             description_base_rect,
@@ -3647,17 +3717,17 @@ pub fn update_and_render(
                                     },
                                     CpuMenu::WaitingWhenPlayedTwoFistedFisherman => {
                                         commands.draw_nine_slice(gfx::NineSlice::Window, CPU_TWO_FISTED_FISHERMAN_WINDOW);
-                        
+
                                         let base_xy = CPU_TWO_FISTED_FISHERMAN_WINDOW.xy()
                                             + WINDOW_CONTENT_OFFSET;
-                        
+
                                         let description_base_xy = base_xy;
-                        
+
                                         let description_base_rect = fit_to_rest_of_window(
                                             description_base_xy,
                                             CPU_TWO_FISTED_FISHERMAN_WINDOW,
                                         );
-                        
+
                                         commands.print_centered(
                                             b"They played the Two-Fisted \nFisherman! So they get to go again!",
                                             description_base_rect,
