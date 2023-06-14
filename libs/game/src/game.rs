@@ -19,6 +19,7 @@ macro_rules! allow_to_respond {
     ($state: ident) => {
         $state.sub_turn_ids = $state.turn_id.next_to_current();
         $state.sub_turn_index = 0;
+        $state.done_something_this_turn = true;
     }
 }
 
@@ -38,6 +39,7 @@ macro_rules! cpu_handle_negative_response {
                 hand_id,
             );
             *$menu = CpuMenu::WaitingWhenPlayedTwoFistedFisherman;
+            $state.done_something_this_turn = true;
 
             $state.stack.push(Play {
                 sub_turn_ids: hand_id.next_to_current(),
@@ -74,6 +76,7 @@ macro_rules! cpu_handle_negative_response {
                     $state.memories.fished_for(hand_id, $rank, suit);
 
                     *$menu = CpuMenu::WaitingWhenGotWhatWasFishingFor;
+                    $state.done_something_this_turn = true;
                 } else {
                     // TODO should something be pushed onto the stack here?
                     allow_to_respond!($state);
@@ -93,6 +96,7 @@ macro_rules! to_next_turn {
         $state.sub_turn_index = HandId::COUNT + 1;
         $state.selection.player_menu = Default::default();
         $state.cpu_menu = CpuMenu::default();
+        $state.done_something_this_turn = false;
     }
 }
 
@@ -607,6 +611,14 @@ impl PlayKind {
             Self::TwoFistedFisherman { source } => source,
         }
     }
+
+    fn is_zinger(&self) -> bool {
+        match self {
+            Self::FishedUnsuccessfully { .. } => false,
+            Self::NoFishing { .. }
+            | Self::TwoFistedFisherman { .. } => true,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -614,6 +626,12 @@ pub struct Play {
     pub sub_turn_ids: [HandId; HandId::COUNT as usize],
     pub sub_turn_index: u8,
     pub kind: PlayKind,
+}
+
+impl Play {
+    fn is_zinger(&self) -> bool {
+        self.kind.is_zinger()
+    }
 }
 
 #[derive(Clone, Default)]
@@ -630,6 +648,7 @@ pub struct State {
     pub sub_turn_index: u8,
     pub stack: Vec<Play>,
     pub cpu_menu: CpuMenu,
+    pub done_something_this_turn: bool,
 }
 
 impl State {
@@ -766,6 +785,7 @@ impl State {
                                     | CpuMenu::WaitingWhenPlayedTwoFistedFisherman
                                 ) {
                                     self.cpu_menu = CpuMenu::Selecting;
+                                    self.done_something_this_turn = true;
                                 }
                             }
                         }
@@ -1524,25 +1544,11 @@ fn anytime_play(
                             selection: AnytimePlaySelection::DivineIntervention,
                         });
                     } else {
-                        let mut zingers_in_hand = 0;
-                        for card in hand.iter() {
-                            if models::get_zinger(card).is_some() {
-                                zingers_in_hand += 1;
-                            }
-                        }
-                        
-
-                        let zingers_remaining =
-                            models::ZINGER_COUNT
-                                .saturating_sub(
-                                    zingers_in_hand
-                                    // Only zingers end up in the discard pile
-                                    + cards.discard.len()
-                                    // + 1 because we know that No Fishing
-                                    // is on the stack.
-                                    + 1
-                                );
-                        if zingers_remaining <= 1 {
+                        if should_get_rid_of_divine_intervention(
+                            &cards,
+                            &hand,
+                            &stack
+                        ) {
                             // It's probably time to use this up. Let's avoid
                             // needing to skip our own turn.
                             return Some(AnytimePlay {
@@ -1561,6 +1567,39 @@ fn anytime_play(
 
 
     None
+}
+
+fn should_get_rid_of_divine_intervention(
+    cards: &Cards,
+    hand: &Hand,
+    stack: &[Play]
+) -> bool {
+    let mut zingers_in_hand = 0;
+    for card in hand.iter() {
+        if models::get_zinger(card).is_some() {
+            zingers_in_hand += 1;
+        }
+    }
+
+    let mut zingers_in_stack = 0;
+    for play in stack.iter() {
+        if play.is_zinger() {
+            zingers_in_stack += 1;
+        }
+    }
+
+    let zingers_remaining =
+        models::ZINGER_COUNT
+            .saturating_sub(
+                zingers_in_hand
+                // Only zingers end up in the discard pile
+                + cards.discard.len()
+                // + 1 because we know that No Fishing
+                // is on the stack.
+                + zingers_in_stack
+            );
+
+    zingers_remaining <= 1
 }
 
 fn discard_game_warden(
@@ -1591,6 +1630,8 @@ fn discard_glass_bottom_boat(
     )
 }
 
+/// This is currently called both when using divine intervention and when doing the
+/// speical discard action that doesn't affect the stack.
 fn discard_divine_intervention(
     cards: &mut Cards,
     animations: &mut Animations,
@@ -2743,6 +2784,7 @@ pub fn update_and_render(
                                                             predicate: core::mem::take(predicate),
                                                             drew,
                                                         };
+                                                        state.done_something_this_turn = true;
 
                                                         if let Some(card) = drew {
                                                             let at = DECK_XY;
@@ -2827,6 +2869,7 @@ pub fn update_and_render(
                                                         });
 
                                                         *menu = PlayerMenu::default();
+                                                        state.done_something_this_turn = true;
                                                     } else {
                                                         p_net_handle_negative_response!();
                                                     }
@@ -2921,6 +2964,7 @@ pub fn update_and_render(
                                                         question: core::mem::take(question),
                                                         drew,
                                                     };
+                                                    state.done_something_this_turn = true;
 
                                                     if let Some(card) = drew {
                                                         let at = DECK_XY;
@@ -3101,6 +3145,7 @@ pub fn update_and_render(
                                                                 });
 
                                                                 *menu = PlayerMenu::default();
+                                                                state.done_something_this_turn = true;
                                                             } else if state.cards.player.contains(zingers::TWO_FISTED_FISHERMAN) {
                                                                 *sub_menu = PlayerAskingSubMenu::TwoFistedFisherman;
                                                             } else {
@@ -3234,6 +3279,7 @@ pub fn update_and_render(
                                                         );
                                                         state.selection.card_index = selected;
                                                         state.selection.player_menu = PlayerMenu::default();
+                                                        state.done_something_this_turn = true;
                                                     } else if input.pressed_this_frame(Button::B) {
                                                         p_handle_negative_response!();
                                                     } else {
@@ -3320,6 +3366,7 @@ pub fn update_and_render(
                                                     );
                                                     state.selection.card_index = state.cards.player.len().saturating_sub(1);
                                                     state.selection.player_menu = PlayerMenu::default();
+                                                    state.done_something_this_turn = true;
                                                 } else {
                                                     state.stack.push(Play {
                                                         sub_turn_ids: HandId::Player.next_to_current(),
@@ -3396,9 +3443,11 @@ pub fn update_and_render(
                                                     rank,
                                                     question,
                                                 );
+                                                state.done_something_this_turn = true;
                                             }
 
                                             if let CpuMenu::Selecting = *menu {
+                                                let mut zinger_to_play = None;
                                                 // TODO? randomize order through the cards here to make Cpu
                                                 // player less predictable?
                                                 for card in hand.iter() {
@@ -3423,6 +3472,7 @@ pub fn update_and_render(
                                                             rank,
                                                             question,
                                                         );
+                                                        state.done_something_this_turn = true;
                                                         break
                                                     } else if let Some(zinger) = models::get_zinger(card) {
                                                         match zinger {
@@ -3430,20 +3480,16 @@ pub fn update_and_render(
                                                                 todo!("Play Net")
                                                             }
                                                             Zinger::DivineIntervention => {
-                                                                // TODO does `anytime_play` cover all scenarions besides discarding?                                                                                                                                      // TODO does `anytime_play` cover all scenarios besides discarding?
-                                                                enum DivineInterventionDiscardDecision {
-                                                                    CanNot,
-                                                                    ShouldNot,
-                                                                    Should,
-                                                                }
-                                                                use DivineInterventionDiscardDecision::*;
-
-                                                                match todo!("discard decision") {
-                                                                    CanNot => {},
-                                                                    ShouldNot => {},
-                                                                    Should => {
-
-                                                                    },
+                                                                if state.done_something_this_turn {
+                                                                    // Cannot play it
+                                                                } else if should_get_rid_of_divine_intervention(
+                                                                    &state.cards,
+                                                                    state.cards.hand(hand_id),
+                                                                    &state.stack,
+                                                                ) {
+                                                                    zinger_to_play = Some(zinger);
+                                                                } else {
+                                                                    // Don't discard it
                                                                 }
                                                             }
                                                             // TODO Play other Zingers sometimes.
@@ -3454,8 +3500,25 @@ pub fn update_and_render(
                                                     }
                                                 }
 
-                                                if let CpuMenu::Selecting = *menu {
-                                                    *menu = CpuMenu::DeadInTheWater;
+                                                match zinger_to_play {
+                                                    Some(Zinger::DivineIntervention) => {
+                                                        discard_divine_intervention(
+                                                            &mut state.cards,
+                                                            &mut state.animations,
+                                                            hand_id
+                                                        );
+                                                        // We're doing the special
+                                                        // discard action, so don't
+                                                        // do anything to the stack.
+                                                    }
+                                                    Some(zinger) => {
+                                                        todo!("cpu handle selecting {zinger:?}");
+                                                    }
+                                                    None => {
+                                                        if let CpuMenu::Selecting = *menu {
+                                                            *menu = CpuMenu::DeadInTheWater;
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -3517,6 +3580,7 @@ pub fn update_and_render(
                                                     });
 
                                                     state.cpu_menu = CpuMenu::WaitingForSuccesfulAsk;
+                                                    state.done_something_this_turn = true;
                                                 } else {
                                                     cpu_handle_negative_response!(state, menu, id, rank, question.suit);
                                                 }
