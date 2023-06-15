@@ -78,11 +78,23 @@ macro_rules! cpu_handle_negative_response {
                     *$menu = CpuMenu::WaitingWhenGotWhatWasFishingFor;
                     $state.done_something_this_turn = true;
                 } else {
-                    // TODO should something be pushed onto the stack here?
+                    $state.stack.push(Play {
+                        sub_turn_ids: hand_id.next_to_current(),
+                        sub_turn_index: 0,
+                        kind: PlayKind::FishedUnsuccessfully {
+                            source: hand_id,
+                        }
+                    });
                     allow_to_respond!($state);
                 }
             } else {
-                // TODO should something be pushed onto the stack here?
+                $state.stack.push(Play {
+                    sub_turn_ids: hand_id.next_to_current(),
+                    sub_turn_index: 0,
+                    kind: PlayKind::FishedUnsuccessfully {
+                        source: hand_id,
+                    }
+                });
                 allow_to_respond!($state);
             }
         }
