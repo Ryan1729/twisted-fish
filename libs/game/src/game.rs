@@ -3816,6 +3816,7 @@ pub fn update_and_render(
                     }
                     // Resolve the card on the top of the stack
                     Some(play) => {
+                        let mut go_again = false;
                         match play.kind {
                             PlayKind::FishedUnsuccessfully{ .. } => {
                                 assert!(state.stack.is_empty());
@@ -3840,11 +3841,15 @@ pub fn update_and_render(
                                 }
                             }
                             PlayKind::TwoFistedFisherman{ source: _ } => {
-                                todo!("Play::TwoFistedFisherman")
+                                // If this turns out to be false ever, we need to
+                                // store that the player gets an extra turn somewhere
+                                // more persistently.
+                                assert!(state.stack.is_empty());
+                                go_again = true;
                             }
                         }
 
-                        if state.stack.is_empty() {
+                        if !go_again && state.stack.is_empty() {
                             // We've resolved the whole stack.
                             to_next_turn!(state);
                         }
