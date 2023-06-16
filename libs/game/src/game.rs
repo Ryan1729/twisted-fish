@@ -46,6 +46,7 @@ macro_rules! cpu_handle_negative_response {
                 sub_turn_index: 0,
                 kind: PlayKind::TwoFistedFisherman {
                     source: hand_id,
+                    cancelled: false,
                 },
             });
             allow_to_respond!($state);
@@ -609,6 +610,7 @@ pub enum PlayKind {
     },
     TwoFistedFisherman {
         source: HandId,
+        cancelled: bool,
     }
 }
 
@@ -620,7 +622,7 @@ impl PlayKind {
                 targeting: Targeting { source, .. },
                 ..
             } => source,
-            Self::TwoFistedFisherman { source } => source,
+            Self::TwoFistedFisherman { source, .. } => source,
         }
     }
 
@@ -1569,6 +1571,37 @@ fn anytime_play(
                         }
                     };
                 }
+                Some(Play {
+                    kind: PlayKind::TwoFistedFisherman {
+                        source,
+                        ..
+                    },
+                    ..
+                }) => {
+                    
+                    if *source == hand_id {
+                        // Don't cancel our own play.
+                    // TODO remove true ||
+                    } else if true || should_get_rid_of_divine_intervention(
+                        &cards,
+                        &hand,
+                        &stack
+                    ) {
+                        // It's probably time to use this up. Let's avoid
+                        // needing to skip our own turn.
+                        return Some(AnytimePlay {
+                            selection: AnytimePlaySelection::DivineIntervention,
+                        });
+                    } else if memories.memory(responder_id)
+                        .likely_to_fill_basket_soon(
+                            *source
+                        ).is_some() {
+                        // We know it will likely hurt to miss this chance to ask.
+                        return Some(AnytimePlay {
+                            selection: AnytimePlaySelection::DivineIntervention,
+                        });
+                    };
+                }
                 Some(Play { kind, .. }) => {
                     todo!("zingers::DIVINE_INTERVENTION Actually play: {kind:?}")
                 }
@@ -2505,9 +2538,20 @@ pub fn update_and_render(
                                                 &mut state.animations,
                                                 source.into()
                                             );
-                                            // Cancel the card we by removing it from
-                                            // the stack.
-                                            state.stack.pop();
+
+                                            if let Some(Play {
+                                                kind: PlayKind::TwoFistedFisherman {
+                                                    cancelled,
+                                                    ..
+                                                },
+                                                ..
+                                            }) = state.stack.last_mut() {
+                                                *cancelled = true;
+                                            } else {
+                                                // Cancel the card we targetted by 
+                                                // removing it from the stack.
+                                                state.stack.pop();
+                                            }
 
                                             Selection::Response(())
                                         }
@@ -3840,12 +3884,14 @@ pub fn update_and_render(
                                     }
                                 }
                             }
-                            PlayKind::TwoFistedFisherman{ source: _ } => {
-                                // If this turns out to be false ever, we need to
-                                // store that the player gets an extra turn somewhere
-                                // more persistently.
-                                assert!(state.stack.is_empty());
-                                go_again = true;
+                            PlayKind::TwoFistedFisherman{ source: _, cancelled } => {
+                                if !cancelled {
+                                    // If this turns out to be false ever, we need to
+                                    // store that the player gets an extra turn somewhere
+                                    // more persistently.
+                                    assert!(state.stack.is_empty());
+                                    go_again = true;
+                                }
                             }
                         }
 
