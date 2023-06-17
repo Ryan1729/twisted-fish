@@ -1581,8 +1581,7 @@ fn anytime_play(
                     
                     if *source == hand_id {
                         // Don't cancel our own play.
-                    // TODO remove true ||
-                    } else if true || should_get_rid_of_divine_intervention(
+                    } else if should_get_rid_of_divine_intervention(
                         &cards,
                         &hand,
                         &stack
