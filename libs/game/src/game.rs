@@ -107,6 +107,7 @@ macro_rules! to_next_turn {
         // Time for the next turn.
         $state.turn_id = $state.turn_id.next_looping();
         $state.sub_turn_index = HandId::COUNT + 1;
+        $state.selection.card_index = $state.cards.player.len().saturating_sub(1);
         $state.selection.player_menu = Default::default();
         $state.cpu_menu = CpuMenu::default();
         $state.done_something_this_turn = false;
@@ -293,7 +294,7 @@ pub enum AnimationAction {
 mod question {
     use super::*;
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     pub struct Question {
         pub target: HandId,
         pub suit: Suit,
@@ -523,7 +524,7 @@ pub enum PlayerAskingSubMenu {
     TwoFistedFisherman,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum CpuMenu {
     #[default]
     Selecting,
@@ -678,9 +679,9 @@ impl State {
         // Gives player the game warden and glass bottom boat. (16)
         //let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
         // Gives Cpu2 the dead scuba diver and no fishing. (8)
-        //let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
+        let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
         // Gives player the net and no fishing. (8)
-        let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
+        //let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
         // }
 
         let mut rng = xs::from_seed(seed);
@@ -1578,7 +1579,6 @@ fn anytime_play(
                     },
                     ..
                 }) => {
-                    
                     if *source == hand_id {
                         // Don't cancel our own play.
                     } else if should_get_rid_of_divine_intervention(
