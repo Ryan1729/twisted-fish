@@ -1509,6 +1509,7 @@ fn anytime_play(
 
         if card == zingers::DEAD_SCUBA_DIVER {
             if let Some(almost_complete) = find_almost_complete_baskets(hand) {
+                if true { panic!() }
                 // TODO? Think more carefully about how to make this decision?
                 let count = almost_complete_basket_count(almost_complete);
                 // For testing; remove later
@@ -3505,32 +3506,16 @@ pub fn update_and_render(
                                                 let mut zinger_to_play = None;
                                                 // TODO? randomize order through the cards here to make Cpu
                                                 // player less predictable?
+                                                
+                                                // TODO? Collect proirity ordered indexes of cards to visit so we only loop through once?
+                                                // Priority Zingers
                                                 for card in hand.iter() {
-                                                    if let Some(rank) = models::get_rank(card) {
-                                                        let besides = HandId::besides(hand_id);
-                                                        let target_id = besides[
-                                                            xs::range(&mut state.rng, 0..besides.len() as u32) as usize
-                                                        ];
-
-                                                        // TODO? Decide what suit to ask for intelligently
-                                                        // in this case? Does it matter given that asking
-                                                        // for a card you have as a distraction is viable?
-                                                        // Maybe only ask for a card you have when your
-                                                        // have 4 in your hand already?
-                                                        let suit = Suit::from_rng(&mut state.rng);
-
-                                                        let mut question = Question::default();
-                                                        question.target = target_id;
-                                                        question.suit = suit;
-
-                                                        *menu = CpuMenu::Asking(
-                                                            rank,
-                                                            question,
-                                                        );
-                                                        state.done_something_this_turn = true;
-                                                        break
-                                                    } else if let Some(zinger) = models::get_zinger(card) {
+                                                    if let Some(zinger) = models::get_zinger(card) {
+                                                        // TODO Consolidate cases with other loop somehow, including possibly combining loops
                                                         match zinger {
+                                                            Zinger::DeadScubaDiver => {
+                                                                todo!("Play DeadScubaDiver")
+                                                            }
                                                             Zinger::TheNet => {
                                                                 todo!("Play Net")
                                                             }
@@ -3543,6 +3528,7 @@ pub fn update_and_render(
                                                                     &state.stack,
                                                                 ) {
                                                                     zinger_to_play = Some(zinger);
+                                                                    break
                                                                 } else {
                                                                     // Don't discard it
                                                                 }
@@ -3550,11 +3536,62 @@ pub fn update_and_render(
                                                             // TODO Play other Zingers sometimes.
                                                             _ => { todo!("Attempted to play {zinger:?}") }
                                                         }
-                                                    } else {
-                                                        debug_assert!(false, "Non-fish, non-zinger card!? {card}");
                                                     }
                                                 }
 
+                                                if zinger_to_play.is_none() {
+                                                    for card in hand.iter() {
+                                                        if let Some(rank) = models::get_rank(card) {
+                                                            let besides = HandId::besides(hand_id);
+                                                            let target_id = besides[
+                                                                xs::range(&mut state.rng, 0..besides.len() as u32) as usize
+                                                            ];
+    
+                                                            // TODO? Decide what suit to ask for intelligently
+                                                            // in this case? Does it matter given that asking
+                                                            // for a card you have as a distraction is viable?
+                                                            // Maybe only ask for a card you have when your
+                                                            // have 4 in your hand already?
+                                                            let suit = Suit::from_rng(&mut state.rng);
+    
+                                                            let mut question = Question::default();
+                                                            question.target = target_id;
+                                                            question.suit = suit;
+    
+                                                            *menu = CpuMenu::Asking(
+                                                                rank,
+                                                                question,
+                                                            );
+                                                            state.done_something_this_turn = true;
+                                                            break
+                                                        } else if let Some(zinger) = models::get_zinger(card) {
+                                                            match zinger {
+                                                                Zinger::TheNet => {
+                                                                    todo!("Play Net")
+                                                                }
+                                                                Zinger::DivineIntervention => {
+                                                                    if state.done_something_this_turn {
+                                                                        // Cannot play it
+                                                                    } else if should_get_rid_of_divine_intervention(
+                                                                        &state.cards,
+                                                                        state.cards.hand(hand_id),
+                                                                        &state.stack,
+                                                                    ) {
+                                                                        zinger_to_play = Some(zinger);
+                                                                        break
+                                                                    } else {
+                                                                        // Don't discard it
+                                                                    }
+                                                                }
+                                                                // TODO Play other Zingers sometimes.
+                                                                _ => { todo!("Attempted to play {zinger:?}") }
+                                                            }
+                                                        } else {
+                                                            debug_assert!(false, "Non-fish, non-zinger card!? {card}");
+                                                        }
+                                                    }
+                                                }
+    
                                                 match zinger_to_play {
                                                     Some(Zinger::DivineIntervention) => {
                                                         discard_divine_intervention(
