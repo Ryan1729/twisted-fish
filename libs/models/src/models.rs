@@ -502,6 +502,52 @@ impl Hand {
         slice[slice.len() - 1] = CardOption::NONE;
         output
     }
+
+    pub fn ordering_iter(&self, ordering: HandOrdering) -> impl Iterator<Item = Card> + '_ {
+        compile_time_assert!{DECK_SIZE as u64 <= CardIndex::MAX as u64}
+        
+        let mut ordering_index = 0;
+        std::iter::from_fn(move || {
+            let i = ordering.0[ordering_index];
+
+            ordering_index += 1;
+
+            self.get(i)
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct HandOrdering([CardIndex; DECK_SIZE as usize]);
+
+impl Default for HandOrdering {
+    fn default() -> Self {
+        let mut indexes = [0; DECK_SIZE as usize];
+
+        for i in 1..DECK_SIZE {
+            indexes[i as usize] = i;
+        }
+
+        Self(indexes)
+    }
+}
+
+impl HandOrdering {
+    pub fn move_to_first(&mut self, to_move: CardIndex) {
+        let mut currently_at = 0;
+        for (i, e) in self.0.iter().enumerate() {
+            if *e == to_move {
+                currently_at = i;
+                break
+            }
+        }
+
+        let mut temp = self.0[currently_at];
+        for i in (1..=currently_at).rev() {
+            self.0[currently_at] = self.0[currently_at - 1];
+        }
+        self.0[0] = temp;
+    }
 }
 
 #[repr(u8)]
