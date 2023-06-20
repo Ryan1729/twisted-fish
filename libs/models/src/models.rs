@@ -544,9 +544,23 @@ impl HandOrdering {
 
         let mut temp = self.0[currently_at];
         for i in (1..=currently_at).rev() {
-            self.0[currently_at] = self.0[currently_at - 1];
+            self.0[i] = self.0[i - 1];
         }
         self.0[0] = temp;
+
+        self.assert_counts();
+    }
+
+    #[track_caller]
+    fn assert_counts(&self) {
+        let mut counts = [0; DECK_SIZE as usize];
+        for &e in self.0.iter() {
+            counts[e as usize] += 1;
+        }
+
+        for (i, &e) in counts.iter().enumerate() {
+            assert_eq!(e, 1, "index {i} showed up not exactly once. {self:?} {counts:?}");
+        }
     }
 }
 
