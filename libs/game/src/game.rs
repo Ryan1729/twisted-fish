@@ -1509,7 +1509,6 @@ fn anytime_play(
 
         if card == zingers::DEAD_SCUBA_DIVER {
             if let Some(almost_complete) = find_almost_complete_baskets(hand) {
-                if true { panic!() }
                 // TODO? Think more carefully about how to make this decision?
                 let count = almost_complete_basket_count(almost_complete);
                 // For testing; remove later
@@ -2417,171 +2416,152 @@ pub fn update_and_render(
             }
         } {
             Some(&responder_id) => {
-                if {
-                    match state.stack.last() {
-                        Some(Play {kind, ..}) => kind.source() == responder_id,
-                        None => false,
-                    }
-                } {
-                    // We've looped around to the participant whose played the top of
-                    // the stack. We don't want to allow them to respond to
-                    // themselves, at least at the moment.
-                    match state.stack.last_mut() {
-                        Some(Play { sub_turn_index, ..}) => {
-                            *sub_turn_index += 1;
-                        },
-                        None => {
-                            state.sub_turn_index += 1;
-                        },
-                    }
+                // Give this participant a chance to respond.
+                enum Selection {
+                    Response(()),
+                    Nothing,
+                    Pending,
+                }
+
+                let hand = state.cards.hand(responder_id);
+
+                let selection = if hand.is_empty() {
+                    Selection::Nothing
                 } else {
-                    // Give this participant a chance to respond.
-                    enum Selection {
-                        Response(()),
-                        Nothing,
-                        Pending,
-                    }
-
-                    let hand = state.cards.hand(responder_id);
-
-                    let selection = if hand.is_empty() {
-                        Selection::Nothing
-                    } else {
-                        match CpuId::try_from(responder_id) {
-                            Err(()) => {
-                                if let (Some(available), false) = (
-                                    AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
-                                    state.selection.player_selection.declined
-                                ) {
-                                    match do_play_anytime_menu(
-                                        new_group!(),
-                                        &mut state.cards,
-                                        &mut state.animations,
-                                        &mut state.rng,
-                                        &mut state.selection.player_selection,
-                                        available,
-                                    ) {
-                                        AnytimeOutcome::Done => Selection::Response(()),
-                                        AnytimeOutcome::Hold => Selection::Pending,
-                                    }
-                                } else {
-                                    Selection::Nothing
-                                }
-                            }
-                            Ok(source) => {
-                                if let Some(AnytimePlay { selection })
-                                = anytime_play(
+                    match CpuId::try_from(responder_id) {
+                        Err(()) => {
+                            if let (Some(available), false) = (
+                                AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
+                                state.selection.player_selection.declined
+                            ) {
+                                match do_play_anytime_menu(
+                                    new_group!(),
+                                    &mut state.cards,
+                                    &mut state.animations,
                                     &mut state.rng,
-                                    &state.stack,
-                                    &state.cards,
-                                    &state.memories,
-                                    source
+                                    &mut state.selection.player_selection,
+                                    available,
                                 ) {
-                                    match selection {
-                                        AnytimePlaySelection::GameWarden(target) => {
-                                            if let Some(()) = perform_game_warden(
-                                                &mut state.cards,
-                                                &mut state.animations,
-                                                &mut state.rng,
-                                                Targeting {
-                                                    source: responder_id,
-                                                    target,
-                                                },
-                                            ) {
-                                                Selection::Response(())
-                                            } else {
-                                                debug_assert!(false, "perform_game_warden failed");
-                                                Selection::Nothing
-                                            }
-                                        },
-                                        AnytimePlaySelection::GlassBottomBoat(target) => {
-                                            let target_hand = state.cards.hand_mut(target);
-                                            let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
-                                            let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
-
-                                            state.memories.memory_mut(source).known(target, card);
-
-                                            let at = get_card_position(
-                                                spread(target),
-                                                target_hand.len(),
-                                                i,
-                                            );
-
-                                            state.animations.push(Animation {
-                                                card,
-                                                at,
-                                                target: in_front_of(responder_id),
-                                                action: AnimationAction::AnimateBackToHand(target),
-                                                .. <_>::default()
-                                            });
-
-                                            discard_glass_bottom_boat(
-                                                &mut state.cards,
-                                                &mut state.animations,
-                                                source.into()
-                                            );
-
-                                            Selection::Response(())
-                                        },
-                                        AnytimePlaySelection::DeadScubaDiver(almost_basket, scuba_i) => {
-                                            play_dead_scuba_diver(
-                                                &mut state.cards,
-                                                responder_id,
-                                                almost_basket,
-                                                scuba_i
-                                            );
-                                            Selection::Response(())
-                                        },
-                                        AnytimePlaySelection::DivineIntervention => {
-                                            discard_divine_intervention(
-                                                &mut state.cards,
-                                                &mut state.animations,
-                                                source.into()
-                                            );
-
-                                            if let Some(Play {
-                                                kind: PlayKind::TwoFistedFisherman {
-                                                    cancelled,
-                                                    ..
-                                                },
-                                                ..
-                                            }) = state.stack.last_mut() {
-                                                *cancelled = true;
-                                            } else {
-                                                // Cancel the card we targetted by 
-                                                // removing it from the stack.
-                                                state.stack.pop();
-                                            }
-
-                                            Selection::Response(())
-                                        }
-                                    }
-                                } else {
-                                    Selection::Nothing
+                                    AnytimeOutcome::Done => Selection::Response(()),
+                                    AnytimeOutcome::Hold => Selection::Pending,
                                 }
+                            } else {
+                                Selection::Nothing
                             }
                         }
-                    };
+                        Ok(source) => {
+                            if let Some(AnytimePlay { selection })
+                            = anytime_play(
+                                &mut state.rng,
+                                &state.stack,
+                                &state.cards,
+                                &state.memories,
+                                source
+                            ) {
+                                match selection {
+                                    AnytimePlaySelection::GameWarden(target) => {
+                                        if let Some(()) = perform_game_warden(
+                                            &mut state.cards,
+                                            &mut state.animations,
+                                            &mut state.rng,
+                                            Targeting {
+                                                source: responder_id,
+                                                target,
+                                            },
+                                        ) {
+                                            Selection::Response(())
+                                        } else {
+                                            debug_assert!(false, "perform_game_warden failed");
+                                            Selection::Nothing
+                                        }
+                                    },
+                                    AnytimePlaySelection::GlassBottomBoat(target) => {
+                                        let target_hand = state.cards.hand_mut(target);
+                                        let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
+                                        let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
 
-                    match selection {
-                        Selection::Response(()) => {
-                            // TODO trigger an animation that will get us out of this state
-                        },
-                        Selection::Nothing => {
-                            // Passing the chance to counter
-                            match state.stack.last_mut() {
-                                Some(Play { sub_turn_index, ..}) => {
-                                    *sub_turn_index += 1;
-                                },
-                                None => {
-                                    state.sub_turn_index += 1;
-                                },
+                                        state.memories.memory_mut(source).known(target, card);
+
+                                        let at = get_card_position(
+                                            spread(target),
+                                            target_hand.len(),
+                                            i,
+                                        );
+
+                                        state.animations.push(Animation {
+                                            card,
+                                            at,
+                                            target: in_front_of(responder_id),
+                                            action: AnimationAction::AnimateBackToHand(target),
+                                            .. <_>::default()
+                                        });
+
+                                        discard_glass_bottom_boat(
+                                            &mut state.cards,
+                                            &mut state.animations,
+                                            source.into()
+                                        );
+
+                                        Selection::Response(())
+                                    },
+                                    AnytimePlaySelection::DeadScubaDiver(almost_basket, scuba_i) => {
+                                        play_dead_scuba_diver(
+                                            &mut state.cards,
+                                            responder_id,
+                                            almost_basket,
+                                            scuba_i
+                                        );
+                                        Selection::Response(())
+                                    },
+                                    AnytimePlaySelection::DivineIntervention => {
+                                        discard_divine_intervention(
+                                            &mut state.cards,
+                                            &mut state.animations,
+                                            source.into()
+                                        );
+
+                                        if let Some(Play {
+                                            kind: PlayKind::TwoFistedFisherman {
+                                                cancelled,
+                                                ..
+                                            },
+                                            ..
+                                        }) = state.stack.last_mut() {
+                                            *cancelled = true;
+                                        } else {
+                                            // Cancel the card we targetted by 
+                                            // removing it from the stack.
+                                            state.stack.pop();
+                                        }
+
+                                        Selection::Response(())
+                                    }
+                                }
+                            } else {
+                                Selection::Nothing
                             }
-                        },
-                        Selection::Pending => {
-                            assert_eq!(responder_id, HandId::Player);
-                            // Keep drawing the menu for the player until they choose
                         }
+                    }
+                };
+
+                match selection {
+                    Selection::Response(()) => {
+                        // TODO trigger an animation that will get us out of this state
+                    },
+                    Selection::Nothing => {
+                        // Passing the chance to counter
+                        match state.stack.last_mut() {
+                            Some(Play { sub_turn_index, ..}) => {
+                                *sub_turn_index += 1;
+                            },
+                            None => {
+                                state.sub_turn_index += 1;
+                            },
+                        }
+                    },
+                    Selection::Pending => {
+                        assert_eq!(responder_id, HandId::Player);
+                        // Keep drawing the menu for the player until they choose
                     }
                 }
             }
@@ -3513,9 +3493,10 @@ pub fn update_and_render(
                                                     if models::get_zinger(card).is_some() {
                                                         // TODO? Are all zingers high priority?
                                                         ordering.move_to_first(i);
+dbg!(i, &ordering);
                                                     }
                                                 }
-
+dbg!(&ordering);
                                                 for card in hand.ordering_iter(ordering) {
                                                     if let Some(rank) = models::get_rank(card) {
                                                         let besides = HandId::besides(hand_id);
@@ -3561,6 +3542,9 @@ pub fn update_and_render(
                                                                 } else {
                                                                     // Don't discard it
                                                                 }
+                                                            }
+                                                            Zinger::TwoFistedFisherman => {
+                                                                // Can't play that now. Wait until asking for something.
                                                             }
                                                             // TODO Play other Zingers sometimes.
                                                             _ => { todo!("Attempted to play {zinger:?}") }
