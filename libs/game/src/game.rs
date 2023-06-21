@@ -500,7 +500,12 @@ pub enum PlayerMenu {
     NetFished {
         predicate: NetPredicate,
         drew: Option<Card>
-    }
+    },
+    Lure {
+        target: CpuId,
+        rank: Rank,
+        suit: Suit,
+    },
 }
 
 impl Default for PlayerMenu {
@@ -2667,8 +2672,18 @@ pub fn update_and_render(
                                                                             predicate: <_>::default(),
                                                                         };
                                                                     },
-                                                                    Zinger::TheLure => {
-                                                                        todo!("Zinger::TheLure")
+                                                                    Zinger::TheLure => if state.done_something_this_turn {
+                                                                        let message = b"This card can only be played at the start of your turn.";
+                                                                        let mut vec = Vec::with_capacity(message.len());
+                                                                        vec.extend(message);
+                                                                        *sub_menu = PlayerSelectingSubMenu::Message(vec);
+                                                                    } else {
+                                                                        state.selection.card_index = selected;
+                                                                        state.selection.player_menu = PlayerMenu::Lure {
+                                                                            target: <_>::default(),
+                                                                            rank: <_>::default(),
+                                                                            suit: <_>::default(),
+                                                                        };
                                                                     },
                                                                     Zinger::DivineIntervention => {
                                                                         todo!("Zinger::DivineIntervention")
@@ -2983,6 +2998,11 @@ pub fn update_and_render(
                                             drew,
                                         } => {
                                             todo!("PlayerMenu::NetFished")
+                                        }
+                                        PlayerMenu::Lure {
+                                            ..
+                                        } => {
+                                            todo!("PlayerMenu::Lure")
                                         }
                                         PlayerMenu::Asking {
                                             used,
