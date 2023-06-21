@@ -668,7 +668,7 @@ pub struct State {
 
 impl State {
     pub fn new(seed: Seed) -> State {
-        const INITIAL_HAND_SIZE: u8 = 8;//16;
+        const INITIAL_HAND_SIZE: u8 = 16;//8;
         // For debugging: {
         // Gives player multiple zingers. (8)
         //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
@@ -677,9 +677,9 @@ impl State {
         // Gives player glass bottom boat. (8)
         //let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
         // Gives player the game warden and glass bottom boat. (16)
-        //let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
+        let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
         // Gives Cpu2 the dead scuba diver and no fishing. (8)
-        let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
+        //let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
         // Gives player the net and no fishing. (8)
         //let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
         // }
@@ -1921,6 +1921,8 @@ fn do_play_anytime_menu(
         );
 
         let submit_base_xy = base_xy + CARD_WIDTH;
+
+        group.ctx.set_next_hot(Submit);
 
         return if do_button(
             &mut group,
@@ -3493,10 +3495,9 @@ pub fn update_and_render(
                                                     if models::get_zinger(card).is_some() {
                                                         // TODO? Are all zingers high priority?
                                                         ordering.move_to_first(i);
-dbg!(i, &ordering);
                                                     }
                                                 }
-dbg!(&ordering);
+
                                                 for card in hand.ordering_iter(ordering) {
                                                     if let Some(rank) = models::get_rank(card) {
                                                         let besides = HandId::besides(hand_id);
