@@ -3525,7 +3525,8 @@ pub fn update_and_render(
                                                     } else if let Some(zinger) = models::get_zinger(card) {
                                                         match zinger {
                                                             Zinger::DeadScubaDiver => {
-                                                                todo!("Play DeadScubaDiver")
+                                                                // TODO? is there a case where we'd rather play
+                                                                // it here than wait to respond to our own turn?
                                                             }
                                                             Zinger::TheNet => {
                                                                 todo!("Play Net")
