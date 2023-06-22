@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, HandOrdering, Predicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, get_rank, zingers};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, HandOrdering, Predicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, get_rank, get_suit, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -2891,8 +2891,31 @@ pub fn update_and_render(
                                                     );
 
                                                     let mut found = None;
-                                                    for i in 0..target_hand.len() {
-                                                        todo!("find via NetPredicate")
+                                                    match *predicate {
+                                                        NetPredicate::Rank(rank) => {
+                                                            for (i, card) in target_hand.enumerated_iter() {
+                                                                // TODO pick best one to give up
+                                                                match (get_rank(card), get_suit(card)) {
+                                                                    (Some(r), Some(suit)) if r == rank => {
+                                                                        found = Some((rank, suit, i));
+                                                                        break
+                                                                    }
+                                                                    _ => {}
+                                                                }
+                                                            }
+                                                        }
+                                                        NetPredicate::Suit(suit) => {
+                                                            for (i, card) in target_hand.enumerated_iter() {
+                                                                // TODO pick best one to give up
+                                                                match (get_rank(card), get_suit(card)) {
+                                                                    (Some(rank), Some(s)) if s == suit => {
+                                                                        found = Some((rank, suit, i));
+                                                                        break
+                                                                    }
+                                                                    _ => {}
+                                                                }
+                                                            }
+                                                        }
                                                     }
 
                                                     if let Some((rank, suit, i)) = found {
