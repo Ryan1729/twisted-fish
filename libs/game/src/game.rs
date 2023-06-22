@@ -2890,14 +2890,25 @@ pub fn update_and_render(
                                                         Predicate::Net(*predicate)
                                                     );
 
+                                                    let memory = state.memories.memory(*target);
                                                     let mut found = None;
                                                     match *predicate {
                                                         NetPredicate::Rank(rank) => {
                                                             for (i, card) in target_hand.enumerated_iter() {
-                                                                // TODO pick best one to give up
                                                                 match (get_rank(card), get_suit(card)) {
                                                                     (Some(r), Some(suit)) if r == rank => {
                                                                         found = Some((rank, suit, i));
+                                                                        // TODO? pick best one to give up, when there's no unlikely ones left?
+                                                                        // If this is an undesirable to give up card, keep looking.
+                                                                        if memory.is_likely_to_fill_rank_soon(
+                                                                            target_hand_id,
+                                                                            rank
+                                                                        ) || memory.is_likely_to_fill_rank_soon(
+                                                                            HandId::Player,
+                                                                            rank
+                                                                        ) {
+                                                                            continue
+                                                                        }
                                                                         break
                                                                     }
                                                                     _ => {}
@@ -2906,10 +2917,20 @@ pub fn update_and_render(
                                                         }
                                                         NetPredicate::Suit(suit) => {
                                                             for (i, card) in target_hand.enumerated_iter() {
-                                                                // TODO pick best one to give up
                                                                 match (get_rank(card), get_suit(card)) {
                                                                     (Some(rank), Some(s)) if s == suit => {
                                                                         found = Some((rank, suit, i));
+                                                                        // TODO? pick best one to give up, when there's no unlikely ones left?
+                                                                        // If this is an undesirable to give up card, keep looking.
+                                                                        if memory.is_likely_to_fill_rank_soon(
+                                                                            target_hand_id,
+                                                                            rank
+                                                                        ) || memory.is_likely_to_fill_rank_soon(
+                                                                            HandId::Player,
+                                                                            rank
+                                                                        ) {
+                                                                            continue
+                                                                        }
                                                                         break
                                                                     }
                                                                     _ => {}
