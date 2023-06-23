@@ -2536,7 +2536,7 @@ pub fn update_and_render(
                                         }) = state.stack.last_mut() {
                                             *cancelled = true;
                                         } else {
-                                            // Cancel the card we targetted by 
+                                            // Cancel the card we targetted by
                                             // removing it from the stack.
                                             state.stack.pop();
                                         }
@@ -2665,7 +2665,12 @@ pub fn update_and_render(
                                                                         vec.extend(message);
                                                                         *sub_menu = PlayerSelectingSubMenu::Message(vec);
                                                                     },
-                                                                    Zinger::TheNet => {
+                                                                    Zinger::TheNet => if state.done_something_this_turn {
+                                                                        let message = b"This card can only be played at the start of your turn.";
+                                                                        let mut vec = Vec::with_capacity(message.len());
+                                                                        vec.extend(message);
+                                                                        *sub_menu = PlayerSelectingSubMenu::Message(vec);
+                                                                    } else {
                                                                         state.selection.card_index = selected;
                                                                         state.selection.player_menu = PlayerMenu::Net {
                                                                             target: <_>::default(),
@@ -2965,8 +2970,7 @@ pub fn update_and_render(
                                                             .. <_>::default()
                                                         });
 
-                                                        *menu = PlayerMenu::default();
-                                                        state.done_something_this_turn = true;
+                                                        to_next_turn!(state);
                                                     } else {
                                                         p_net_handle_negative_response!();
                                                     }
@@ -3041,7 +3045,9 @@ pub fn update_and_render(
                                             predicate,
                                             drew,
                                         } => {
-                                            todo!("PlayerMenu::NetFished")
+                                            // TODO get rid of this enum variant entirely, if possible.
+                                            // This card counts as a turn, so just go on to the next turn.
+                                            to_next_turn!(state);
                                         }
                                         PlayerMenu::Lure {
                                             ..
@@ -3552,7 +3558,7 @@ pub fn update_and_render(
                                                 let mut zinger_to_play = None;
                                                 // TODO? randomize order through the cards here to make Cpu
                                                 // player less predictable?
-                                                
+
                                                 let mut ordering = HandOrdering::default();
 
                                                 for (i, card) in hand.enumerated_iter() {
@@ -3619,7 +3625,7 @@ pub fn update_and_render(
                                                         debug_assert!(false, "Non-fish, non-zinger card!? {card}");
                                                     }
                                                 }
-    
+
                                                 match zinger_to_play {
                                                     Some(Zinger::DivineIntervention) => {
                                                         discard_divine_intervention(
@@ -4302,31 +4308,28 @@ const CARD_QUICK_SELECT_WH: unscaled::WH = unscaled::WH {
     ),
 };
 
+const CARD_WIN_H: unscaled::Inner = CARD_HEIGHT.get()
+    + WINDOW_CONTENT_OFFSET.h.get() * 2;
+
 const ASKING_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 8;
 
-    const WIN_H: unscaled::Inner = CARD_HEIGHT.get()
-    + WINDOW_CONTENT_OFFSET.h.get() * 2;
-
     unscaled::Rect {
         x: X(OFFSET),
-        y: Y((command::HEIGHT - WIN_H) / 2),
+        y: Y((command::HEIGHT - CARD_WIN_H) / 2),
         w: W(command::WIDTH - OFFSET * 2),
-        h: H(WIN_H),
+        h: H(CARD_WIN_H),
     }
 };
 
 const PLAYER_TWO_FISTED_FISHERMAN_WINDOW: unscaled::Rect = {
     const OFFSET: unscaled::Inner = 8;
 
-    const WIN_H: unscaled::Inner = CARD_HEIGHT.get()
-    + WINDOW_CONTENT_OFFSET.h.get() * 2;
-
     unscaled::Rect {
         x: X(OFFSET),
-        y: Y((command::HEIGHT - WIN_H) / 2),
+        y: Y((command::HEIGHT - CARD_WIN_H) / 2),
         w: W(command::WIDTH - OFFSET * 2),
-        h: H(WIN_H),
+        h: H(CARD_WIN_H),
     }
 };
 
