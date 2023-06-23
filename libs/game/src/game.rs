@@ -497,10 +497,6 @@ pub enum PlayerMenu {
         target: CpuId,
         predicate: NetPredicate,
     },
-    NetFished {
-        predicate: NetPredicate,
-        drew: Option<Card>
-    },
     Lure {
         target: CpuId,
         rank: Rank,
@@ -2779,8 +2775,7 @@ pub fn update_and_render(
                                             );
 
                                             let target_base_xy = label_card_xy + CARD_WIDTH;
-                                            // TODO replace reference to ASKING_WINDOW with something else
-                                            let target_xy = target_base_xy + (ASKING_WINDOW.h / 5);
+                                            let target_xy = target_base_xy + H(CARD_WIN_H / 5);
 
                                             let group = new_group!();
 
@@ -2838,12 +2833,6 @@ pub fn update_and_render(
 
                                                         let drew = state.cards.deck.draw();
 
-                                                        *menu = PlayerMenu::NetFished {
-                                                            predicate: core::mem::take(predicate),
-                                                            drew,
-                                                        };
-                                                        state.done_something_this_turn = true;
-
                                                         if let Some(card) = drew {
                                                             let at = DECK_XY;
 
@@ -2860,6 +2849,9 @@ pub fn update_and_render(
                                                                 .. <_>::default()
                                                             });
                                                         }
+
+                                                        // This card counts as a turn, so just go on to the next turn.
+                                                        to_next_turn!(state);
                                                     }
                                                 }
 
@@ -3041,14 +3033,6 @@ pub fn update_and_render(
                                                 // do nothing
                                             }
                                         },
-                                        PlayerMenu::NetFished {
-                                            predicate,
-                                            drew,
-                                        } => {
-                                            // TODO get rid of this enum variant entirely, if possible.
-                                            // This card counts as a turn, so just go on to the next turn.
-                                            to_next_turn!(state);
-                                        }
                                         PlayerMenu::Lure {
                                             ..
                                         } => {
