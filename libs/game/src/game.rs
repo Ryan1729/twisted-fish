@@ -1936,6 +1936,7 @@ fn do_play_anytime_menu(
                 text: b"Done",
             }
         ) {
+            player_selection.viewing = None;
             Done
         } else {
             Hold
