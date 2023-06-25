@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, HandOrdering, Predicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, get_rank, get_suit, zingers};
+use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, HandOrdering, Predicate, LurePredicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, fish_card, get_rank, get_suit, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -52,7 +52,7 @@ macro_rules! cpu_handle_negative_response {
             allow_to_respond!($state);
         } else {
             let suit = $suit;
-            let target_card = models::fish_card($rank, suit);
+            let target_card = fish_card($rank, suit);
             let my_len = $state.cards.hand(hand_id).len();
 
             let card_option = $state.cards.deck.draw();
@@ -413,7 +413,7 @@ mod question {
             self.description.push(b' ');
 
             if let Some(card) = drew {
-                let target_card = models::fish_card(rank, self.suit);
+                let target_card = fish_card(rank, self.suit);
                 if card == target_card {
                     self.description.extend_from_slice(
                         b"and you got what you asked for!"
@@ -499,8 +499,7 @@ pub enum PlayerMenu {
     },
     Lure {
         target: CpuId,
-        rank: Rank,
-        suit: Suit,
+        predicate: LurePredicate,
     },
 }
 
@@ -957,6 +956,7 @@ mod ui {
         AnytimeCard,
         RankSelect,
         NetPredicate,
+        LurePredicate,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -1317,8 +1317,8 @@ fn find_almost_complete_baskets_works_on_this_previously_panicking_example() {
     hand.push(17);
     hand.push(67);
     hand.push(27);
-    hand.push(models::fish_card(Rank::DOGFISH, Suit::Yellow));
-    hand.push(models::fish_card(Rank::DOGFISH, Suit::Purple));
+    hand.push(fish_card(Rank::DOGFISH, Suit::Yellow));
+    hand.push(fish_card(Rank::DOGFISH, Suit::Purple));
     hand.push(42);
     hand.push(30);
 
@@ -1332,8 +1332,8 @@ fn find_almost_complete_baskets_works_on_this_previously_panicking_example() {
 fn find_almost_complete_baskets_works_on_this_simplifed_previously_panicking_example() {
     let mut hand = Hand::default();
 
-    hand.push(models::fish_card(Rank::DOGFISH, Suit::Yellow));
-    hand.push(models::fish_card(Rank::DOGFISH, Suit::Purple));
+    hand.push(fish_card(Rank::DOGFISH, Suit::Yellow));
+    hand.push(fish_card(Rank::DOGFISH, Suit::Purple));
 
     assert_eq!(
         find_almost_complete_baskets(&hand),
@@ -1344,7 +1344,7 @@ fn find_almost_complete_baskets_works_on_this_simplifed_previously_panicking_exa
 #[test]
 fn find_almost_complete_baskets_returns_none_on_this_previously_misbehaving_example() {
     let mut hand = Hand::default();
-    hand.push(models::fish_card(Rank::DOGFISH, Suit::Yellow));
+    hand.push(fish_card(Rank::DOGFISH, Suit::Yellow));
 
     assert_eq!(
         find_almost_complete_baskets(&hand),
@@ -1727,6 +1727,20 @@ fn discard_two_fisted_fisherman(
     )
 }
 
+fn discard_lure(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    source: HandId,
+) {
+    discard_given_card(
+        cards,
+        animations,
+        source,
+        zingers::THE_LURE,
+        AfterDiscard::Nothing,
+    )
+}
+
 fn discard_net(
     cards: &mut Cards,
     animations: &mut Animations,
@@ -1865,6 +1879,7 @@ fn do_play_anytime_menu(
             Submit => Some(Section::Submit),
             Zero
             | AskSuit
+            | LurePredicate
             | NetPredicate => None,
         };
 
@@ -2036,7 +2051,7 @@ fn do_play_anytime_menu(
             let mut suit_xy = (rank_xy + (RANK_SELECT_WH.w / 2)) - (CARD_WIDTH / 2) + gfx::CHEVRON_H;
             for &suit in Suit::ALL.iter().rev() {
                 group.commands.draw_card(
-                    models::fish_card(player_selection.rank, suit),
+                    fish_card(player_selection.rank, suit),
                     suit_xy
                 );
 
@@ -2153,6 +2168,7 @@ fn do_play_anytime_menu(
             Zero
             | AskSuit
             | Submit
+            | LurePredicate
             | NetPredicate => None,
         };
 
@@ -2270,7 +2286,7 @@ fn should_use_no_fishing_against(
 
     match predicate {
         Predicate::RankSuit(rank, suit) => {
-            hand.contains(models::fish_card(rank, suit))
+            hand.contains(fish_card(rank, suit))
             && memory.is_likely_to_fill_rank_soon(target, rank)
         },
         Predicate::Net(predicate) => {
@@ -2301,7 +2317,7 @@ fn can_and_should_play_two_fisted_fisherman(
     // TODO? Does this capture the criteria we want to capture?
     for rank in Rank::ALL {
         for suit in Suit::ALL {
-            if hand.contains(models::fish_card(rank, suit)) {
+            if hand.contains(fish_card(rank, suit)) {
                 for target in targets {
                     if memory.is_likely_to_fill_rank_soon(target, rank) {
                         return true
@@ -2683,8 +2699,7 @@ pub fn update_and_render(
                                                                         state.selection.card_index = selected;
                                                                         state.selection.player_menu = PlayerMenu::Lure {
                                                                             target: <_>::default(),
-                                                                            rank: <_>::default(),
-                                                                            suit: <_>::default(),
+                                                                            predicate: <_>::default(),
                                                                         };
                                                                     },
                                                                     Zinger::DivineIntervention => {
@@ -2955,7 +2970,7 @@ pub fn update_and_render(
                                                         );
 
                                                         state.animations.push(Animation {
-                                                            card: models::fish_card(rank, suit),
+                                                            card: fish_card(rank, suit),
                                                             at,
                                                             target,
                                                             action: AnimationAction::AddToHand(HandId::Player),
@@ -3035,9 +3050,259 @@ pub fn update_and_render(
                                             }
                                         },
                                         PlayerMenu::Lure {
-                                            ..
+                                            ref mut target,
+                                            ref mut predicate,
                                         } => {
-                                            todo!("PlayerMenu::Lure")
+                                            commands.draw_nine_slice(
+                                                gfx::NineSlice::Window,
+                                                PLAYER_LURE_WINDOW
+                                            );
+
+                                            let base_xy = PLAYER_LURE_WINDOW.xy()
+                                                + WINDOW_CONTENT_OFFSET;
+
+                                            let label_card_xy = base_xy;
+
+                                            commands.draw_card(
+                                                zingers::THE_LURE,
+                                                label_card_xy
+                                            );
+
+                                            let target_base_xy = label_card_xy + CARD_WIDTH;
+                                            let target_xy = target_base_xy + H(CARD_WIN_H / 5);
+
+                                            let group = new_group!();
+
+                                            draw_cpu_id_quick_select(
+                                                group,
+                                                *target,
+                                                target_xy
+                                            );
+
+                                            let card_xy = target_base_xy + CPU_ID_SELECT_WH.w;
+
+                                            group.commands.draw_card(
+                                                fish_card(predicate.rank, predicate.suit),
+                                                card_xy
+                                            );
+
+                                            let predicate_select_xy = card_xy + CARD_WIDTH;
+
+                                            let predicate_select_rect = Rect::xy_wh(
+                                                predicate_select_xy,
+                                                LURE_PREDICATE_SELECT_WH,
+                                            );
+
+                                            group.commands.print_centered(
+                                                LurePredicate::TEXT[predicate.index_of()],
+                                                Rect::xy_wh(
+                                                    predicate_select_xy + LURE_PREDICATE_SELECT_TEXT_OFFSET.w,
+                                                    LURE_PREDICATE_SELECT_TEXT_WH,
+                                                ),
+                                                WHITE,
+                                            );
+
+                                            ui::draw_quick_select(
+                                                group,
+                                                predicate_select_rect,
+                                                LurePredicate,
+                                            );
+
+                                            let submit_xy = predicate_select_xy + LURE_PREDICATE_SELECT_WH.w;
+
+                                            if do_button(
+                                                group,
+                                                ButtonSpec {
+                                                    id: Submit,
+                                                    rect: fit_to_rest_of_window(
+                                                        submit_xy,
+                                                        PLAYER_NET_WINDOW,
+                                                    ),
+                                                    text: b"Submit",
+                                                }
+                                            ) {
+                                                macro_rules! p_net_handle_negative_response {
+                                                    () => {
+                                                        let player_len = state.cards.player.len();
+
+                                                        let drew = state.cards.deck.draw();
+
+                                                        if let Some(card) = drew {
+                                                            let at = DECK_XY;
+
+                                                            let target = get_card_insert_position(
+                                                                spread(HandId::Player),
+                                                                player_len
+                                                            );
+
+                                                            state.animations.push(Animation {
+                                                                card,
+                                                                at,
+                                                                target,
+                                                                action: AnimationAction::AddToHand(HandId::Player),
+                                                                .. <_>::default()
+                                                            });
+                                                        }
+
+                                                        // This card counts as a turn, so just go on to the next turn.
+                                                        to_next_turn!(state);
+                                                    }
+                                                }
+
+                                                discard_lure(
+                                                    &mut state.cards,
+                                                    &mut state.animations,
+                                                    HandId::Player
+                                                );
+
+                                                let target_hand_id = (*target).into();
+                                                if state.cards.hand(target_hand_id)
+                                                    .contains(zingers::NO_FISHING)
+                                                && should_use_no_fishing_against(
+                                                    state.memories.memory(*target),
+                                                    state.cards.hand(target_hand_id),
+                                                    HandId::Player,
+                                                    Predicate::RankSuit(predicate.rank, predicate.suit),
+                                                    state.cards.active_count(),
+                                                ) {
+                                                    discard_no_fishing(
+                                                        &mut state.cards,
+                                                        &mut state.animations,
+                                                        target_hand_id.with_target(HandId::Player),
+                                                        Predicate::RankSuit(predicate.rank, predicate.suit)
+                                                    );
+                                                    p_net_handle_negative_response!();
+                                                } else {
+                                                    let player_len = state.cards.player.len();
+                                                    let target_hand = state.cards.hand_mut(target_hand_id);
+
+                                                    state.memories.asked_for(
+                                                        HandId::Player,
+                                                        Predicate::RankSuit(predicate.rank, predicate.suit)
+                                                    );
+
+                                                    let memory = state.memories.memory(*target);
+                                                    let mut found = None;
+                                                    let LurePredicate { rank, suit } = *predicate;
+                                                    {
+                                                        for (i, card) in target_hand.enumerated_iter() {
+                                                            match (get_rank(card), get_suit(card)) {
+                                                                (Some(r), Some(s)) if r == rank && s == suit => {
+                                                                    found = Some((rank, suit, i));
+                                                                    // TODO? pick best one to give up, when there's no unlikely ones left?
+                                                                    // If this is an undesirable to give up card, keep looking.
+                                                                    if memory.is_likely_to_fill_rank_soon(
+                                                                        target_hand_id,
+                                                                        rank
+                                                                    ) || memory.is_likely_to_fill_rank_soon(
+                                                                        HandId::Player,
+                                                                        rank
+                                                                    ) {
+                                                                        continue
+                                                                    }
+                                                                    break
+                                                                }
+                                                                _ => {}
+                                                            }
+                                                        }
+                                                    }
+
+                                                    if let Some((rank, suit, i)) = found {
+                                                        state.memories.found(
+                                                            HandId::Player,
+                                                            rank,
+                                                            suit
+                                                        );
+                                                        let at = get_card_position(
+                                                            spread(target_hand_id),
+                                                            target_hand.len(),
+                                                            i,
+                                                        );
+
+                                                        let target = get_card_insert_position(
+                                                            spread(HandId::Player),
+                                                            player_len
+                                                        );
+
+                                                        state.animations.push(Animation {
+                                                            card: fish_card(rank, suit),
+                                                            at,
+                                                            target,
+                                                            action: AnimationAction::AddToHand(HandId::Player),
+                                                            shown: true,
+                                                            .. <_>::default()
+                                                        });
+
+                                                        to_next_turn!(state);
+                                                    } else {
+                                                        p_net_handle_negative_response!();
+                                                    }
+                                                }
+                                            } else if input.pressed_this_frame(Button::B) {
+                                                state.selection.card_index = selected;
+                                                state.selection.player_menu = PlayerMenu::default();
+                                            } else if let Some(dir) = input.dir_pressed_this_frame() {
+                                                const GRID_LEN: usize = 3;
+
+                                                #[derive(Clone, Copy, PartialEq, Eq)]
+                                                enum Section {
+                                                    Target,
+                                                    Predicate,
+                                                    Submit,
+                                                }
+
+                                                const GRID: [Section; GRID_LEN] = [
+                                                    Section::Target, Section::Predicate, Section::Submit,
+                                                ];
+
+                                                let old_el = match state.ctx.hot {
+                                                    CpuIdSelect => Some(Section::Target),
+                                                    LurePredicate => Some(Section::Predicate),
+                                                    Submit => Some(Section::Submit),
+                                                    _ => None,
+                                                };
+                                                let mut el_i = GRID.iter()
+                                                    .position(|el| Some(*el) == old_el)
+                                                    .unwrap_or_default();
+
+                                                match dir {
+                                                    Dir::Up => match GRID[el_i] {
+                                                        Section::Target => match *target {
+                                                            CpuId::One => { *target = CpuId::Two; },
+                                                            CpuId::Two => { *target = CpuId::Three; },
+                                                            CpuId::Three => { *target = CpuId::One; },
+                                                        },
+                                                        Section::Predicate => predicate.wrapping_inc(),
+                                                        Section::Submit => {}
+                                                    },
+                                                    Dir::Down => match GRID[el_i] {
+                                                        Section::Target => match *target {
+                                                            CpuId::One => { *target = CpuId::Three; },
+                                                            CpuId::Two => { *target = CpuId::One; },
+                                                            CpuId::Three => { *target = CpuId::Two; },
+                                                        },
+                                                        Section::Predicate => predicate.wrapping_dec(),
+                                                        Section::Submit => {}
+                                                    },
+                                                    Dir::Left => if el_i == 0 {
+                                                        el_i = GRID_LEN - 1;
+                                                    } else {
+                                                        el_i -= 1;
+                                                    },
+                                                    Dir::Right => if el_i >= GRID_LEN - 1 {
+                                                        el_i = 0;
+                                                    } else {
+                                                        el_i += 1;
+                                                    },
+                                                }
+                                                state.ctx.set_next_hot(match GRID[el_i] {
+                                                    Section::Target => CpuIdSelect,
+                                                    Section::Predicate => LurePredicate,
+                                                    Section::Submit => Submit,
+                                                });
+                                            } else {
+                                                // do nothing
+                                            }
                                         }
                                         PlayerMenu::Asking {
                                             used,
@@ -3194,7 +3459,7 @@ pub fn update_and_render(
                                                                 Predicate::RankSuit(rank, question.suit)
                                                             );
 
-                                                            let target_card = models::fish_card(rank, question.suit);
+                                                            let target_card = fish_card(rank, question.suit);
 
                                                             let mut found = None;
                                                             for i in 0..target_hand.len() {
@@ -3398,7 +3663,7 @@ pub fn update_and_render(
 
                                             let target_card_xy = base_xy;
 
-                                            let target_card = models::fish_card(rank, question.suit);
+                                            let target_card = fish_card(rank, question.suit);
 
                                             commands.draw_card(
                                                 target_card,
@@ -3448,7 +3713,7 @@ pub fn update_and_render(
 
                                             if input.pressed_this_frame(Button::A)
                                             || input.pressed_this_frame(Button::B) {
-                                                let target_card = models::fish_card(rank, question.suit);
+                                                let target_card = fish_card(rank, question.suit);
 
                                                 if let Some(true) = drew
                                                     .map(|card| card == target_card) {
@@ -3644,7 +3909,7 @@ pub fn update_and_render(
                                                     Predicate::RankSuit(rank, question.suit)
                                                 );
 
-                                                let target_card = models::fish_card(rank, question.suit);
+                                                let target_card = fish_card(rank, question.suit);
                                                 let my_len = state.cards.hand(id.into()).len();
 
                                                 let target_hand = state.cards.hand_mut(question.target);
@@ -4347,6 +4612,32 @@ const NET_PREDICATE_SELECT_TEXT_OFFSET: unscaled::WH = CPU_ID_SELECT_TEXT_OFFSET
 const NET_PREDICATE_SELECT_TEXT_WH: unscaled::WH = unscaled::WH {
     w: W(NET_PREDICATE_SELECT_WH.w.get() - NET_PREDICATE_SELECT_TEXT_OFFSET.w.get() * 2),
     h: NET_PREDICATE_SELECT_WH.h,
+};
+
+const PLAYER_LURE_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 8;
+
+    const WIN_H: unscaled::Inner = CARD_HEIGHT.get()
+    + WINDOW_CONTENT_OFFSET.h.get() * 2;
+
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y((command::HEIGHT - WIN_H) / 2),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(WIN_H),
+    }
+};
+
+const LURE_PREDICATE_SELECT_WH: unscaled::WH = unscaled::WH {
+    w: W(CARD_WIDTH.get() * 3 - CPU_ID_SELECT_WH.w.get() * 7 / 8),
+    h: H(PLAYER_LURE_WINDOW.h.0 - (WINDOW_CONTENT_OFFSET.h.0 * 2)),
+};
+
+const LURE_PREDICATE_SELECT_TEXT_OFFSET: unscaled::WH = CPU_ID_SELECT_TEXT_OFFSET;
+
+const LURE_PREDICATE_SELECT_TEXT_WH: unscaled::WH = unscaled::WH {
+    w: W(LURE_PREDICATE_SELECT_WH.w.get() - LURE_PREDICATE_SELECT_TEXT_OFFSET.w.get() * 2),
+    h: LURE_PREDICATE_SELECT_WH.h,
 };
 
 const CPU_ID_SELECT_TEXT_OFFSET: unscaled::WH = unscaled::WH {

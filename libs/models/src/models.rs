@@ -124,6 +124,22 @@ impl From<Rank> for u8 {
     }
 }
 
+macro_rules! rank_text {
+    (0) => { "Barnacle" };
+    (1) => { "Crab" };
+    (2) => { "Dogfish" };
+    (3) => { "Eel" };
+    (4) => { "Flying Fish" };
+    (5) => { "Hammerhead" };
+    (6) => { "Jellyfish" };
+    (7) => { "Shrimp" };
+    (8) => { "Blowfish" };
+    (9) => { "Clownfish" };
+    (10) => { "Starfish" };
+    (11) => { "Whale" };
+    (12) => { "Card Shark" };
+}
+
 impl Rank {
     pub const COUNT: u8 = 13;
 
@@ -144,19 +160,19 @@ impl Rank {
     ];
 
     pub const TEXT: [&[u8]; Rank::COUNT as usize] = [
-        b"Barnacle",
-        b"Crab",
-        b"Dogfish",
-        b"Eel",
-        b"Flying Fish",
-        b"Hammerhead",
-        b"Jellyfish",
-        b"Shrimp",
-        b"Blowfish",
-        b"Clownfish",
-        b"Starfish",
-        b"Whale",
-        b"Card Shark",
+        rank_text!(0).as_bytes(),
+        rank_text!(1).as_bytes(),
+        rank_text!(2).as_bytes(),
+        rank_text!(3).as_bytes(),
+        rank_text!(4).as_bytes(),
+        rank_text!(5).as_bytes(),
+        rank_text!(6).as_bytes(),
+        rank_text!(7).as_bytes(),
+        rank_text!(8).as_bytes(),
+        rank_text!(9).as_bytes(),
+        rank_text!(10).as_bytes(),
+        rank_text!(11).as_bytes(),
+        rank_text!(12).as_bytes(),
     ];
 
     pub fn wrapping_dec(mut self, acb: AlmostCompleteBaskets) -> Self {
@@ -254,6 +270,14 @@ impl From<Suit> for u8 {
     }
 }
 
+macro_rules! suit_text {
+    (0) => { "Red" };
+    (1) => { "Green" };
+    (2) => { "Blue" };
+    (3) => { "Yellow" };
+    (4) => { "Purple" };
+}
+
 impl Suit {
     pub const COUNT: u8 = 5;
 
@@ -266,11 +290,11 @@ impl Suit {
     ];
 
     pub const TEXT: [&[u8]; Suit::COUNT as usize] = [
-        b"Red",
-        b"Green",
-        b"Blue",
-        b"Yellow",
-        b"Purple",
+        suit_text!(0).as_bytes(),
+        suit_text!(1).as_bytes(),
+        suit_text!(2).as_bytes(),
+        suit_text!(3).as_bytes(),
+        suit_text!(4).as_bytes(),
     ];
 
     pub fn from_rng(xs: &mut Xs) -> Suit {
@@ -814,6 +838,195 @@ impl NetPredicate {
         Rank::TEXT[10],
         Rank::TEXT[11],
         Rank::TEXT[12],
+    ];
+
+    pub fn wrapping_inc(&mut self) {
+        let index = self.index_of();
+        *self = Self::ALL[if index >= Self::ALL.len() - 1 {
+            0
+        } else {
+            index + 1
+        }];
+    }
+
+    pub fn wrapping_dec(&mut self) {
+        let index = self.index_of();
+        *self = Self::ALL[if index == 0 {
+            Self::ALL.len() - 1
+        } else {
+            index - 1
+        }];
+    }
+
+    pub fn index_of(&self) -> usize {
+        for i in 0..Self::ALL.len() {
+            if Self::ALL[i] == *self {
+                return i;
+            }
+        }
+
+        unreachable!()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LurePredicate {
+    pub rank: Rank,
+    pub suit: Suit,
+}
+
+macro_rules! l {
+    ($suit_index: tt $rank_index: tt) => {
+        Self {
+            suit: Suit::ALL[$suit_index],
+            rank: Rank::ALL[$rank_index],
+        }
+    }
+}
+
+macro_rules! t {
+    ($suit_index: tt $rank_index: tt) => {
+        concat!(suit_text!($suit_index), " ", rank_text!($rank_index)).as_bytes()
+    }
+}
+
+impl LurePredicate {
+    pub const COUNT: u8 = Suit::COUNT * Rank::COUNT;
+
+    pub const ALL: [Self; Self::COUNT as usize] = [
+        l!(0 0),
+        l!(0 1),
+        l!(0 2),
+        l!(0 3),
+        l!(0 4),
+        l!(0 5),
+        l!(0 6),
+        l!(0 7),
+        l!(0 8),
+        l!(0 9),
+        l!(0 10),
+        l!(0 11),
+        l!(0 12),
+        l!(1 0),
+        l!(1 1),
+        l!(1 2),
+        l!(1 3),
+        l!(1 4),
+        l!(1 5),
+        l!(1 6),
+        l!(1 7),
+        l!(1 8),
+        l!(1 9),
+        l!(1 10),
+        l!(1 11),
+        l!(1 12),
+        l!(2 0),
+        l!(2 1),
+        l!(2 2),
+        l!(2 3),
+        l!(2 4),
+        l!(2 5),
+        l!(2 6),
+        l!(2 7),
+        l!(2 8),
+        l!(2 9),
+        l!(2 10),
+        l!(2 11),
+        l!(2 12),
+        l!(3 0),
+        l!(3 1),
+        l!(3 2),
+        l!(3 3),
+        l!(3 4),
+        l!(3 5),
+        l!(3 6),
+        l!(3 7),
+        l!(3 8),
+        l!(3 9),
+        l!(3 10),
+        l!(3 11),
+        l!(3 12),
+        l!(4 0),
+        l!(4 1),
+        l!(4 2),
+        l!(4 3),
+        l!(4 4),
+        l!(4 5),
+        l!(4 6),
+        l!(4 7),
+        l!(4 8),
+        l!(4 9),
+        l!(4 10),
+        l!(4 11),
+        l!(4 12),
+    ];
+
+    pub const TEXT: [&[u8]; Self::COUNT as usize] = [
+        t!(0 0),
+        t!(0 1),
+        t!(0 2),
+        t!(0 3),
+        t!(0 4),
+        t!(0 5),
+        t!(0 6),
+        t!(0 7),
+        t!(0 8),
+        t!(0 9),
+        t!(0 10),
+        t!(0 11),
+        t!(0 12),
+        t!(1 0),
+        t!(1 1),
+        t!(1 2),
+        t!(1 3),
+        t!(1 4),
+        t!(1 5),
+        t!(1 6),
+        t!(1 7),
+        t!(1 8),
+        t!(1 9),
+        t!(1 10),
+        t!(1 11),
+        t!(1 12),
+        t!(2 0),
+        t!(2 1),
+        t!(2 2),
+        t!(2 3),
+        t!(2 4),
+        t!(2 5),
+        t!(2 6),
+        t!(2 7),
+        t!(2 8),
+        t!(2 9),
+        t!(2 10),
+        t!(2 11),
+        t!(2 12),
+        t!(3 0),
+        t!(3 1),
+        t!(3 2),
+        t!(3 3),
+        t!(3 4),
+        t!(3 5),
+        t!(3 6),
+        t!(3 7),
+        t!(3 8),
+        t!(3 9),
+        t!(3 10),
+        t!(3 11),
+        t!(3 12),
+        t!(4 0),
+        t!(4 1),
+        t!(4 2),
+        t!(4 3),
+        t!(4 4),
+        t!(4 5),
+        t!(4 6),
+        t!(4 7),
+        t!(4 8),
+        t!(4 9),
+        t!(4 10),
+        t!(4 11),
+        t!(4 12),
     ];
 
     pub fn wrapping_inc(&mut self) {
