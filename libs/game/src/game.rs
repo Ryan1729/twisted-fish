@@ -2964,19 +2964,24 @@ pub fn update_and_render(
                                                             i,
                                                         );
 
-                                                        let target = get_card_insert_position(
-                                                            spread(HandId::Player),
-                                                            player_len
-                                                        );
+                                                        let removed = target_hand.remove(i);
+                                                        debug_assert!(removed.is_some());
+                                                        if let Some(card) = removed {
 
-                                                        state.animations.push(Animation {
-                                                            card: fish_card(rank, suit),
-                                                            at,
-                                                            target,
-                                                            action: AnimationAction::AddToHand(HandId::Player),
-                                                            shown: true,
-                                                            .. <_>::default()
-                                                        });
+                                                            let target = get_card_insert_position(
+                                                                spread(HandId::Player),
+                                                                player_len
+                                                            );
+    
+                                                            state.animations.push(Animation {
+                                                                card,
+                                                                at,
+                                                                target,
+                                                                action: AnimationAction::AddToHand(HandId::Player),
+                                                                shown: true,
+                                                                .. <_>::default()
+                                                            });
+                                                        }
 
                                                         to_next_turn!(state);
                                                     } else {
@@ -3218,20 +3223,23 @@ pub fn update_and_render(
                                                             target_hand.len(),
                                                             i,
                                                         );
-
-                                                        let target = get_card_insert_position(
-                                                            spread(HandId::Player),
-                                                            player_len
-                                                        );
-
-                                                        state.animations.push(Animation {
-                                                            card: fish_card(rank, suit),
-                                                            at,
-                                                            target,
-                                                            action: AnimationAction::AddToHand(HandId::Player),
-                                                            shown: true,
-                                                            .. <_>::default()
-                                                        });
+                                                        let removed = target_hand.remove(i);
+                                                        debug_assert!(removed.is_some());
+                                                        if let Some(card) = removed {
+                                                            let target = get_card_insert_position(
+                                                                spread(HandId::Player),
+                                                                player_len
+                                                            );
+    
+                                                            state.animations.push(Animation {
+                                                                card,
+                                                                at,
+                                                                target,
+                                                                action: AnimationAction::AddToHand(HandId::Player),
+                                                                shown: true,
+                                                                .. <_>::default()
+                                                            });
+                                                        }
 
                                                         to_next_turn!(state);
                                                     } else {
