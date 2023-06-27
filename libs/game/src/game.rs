@@ -1560,7 +1560,7 @@ fn anytime_play(
                             selection: AnytimePlaySelection::DivineIntervention,
                         });
                     } else {
-                        if should_get_rid_of_divine_intervention(
+                        if should_shed_zingers(
                             &cards,
                             &hand,
                             &stack
@@ -1582,7 +1582,7 @@ fn anytime_play(
                 }) => {
                     if *source == hand_id {
                         // Don't cancel our own play.
-                    } else if should_get_rid_of_divine_intervention(
+                    } else if should_shed_zingers(
                         &cards,
                         &hand,
                         &stack
@@ -1614,7 +1614,27 @@ fn anytime_play(
     None
 }
 
-fn should_get_rid_of_divine_intervention(
+fn should_play_super_ask(
+    cards: &Cards,
+    hand: &Hand,
+    stack: &[Play],
+    memories: &Memories,
+    own_id: CpuId,
+) -> bool {
+    should_shed_zingers(
+        cards,
+        hand,
+        stack
+    ) || {
+        let hand_id = HandId::from(own_id);
+        memories
+            .memory(own_id)
+            .likely_to_fill_basket_soon(hand_id)
+            .is_some()
+    }
+}
+
+fn should_shed_zingers(
     cards: &Cards,
     hand: &Hand,
     stack: &[Play]
@@ -1639,8 +1659,6 @@ fn should_get_rid_of_divine_intervention(
                 zingers_in_hand
                 // Only zingers end up in the discard pile
                 + cards.discard.len()
-                // + 1 because we know that No Fishing
-                // is on the stack.
                 + zingers_in_stack
             );
 
@@ -3798,19 +3816,20 @@ pub fn update_and_render(
                                         if hand.is_empty() {
                                             *menu = CpuMenu::DeadInTheWater;
                                         } else {
-                                            if let Some((rank, suit, target)) = state.memories.memory(id)
-                                                .informed_question(hand, hand_id) {
-                                                let mut question = Question::default();
-
-                                                question.suit = suit;
-                                                question.target = target;
-
-                                                *menu = CpuMenu::Asking(
-                                                    rank,
-                                                    question,
-                                                );
-                                                state.done_something_this_turn = true;
-                                            }
+                                            //TODO restore
+                                            //if let Some((rank, suit, target)) = state.memories.memory(id)
+                                                //.informed_question(hand, hand_id) {
+                                                //let mut question = Question::default();
+//
+                                                //question.suit = suit;
+                                                //question.target = target;
+//
+                                                //*menu = CpuMenu::Asking(
+                                                    //rank,
+                                                    //question,
+                                                //);
+                                                //state.done_something_this_turn = true;
+                                            //}
 
                                             if let CpuMenu::Selecting = *menu {
                                                 let mut zinger_to_play = None;
@@ -3856,13 +3875,26 @@ pub fn update_and_render(
                                                                 // TODO? is there a case where we'd rather play
                                                                 // it here than wait to respond to our own turn?
                                                             }
-                                                            Zinger::TheNet => {
-                                                                todo!("Play Net")
+                                                            Zinger::TheNet | Zinger::TheLure => {
+                                                                if state.done_something_this_turn {
+                                                                    // Cannot play it
+                                                                } else if true || should_play_super_ask(
+                                                                    &state.cards,
+                                                                    state.cards.hand(hand_id),
+                                                                    &state.stack,
+                                                                    &state.memories,
+                                                                    id,
+                                                                ) {
+                                                                    zinger_to_play = Some(zinger);
+                                                                    break
+                                                                } else {
+                                                                    // Don't discard it
+                                                                }
                                                             }
                                                             Zinger::DivineIntervention => {
                                                                 if state.done_something_this_turn {
                                                                     // Cannot play it
-                                                                } else if should_get_rid_of_divine_intervention(
+                                                                } else if should_shed_zingers(
                                                                     &state.cards,
                                                                     state.cards.hand(hand_id),
                                                                     &state.stack,
