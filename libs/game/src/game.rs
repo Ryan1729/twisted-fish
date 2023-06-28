@@ -612,7 +612,11 @@ pub enum PlayKind {
     TwoFistedFisherman {
         source: HandId,
         cancelled: bool,
-    }
+    },
+    TheNet {
+        targeting: Targeting,
+        predicate: NetPredicate,
+    },
 }
 
 impl PlayKind {
@@ -624,6 +628,10 @@ impl PlayKind {
                 ..
             } => source,
             Self::TwoFistedFisherman { source, .. } => source,
+            Self::TheNet {
+                targeting: Targeting { source, .. },
+                ..
+            } => source,
         }
     }
 
@@ -631,7 +639,8 @@ impl PlayKind {
         match self {
             Self::FishedUnsuccessfully { .. } => false,
             Self::NoFishing { .. }
-            | Self::TwoFistedFisherman { .. } => true,
+            | Self::TwoFistedFisherman { .. }
+            | Self::TheNet { .. } => true,
         }
     }
 }
@@ -1579,7 +1588,21 @@ fn anytime_play(
                         ..
                     },
                     ..
-                }) => {
+                })
+                | Some(Play {
+                    kind: PlayKind::TheNet {
+                        targeting: Targeting { source, .. },
+                        ..
+                    },
+                    ..
+                })
+                /*| Some(Play {
+                    kind: PlayKind::TheLure {
+                        source,
+                        ..
+                    },
+                    ..
+                })*/ => {
                     if *source == hand_id {
                         // Don't cancel our own play.
                     } else if should_shed_zingers(
@@ -1601,7 +1624,7 @@ fn anytime_play(
                             selection: AnytimePlaySelection::DivineIntervention,
                         });
                     };
-                }
+                },
                 Some(Play { kind, .. }) => {
                     todo!("zingers::DIVINE_INTERVENTION Actually play: {kind:?}")
                 }
@@ -1762,14 +1785,22 @@ fn discard_lure(
 fn discard_net(
     cards: &mut Cards,
     animations: &mut Animations,
-    source: HandId,
+    targeting: Targeting,
+    predicate: NetPredicate
 ) {
     discard_given_card(
         cards,
         animations,
-        source,
+        targeting.source,
         zingers::THE_NET,
-        AfterDiscard::Nothing,
+        AfterDiscard::PushPlay(Play {
+            sub_turn_ids: targeting.source.next_to_current(),
+            sub_turn_index: 0,
+            kind: PlayKind::TheNet {
+                targeting,
+                predicate,
+            }
+        }),
     )
 }
 
@@ -2861,151 +2892,15 @@ pub fn update_and_render(
                                                     text: b"Submit",
                                                 }
                                             ) {
-                                                macro_rules! p_net_handle_negative_response {
-                                                    () => {
-                                                        let player_len = state.cards.player.len();
-
-                                                        let drew = state.cards.deck.draw();
-
-                                                        if let Some(card) = drew {
-                                                            let at = DECK_XY;
-
-                                                            let target = get_card_insert_position(
-                                                                spread(HandId::Player),
-                                                                player_len
-                                                            );
-
-                                                            state.animations.push(Animation {
-                                                                card,
-                                                                at,
-                                                                target,
-                                                                action: AnimationAction::AddToHand(HandId::Player),
-                                                                .. <_>::default()
-                                                            });
-                                                        }
-
-                                                        // This card counts as a turn, so just go on to the next turn.
-                                                        to_next_turn!(state);
-                                                    }
-                                                }
-
                                                 discard_net(
                                                     &mut state.cards,
                                                     &mut state.animations,
-                                                    HandId::Player
+                                                    Targeting {
+                                                        source: HandId::Player,
+                                                        target: (*target).into(),
+                                                    },
+                                                    *predicate,
                                                 );
-
-                                                let target_hand_id = (*target).into();
-                                                if state.cards.hand(target_hand_id)
-                                                    .contains(zingers::NO_FISHING)
-                                                && should_use_no_fishing_against(
-                                                    state.memories.memory(*target),
-                                                    state.cards.hand(target_hand_id),
-                                                    HandId::Player,
-                                                    Predicate::Net(*predicate),
-                                                    state.cards.active_count(),
-                                                ) {
-                                                    discard_no_fishing(
-                                                        &mut state.cards,
-                                                        &mut state.animations,
-                                                        target_hand_id.with_target(HandId::Player),
-                                                        Predicate::Net(*predicate)
-                                                    );
-                                                    p_net_handle_negative_response!();
-                                                } else {
-                                                    let player_len = state.cards.player.len();
-                                                    let target_hand = state.cards.hand_mut(target_hand_id);
-
-                                                    state.memories.asked_for(
-                                                        HandId::Player,
-                                                        Predicate::Net(*predicate)
-                                                    );
-
-                                                    let memory = state.memories.memory(*target);
-                                                    let mut found = None;
-                                                    match *predicate {
-                                                        NetPredicate::Rank(rank) => {
-                                                            for (i, card) in target_hand.enumerated_iter() {
-                                                                match (get_rank(card), get_suit(card)) {
-                                                                    (Some(r), Some(suit)) if r == rank => {
-                                                                        found = Some((rank, suit, i));
-                                                                        // TODO? pick best one to give up, when there's no unlikely ones left?
-                                                                        // If this is an undesirable to give up card, keep looking.
-                                                                        if memory.is_likely_to_fill_rank_soon(
-                                                                            target_hand_id,
-                                                                            rank
-                                                                        ) || memory.is_likely_to_fill_rank_soon(
-                                                                            HandId::Player,
-                                                                            rank
-                                                                        ) {
-                                                                            continue
-                                                                        }
-                                                                        break
-                                                                    }
-                                                                    _ => {}
-                                                                }
-                                                            }
-                                                        }
-                                                        NetPredicate::Suit(suit) => {
-                                                            for (i, card) in target_hand.enumerated_iter() {
-                                                                match (get_rank(card), get_suit(card)) {
-                                                                    (Some(rank), Some(s)) if s == suit => {
-                                                                        found = Some((rank, suit, i));
-                                                                        // TODO? pick best one to give up, when there's no unlikely ones left?
-                                                                        // If this is an undesirable to give up card, keep looking.
-                                                                        if memory.is_likely_to_fill_rank_soon(
-                                                                            target_hand_id,
-                                                                            rank
-                                                                        ) || memory.is_likely_to_fill_rank_soon(
-                                                                            HandId::Player,
-                                                                            rank
-                                                                        ) {
-                                                                            continue
-                                                                        }
-                                                                        break
-                                                                    }
-                                                                    _ => {}
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-
-                                                    if let Some((rank, suit, i)) = found {
-                                                        state.memories.found(
-                                                            HandId::Player,
-                                                            rank,
-                                                            suit
-                                                        );
-                                                        let at = get_card_position(
-                                                            spread(target_hand_id),
-                                                            target_hand.len(),
-                                                            i,
-                                                        );
-
-                                                        let removed = target_hand.remove(i);
-                                                        debug_assert!(removed.is_some());
-                                                        if let Some(card) = removed {
-
-                                                            let target = get_card_insert_position(
-                                                                spread(HandId::Player),
-                                                                player_len
-                                                            );
-    
-                                                            state.animations.push(Animation {
-                                                                card,
-                                                                at,
-                                                                target,
-                                                                action: AnimationAction::AddToHand(HandId::Player),
-                                                                shown: true,
-                                                                .. <_>::default()
-                                                            });
-                                                        }
-
-                                                        to_next_turn!(state);
-                                                    } else {
-                                                        p_net_handle_negative_response!();
-                                                    }
-                                                }
                                             } else if input.pressed_this_frame(Button::B) {
                                                 state.selection.card_index = selected;
                                                 state.selection.player_menu = PlayerMenu::default();
@@ -3817,19 +3712,19 @@ pub fn update_and_render(
                                             *menu = CpuMenu::DeadInTheWater;
                                         } else {
                                             //TODO restore
-                                            //if let Some((rank, suit, target)) = state.memories.memory(id)
-                                                //.informed_question(hand, hand_id) {
-                                                //let mut question = Question::default();
-//
-                                                //question.suit = suit;
-                                                //question.target = target;
-//
-                                                //*menu = CpuMenu::Asking(
-                                                    //rank,
-                                                    //question,
-                                                //);
-                                                //state.done_something_this_turn = true;
-                                            //}
+                                            if let Some((rank, suit, target)) = state.memories.memory(id)
+                                                .informed_question(hand, hand_id) {
+                                                let mut question = Question::default();
+
+                                                question.suit = suit;
+                                                question.target = target;
+
+                                                *menu = CpuMenu::Asking(
+                                                    rank,
+                                                    question,
+                                                );
+                                                state.done_something_this_turn = true;
+                                            }
 
                                             if let CpuMenu::Selecting = *menu {
                                                 let mut zinger_to_play = None;
@@ -3878,7 +3773,7 @@ pub fn update_and_render(
                                                             Zinger::TheNet | Zinger::TheLure => {
                                                                 if state.done_something_this_turn {
                                                                     // Cannot play it
-                                                                } else if true || should_play_super_ask(
+                                                                } else if should_play_super_ask(
                                                                     &state.cards,
                                                                     state.cards.hand(hand_id),
                                                                     &state.stack,
@@ -3927,6 +3822,9 @@ pub fn update_and_render(
                                                         // discard action, so don't
                                                         // do anything to the stack.
                                                     }
+                                                    //Some(Zinger::TheLure) => {
+                                                        //state.stack.push()
+                                                    //}
                                                     Some(zinger) => {
                                                         todo!("cpu handle selecting {zinger:?}");
                                                     }
@@ -4251,6 +4149,152 @@ pub fn update_and_render(
                                     // more persistently.
                                     assert!(state.stack.is_empty());
                                     go_again = true;
+                                }
+                            }
+                            PlayKind::TheNet{ targeting: Targeting{ source, target }, predicate } => {
+                                match CpuId::try_from(target) {
+                                    Err(()) => {
+                                        todo!("probably move p_handle_negative_response!(); here")
+                                    }
+                                    Ok(target_id) => {
+                                        macro_rules! net_handle_negative_response {
+                                            () => {
+                                                let len = state.cards.hand(source).len();
+
+                                                let drew = state.cards.deck.draw();
+
+                                                if let Some(card) = drew {
+                                                    let at = DECK_XY;
+
+                                                    let target = get_card_insert_position(
+                                                        spread(source),
+                                                        len
+                                                    );
+
+                                                    state.animations.push(Animation {
+                                                        card,
+                                                        at,
+                                                        target,
+                                                        action: AnimationAction::AddToHand(source),
+                                                        .. <_>::default()
+                                                    });
+                                                }
+
+                                                // This card counts as a turn, so just go on to the next turn.
+                                                to_next_turn!(state);
+                                            }
+                                        }
+
+                                        if state.cards.hand(target)
+                                            .contains(zingers::NO_FISHING)
+                                        && should_use_no_fishing_against(
+                                            state.memories.memory(target_id),
+                                            state.cards.hand(target),
+                                            source,
+                                            Predicate::Net(predicate),
+                                            state.cards.active_count(),
+                                        ) {
+                                            discard_no_fishing(
+                                                &mut state.cards,
+                                                &mut state.animations,
+                                                target.with_target(source),
+                                                Predicate::Net(predicate)
+                                            );
+                                            net_handle_negative_response!();
+                                        } else {
+                                            let len = state.cards.hand(source).len();
+                                            let target_hand = state.cards.hand_mut(target);
+
+                                            state.memories.asked_for(
+                                                source,
+                                                Predicate::Net(predicate)
+                                            );
+
+                                            let memory = state.memories.memory(target_id);
+                                            let mut found = None;
+                                            match predicate {
+                                                NetPredicate::Rank(rank) => {
+                                                    for (i, card) in target_hand.enumerated_iter() {
+                                                        match (get_rank(card), get_suit(card)) {
+                                                            (Some(r), Some(suit)) if r == rank => {
+                                                                found = Some((rank, suit, i));
+                                                                // TODO? pick best one to give up, when there's no unlikely ones left?
+                                                                // If this is an undesirable to give up card, keep looking.
+                                                                if memory.is_likely_to_fill_rank_soon(
+                                                                    target,
+                                                                    rank
+                                                                ) || memory.is_likely_to_fill_rank_soon(
+                                                                    source,
+                                                                    rank
+                                                                ) {
+                                                                    continue
+                                                                }
+                                                                break
+                                                            }
+                                                            _ => {}
+                                                        }
+                                                    }
+                                                }
+                                                NetPredicate::Suit(suit) => {
+                                                    for (i, card) in target_hand.enumerated_iter() {
+                                                        match (get_rank(card), get_suit(card)) {
+                                                            (Some(rank), Some(s)) if s == suit => {
+                                                                found = Some((rank, suit, i));
+                                                                // TODO? pick best one to give up, when there's no unlikely ones left?
+                                                                // If this is an undesirable to give up card, keep looking.
+                                                                if memory.is_likely_to_fill_rank_soon(
+                                                                    target,
+                                                                    rank
+                                                                ) || memory.is_likely_to_fill_rank_soon(
+                                                                    source,
+                                                                    rank
+                                                                ) {
+                                                                    continue
+                                                                }
+                                                                break
+                                                            }
+                                                            _ => {}
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            if let Some((rank, suit, i)) = found {
+                                                state.memories.found(
+                                                    source,
+                                                    rank,
+                                                    suit
+                                                );
+                                                let at = get_card_position(
+                                                    spread(target),
+                                                    target_hand.len(),
+                                                    i,
+                                                );
+
+                                                let removed = target_hand.remove(i);
+                                                debug_assert!(removed.is_some());
+                                                if let Some(card) = removed {
+                                                    let target = get_card_insert_position(
+                                                        spread(source),
+                                                        len
+                                                    );
+
+                                                    state.animations.push(Animation {
+                                                        card,
+                                                        at,
+                                                        target,
+                                                        action: AnimationAction::AddToHand(HandId::Player),
+                                                        shown: true,
+                                                        .. <_>::default()
+                                                    });
+                                                }
+
+                                                to_next_turn!(state);
+                                            } else {
+                                                net_handle_negative_response!();
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
