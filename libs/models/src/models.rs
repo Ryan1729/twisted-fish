@@ -566,7 +566,7 @@ impl HandOrdering {
             }
         }
 
-        let mut temp = self.0[currently_at];
+        let temp = self.0[currently_at];
         for i in (1..=currently_at).rev() {
             self.0[i] = self.0[i - 1];
         }

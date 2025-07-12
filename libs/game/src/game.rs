@@ -471,13 +471,6 @@ impl Menu {
             menu: PlayerMenu::default(),
         }
     }
-
-    fn between_turns(next_id: HandId) -> Self {
-        Menu::BetweenTurns {
-            next_id,
-            player_selection: PlayerSelection::default(),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -620,21 +613,6 @@ pub enum PlayKind {
 }
 
 impl PlayKind {
-    fn source(&self) -> HandId {
-        *match self {
-            Self::FishedUnsuccessfully { source } => source,
-            Self::NoFishing {
-                targeting: Targeting { source, .. },
-                ..
-            } => source,
-            Self::TwoFistedFisherman { source, .. } => source,
-            Self::TheNet {
-                targeting: Targeting { source, .. },
-                ..
-            } => source,
-        }
-    }
-
     fn is_zinger(&self) -> bool {
         match self {
             Self::FishedUnsuccessfully { .. } => false,
@@ -676,7 +654,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(seed: Seed) -> State {
+    pub fn new(
+        #[allow(unused_variables)]
+        seed: Seed
+    ) -> State {
         const INITIAL_HAND_SIZE: u8 = 16;//8;
         // For debugging: {
         // Gives player multiple zingers. (8)
@@ -1326,8 +1307,8 @@ fn find_almost_complete_baskets_works_on_this_previously_panicking_example() {
     hand.push(17);
     hand.push(67);
     hand.push(27);
-    hand.push(fish_card(Rank::DOGFISH, Suit::Yellow));
-    hand.push(fish_card(Rank::DOGFISH, Suit::Purple));
+    hand.push(fish_card(Rank::Dogfish, Suit::Yellow));
+    hand.push(fish_card(Rank::Dogfish, Suit::Purple));
     hand.push(42);
     hand.push(30);
 
@@ -1341,8 +1322,8 @@ fn find_almost_complete_baskets_works_on_this_previously_panicking_example() {
 fn find_almost_complete_baskets_works_on_this_simplifed_previously_panicking_example() {
     let mut hand = Hand::default();
 
-    hand.push(fish_card(Rank::DOGFISH, Suit::Yellow));
-    hand.push(fish_card(Rank::DOGFISH, Suit::Purple));
+    hand.push(fish_card(Rank::Dogfish, Suit::Yellow));
+    hand.push(fish_card(Rank::Dogfish, Suit::Purple));
 
     assert_eq!(
         find_almost_complete_baskets(&hand),
@@ -1353,7 +1334,7 @@ fn find_almost_complete_baskets_works_on_this_simplifed_previously_panicking_exa
 #[test]
 fn find_almost_complete_baskets_returns_none_on_this_previously_misbehaving_example() {
     let mut hand = Hand::default();
-    hand.push(fish_card(Rank::DOGFISH, Suit::Yellow));
+    hand.push(fish_card(Rank::Dogfish, Suit::Yellow));
 
     assert_eq!(
         find_almost_complete_baskets(&hand),
@@ -1625,9 +1606,6 @@ fn anytime_play(
                         });
                     };
                 },
-                Some(Play { kind, .. }) => {
-                    todo!("zingers::DIVINE_INTERVENTION Actually play: {kind:?}")
-                }
             }
 
         }
@@ -2213,10 +2191,9 @@ fn do_play_anytime_menu(
             AnytimeCard => Some(Section::Card),
             CpuIdSelect
             | RankSelect => Some(Section::Target),
-            Submit => Some(Section::Submit),
+            ui::Id::Submit => Some(Section::Submit),
             Zero
             | AskSuit
-            | Submit
             | LurePredicate
             | NetPredicate => None,
         };
@@ -2338,8 +2315,8 @@ fn should_use_no_fishing_against(
             hand.contains(fish_card(rank, suit))
             && memory.is_likely_to_fill_rank_soon(target, rank)
         },
-        Predicate::Net(predicate) => {
-            todo!("should_use_no_fishing_against Net(predicate)");
+        Predicate::Net(_predicate) => {
+            todo!("should_use_no_fishing_against Net(_predicate)");
         },
     }
 }
@@ -4124,7 +4101,7 @@ pub fn update_and_render(
                                 assert!(state.stack.is_empty());
                                 // Just move to the next turn
                             },
-                            PlayKind::NoFishing{ targeting: Targeting{ source, target }, predicate } => {
+                            PlayKind::NoFishing{ targeting: Targeting{ source: _, target }, predicate } => {
                                 match CpuId::try_from(target) {
                                     Err(()) => {
                                         todo!("probably move p_handle_negative_response!(); here")
@@ -4330,17 +4307,6 @@ fn draw_dead_in_the_water(commands: &mut Commands) {
         description_base_rect,
         WHITE,
     );
-}
-
-fn next_turn_menu(mut id: CpuId, player_hand: &Hand) -> Menu {
-    match id.next() {
-        Some(next_id) => Menu::between_turns(
-            next_id.into()
-        ),
-        None => Menu::between_turns(
-            HandId::Player
-        )
-    }
 }
 
 fn get_card_insert_position(spread: Spread, len: u8) -> XY {

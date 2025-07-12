@@ -566,6 +566,7 @@ mod wide {
             }
         });
     }
+    #[allow(unused_imports)]
     pub use _gt_mask_32 as gt_mask_32;
 }
 

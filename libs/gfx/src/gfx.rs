@@ -697,8 +697,6 @@ impl Commands {
             NetPredicate::Rank(rank) => {
                 rank_opt = Some(rank);
 
-                const STRIPE_COUNT: unscaled::Inner = Suit::COUNT as _;
-
                 const BACKING_WS: [unscaled::W; Suit::COUNT as _] = [
                     unscaled::W(15),
                     unscaled::W(15),

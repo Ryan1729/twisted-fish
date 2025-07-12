@@ -32,6 +32,7 @@ enum Evidence {
     // TODO Allow marking that a player was asked for something and didn't have it.
     // Will need to have a way to clear that as well, once they've drawn a card.
     // TODO? Is it worth tracking how many cards they drew since they didn't have it?
+    #[allow(dead_code)]
     DidNotHave
 }
 
@@ -286,7 +287,7 @@ mod informed_question_returns_the_expected_result {
     use super::*;
 
     const R: Rank = models::Rank::Barnacle;
-    const R2: Rank = models::Rank::Crab;
+    //const R2: Rank = models::Rank::Crab;
 
     #[test]
     fn on_this_one_found_red_example() {
@@ -319,7 +320,7 @@ mod informed_question_returns_the_expected_result {
 
         mem.known(other_id, models::fish_card(R, Suit::Red));
         // This previously caused `other_id_2` to be asked instead of `other_id`!
-        mem.asked_for(other_id_2, R, Suit::Red);
+        mem.asked_for(other_id_2, Predicate::RankSuit(R, Suit::Red));
 
         assert_eq!(
             mem.informed_question(&my_hand, my_id),
