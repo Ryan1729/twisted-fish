@@ -407,7 +407,7 @@ pub const fn zinger_card(zinger: Zinger) -> Card {
 
 pub type HandLen = u8;
 
-/// An ordered collection of cards that can hold at leat one copy of each card.
+/// An ordered collection of cards that can hold at least one copy of each card.
 #[derive(Clone, Debug)]
 pub struct Hand([CardOption; DECK_SIZE as usize]);
 
@@ -466,6 +466,17 @@ impl Hand {
         }
 
         debug_assert!(pushed);
+    }
+
+    #[allow(dead_code)]
+    // Currently used only in tests
+    pub fn swap_insert_top(&mut self, card: Card) {
+        let old_first = self.0[0];
+        self.0[0] = CardOption::some(card);
+
+        if let Some(old_first_card) = old_first.option() {
+            self.push(old_first_card);
+        }
     }
 
     pub fn draw(&mut self) -> Option<Card> {

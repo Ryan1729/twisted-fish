@@ -246,7 +246,7 @@ impl Animations {
         }
     }
 
-    fn all_done(&self) -> bool {
+    pub fn all_done(&self) -> bool {
         self.iter().count() == 0
     }
 }
