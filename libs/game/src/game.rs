@@ -574,6 +574,26 @@ impl Cards {
             ActiveCardCount::Several
         }
     }
+
+    fn played_zinger_count(&self) -> CardCount {
+        let mut count = 0;
+
+        for hand in [
+            &self.player_baskets,
+            &self.cpu1_baskets,
+            &self.cpu2_baskets,
+            &self.cpu3_baskets,
+            &self.discard,
+        ] {
+            for card in hand.iter() {
+                if let Some(_) = models::get_zinger(card) {
+                    count += 1;
+                }
+            }
+        }
+
+        count
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -581,6 +601,8 @@ enum ActiveCardCount {
     Several,
     VeryFew
 }
+
+type CardCount = u8;
 
 /// This stores all the possible selections that a player can make as part of their
 /// turn, including ones that only make sense when playing a particular card. It is
@@ -656,23 +678,56 @@ pub struct State {
 impl State {
     pub fn new(
         #[allow(unused_variables)]
-        seed: Seed
+        mut seed: Seed
     ) -> State {
-        const INITIAL_HAND_SIZE: u8 = 16;//8;
-        // For debugging: {
-        // Gives player multiple zingers. (8)
-        //let seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
-        // Gives Cpu1 the game warden (8)
-        //let seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
-        // Gives player glass bottom boat. (8)
-        //let seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
-        // Gives player the game warden and glass bottom boat. (16)
-        let seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
-        // Gives Cpu2 the dead scuba diver and no fishing. (8)
-        //let seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
-        // Gives player the net and no fishing. (8)
-        //let seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
-        // }
+        // For debugging
+        #[allow(dead_code)]
+        enum HardcodedMode {
+            Release,
+            PlayerMultipleZingers,
+            Cpu1GameWarden,
+            PlayerGlassBottomBoat,
+            PlayerGameWardenAndGlassBottomBoat,
+            Cpu2DeadScubaDiverAndNoFishing,
+            PlayerNetAndNoFishing,
+            PlayerStuckWithDivineIntervention,
+        }
+        use HardcodedMode::*;
+
+
+        let mode = PlayerMultipleZingers;
+
+        let mut initial_hand_size: u8 = 8; //16;
+
+        match mode {
+            Release => {},
+            PlayerMultipleZingers => {
+                // Gives player multiple zingers. (8)
+                seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
+            },
+            Cpu1GameWarden => {
+                // Gives Cpu1 the game warden (8)
+                seed = [168, 63, 217, 43, 183, 228, 216, 65, 56, 191, 2, 192, 83, 145, 4, 62];
+            },
+            PlayerGlassBottomBoat => {
+                // Gives player glass bottom boat. (8)
+                seed = [233, 217, 2, 79, 186, 228, 216, 65, 146, 77, 106, 40, 81, 145, 4, 62];
+            },
+            PlayerGameWardenAndGlassBottomBoat => {
+                // Gives player the game warden and glass bottom boat. (16)
+                seed = [162, 35, 66, 102, 63, 230, 216, 65, 211, 81, 226, 193, 15, 144, 4, 62];
+                initial_hand_size = 16;
+            },
+            Cpu2DeadScubaDiverAndNoFishing => {
+                // Gives Cpu2 the dead scuba diver and no fishing. (8)
+                seed = [146, 115, 135, 54, 37, 236, 216, 65, 70, 182, 129, 14, 50, 139, 4, 62];
+            },
+            PlayerNetAndNoFishing => {
+                // Gives player the net and no fishing. (8)
+                seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
+            },
+            PlayerStuckWithDivineIntervention => {},
+        }
 
         let mut rng = xs::from_seed(seed);
 
@@ -690,7 +745,14 @@ impl State {
             .. <_>::default()
         };
 
-        for card_i in 0..INITIAL_HAND_SIZE {
+        match mode {
+            PlayerStuckWithDivineIntervention => {
+                todo!("PlayerStuckWithDivineIntervention")
+            },
+            _ => {}
+        }
+
+        for card_i in 0..initial_hand_size {
             // TODO Once starting turn is randomized, deal cards to first player
             // first.
             for (id_i, id) in HandId::ALL.into_iter().enumerate() {
@@ -2729,7 +2791,16 @@ pub fn update_and_render(
                                                                         };
                                                                     },
                                                                     Zinger::DivineIntervention => {
-                                                                        todo!("Zinger::DivineIntervention")
+                                                                        let played_zinger_count = state.cards.played_zinger_count();
+
+                                                                        if played_zinger_count >= 7 {
+                                                                            let message = b"All of the other zingers have been played. You missed your chance to discard this!";
+                                                                            let mut vec = Vec::with_capacity(message.len());
+                                                                            vec.extend(message);
+                                                                            *sub_menu = PlayerSelectingSubMenu::Message(vec);
+                                                                        } else {
+                                                                            todo!("Zinger::DivineIntervention")
+                                                                        }
                                                                     },
                                                                 }
                                                             } else {
@@ -3120,7 +3191,7 @@ pub fn update_and_render(
                                                                 spread(HandId::Player),
                                                                 player_len
                                                             );
-    
+
                                                             state.animations.push(Animation {
                                                                 card,
                                                                 at,
