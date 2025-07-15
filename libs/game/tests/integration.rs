@@ -26,7 +26,7 @@ fn player_play_divine_intervention() {
     // Loop around to the first card in hand
     u_and_r.call(Button::RIGHT);
 
-    force_into_start_of_hand(&mut u_and_r.state, zinger_card(Zinger::DivineIntervention), HandId::Player);
+    force_into_start_of_hand(&mut u_and_r.state, zinger_card(Zinger::DivineIntervention), FullHandId::Player);
 
     // playing divine intervention
     u_and_r.call(Button::A);
@@ -71,45 +71,6 @@ impl UAndR {
 
         self.input.previous_gamepad = self.input.gamepad;
     }
-}
-
-fn force_into_start_of_hand(
-    state: &mut State, 
-    target_card: Card, 
-    hand_id: HandId
-) {
-    let hands = [
-        &mut state.cards.deck,
-        &mut state.cards.player,
-        &mut state.cards.cpu1,
-        &mut state.cards.cpu2,
-        &mut state.cards.cpu3,
-        &mut state.cards.player_baskets,
-        &mut state.cards.cpu1_baskets,
-        &mut state.cards.cpu2_baskets,
-        &mut state.cards.cpu3_baskets,
-        &mut state.cards.discard,
-    ];
-
-    let mut extracted_card = <_>::default();
-
-    for hand in hands {
-        let index_opt = hand.iter().position(|c| c == target_card);
-
-        if let Some(index) = index_opt {
-            extracted_card = hand.remove(index.try_into().expect("index should fit in a CardIndex"));
-            break
-        }
-    }
-
-    let target_hand = match hand_id {
-        HandId::Player => &mut state.cards.player,
-        HandId::Cpu1 => &mut state.cards.cpu1,
-        HandId::Cpu2 => &mut state.cards.cpu2,
-        HandId::Cpu3 => &mut state.cards.cpu3,
-    };
-
-    target_hand.swap_insert_top(extracted_card.expect("card should have been found"));
 }
 
 const GAME_BUTTONS: [Button; 7] = [

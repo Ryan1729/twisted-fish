@@ -596,6 +596,66 @@ impl Cards {
     }
 }
 
+pub enum FullHandId {
+    Deck,
+    Player,
+    Cpu1,
+    Cpu2,
+    Cpu3,
+    PlayerBaskets,
+    Cpu1Baskets,
+    Cpu2Baskets,
+    Cpu3Baskets,
+    Discard,
+}
+
+fn force_into_start_of_hand(
+    state: &mut State,
+    target_card: Card,
+    hand_id: FullHandId
+) {
+    use FullHandId::*;
+
+    let hands = [
+        &mut state.cards.deck,
+        &mut state.cards.player,
+        &mut state.cards.cpu1,
+        &mut state.cards.cpu2,
+        &mut state.cards.cpu3,
+        &mut state.cards.player_baskets,
+        &mut state.cards.cpu1_baskets,
+        &mut state.cards.cpu2_baskets,
+        &mut state.cards.cpu3_baskets,
+        &mut state.cards.discard,
+    ];
+
+    let mut extracted_card = <_>::default();
+
+    for hand in hands {
+        let index_opt = hand.iter().position(|c| c == target_card);
+
+        if let Some(index) = index_opt {
+            extracted_card = hand.remove(index.try_into().expect("index should fit in a CardIndex"));
+            break
+        }
+    }
+
+    let target_hand = match hand_id {
+        Deck => &mut state.cards.deck,
+        Player => &mut state.cards.player,
+        Cpu1 => &mut state.cards.cpu1,
+        Cpu2 => &mut state.cards.cpu2,
+        Cpu3 => &mut state.cards.cpu3,
+        PlayerBaskets => &mut state.cards.player_baskets,
+        Cpu1Baskets => &mut state.cards.cpu1_baskets,
+        Cpu2Baskets => &mut state.cards.cpu2_baskets,
+        Cpu3Baskets => &mut state.cards.cpu3_baskets,
+        Discard => &mut state.cards.discard,
+    };
+
+    target_hand.swap_insert_top(extracted_card.expect("card should have been found"));
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ActiveCardCount {
     Several,
@@ -695,7 +755,7 @@ impl State {
         use HardcodedMode::*;
 
 
-        let mode = PlayerMultipleZingers;
+        let mode = PlayerStuckWithDivineIntervention;
 
         let mut initial_hand_size: u8 = 8; //16;
 
@@ -747,7 +807,17 @@ impl State {
 
         match mode {
             PlayerStuckWithDivineIntervention => {
-                todo!("PlayerStuckWithDivineIntervention")
+                for zinger in models::zingers::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        zinger,
+                        if zinger == zingers::DIVINE_INTERVENTION {
+                            FullHandId::Player
+                        } else {
+                            FullHandId::Discard
+                        }
+                    );
+                }
             },
             _ => {}
         }

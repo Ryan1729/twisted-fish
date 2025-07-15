@@ -53,11 +53,11 @@ compile_time_assert!{
 impl core::fmt::Debug for CardOption {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
-            f, 
+            f,
             "{:?} ({:?})",
             self.option(),
             self.option()
-                .and_then(|card| 
+                .and_then(|card|
                     get_rank(card)
                         .map(|r| (r, get_suit(card).unwrap()))
                 )
@@ -398,7 +398,17 @@ pub mod zingers {
     pub const THE_LURE: Card = zinger_card(Zinger::TheLure);
     pub const THE_NET: Card = zinger_card(Zinger::TheNet);
     pub const TWO_FISTED_FISHERMAN: Card = zinger_card(Zinger::TwoFistedFisherman);
-    
+
+    pub const ALL: [Card; 8] = [
+        DEAD_SCUBA_DIVER,
+        DIVINE_INTERVENTION,
+        GLASS_BOTTOM_BOAT,
+        NO_FISHING,
+        THE_GAME_WARDEN,
+        THE_LURE,
+        THE_NET,
+        TWO_FISTED_FISHERMAN,
+    ];
 }
 
 pub const fn zinger_card(zinger: Zinger) -> Card {
@@ -531,7 +541,7 @@ impl Hand {
 
     pub fn remove(&mut self, index: CardIndex) -> Option<Card> {
         let output = self.get(index);
-        let slice = self.0.as_mut_slice(); 
+        let slice = self.0.as_mut_slice();
         let i = usize::from(index);
         slice.copy_within((i + 1).., i);
         slice[slice.len() - 1] = CardOption::NONE;
@@ -540,7 +550,7 @@ impl Hand {
 
     pub fn ordering_iter(&self, ordering: HandOrdering) -> impl Iterator<Item = Card> + '_ {
         compile_time_assert!{DECK_SIZE as u64 <= CardIndex::MAX as u64}
-        
+
         let mut ordering_index = 0;
         std::iter::from_fn(move || {
             let i = ordering.0[ordering_index];
