@@ -508,6 +508,7 @@ pub enum PlayerSelectingSubMenu {
     Root,
     Anytime(PlayerSelection, AvailablePlayAnytime),
     Message(Vec<u8>),
+    DiscardDivineIntervention,
 }
 
 #[derive(Clone, Default)]
@@ -594,6 +595,10 @@ impl Cards {
 
         count
     }
+
+    fn can_discard_divine_intervention(&self) -> bool {
+        self.played_zinger_count() >= 7
+    }
 }
 
 pub enum FullHandId {
@@ -609,7 +614,7 @@ pub enum FullHandId {
     Discard,
 }
 
-fn force_into_start_of_hand(
+pub fn force_into_start_of_hand(
     state: &mut State,
     target_card: Card,
     hand_id: FullHandId
@@ -751,11 +756,11 @@ impl State {
             Cpu2DeadScubaDiverAndNoFishing,
             PlayerNetAndNoFishing,
             PlayerStuckWithDivineIntervention,
+            PlayerAllZingers,
         }
         use HardcodedMode::*;
 
-
-        let mode = PlayerStuckWithDivineIntervention;
+        let mode = PlayerAllZingers;
 
         let mut initial_hand_size: u8 = 8; //16;
 
@@ -786,7 +791,8 @@ impl State {
                 // Gives player the net and no fishing. (8)
                 seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
             },
-            PlayerStuckWithDivineIntervention => {},
+            PlayerStuckWithDivineIntervention
+            | PlayerAllZingers => {},
         }
 
         let mut rng = xs::from_seed(seed);
@@ -817,6 +823,11 @@ impl State {
                             FullHandId::Discard
                         }
                     );
+                }
+            },
+            PlayerAllZingers => {
+                for zinger in models::zingers::ALL {
+                    force_into_start_of_hand(&mut state, zinger, FullHandId::Player);
                 }
             },
             _ => {}
@@ -2861,15 +2872,18 @@ pub fn update_and_render(
                                                                         };
                                                                     },
                                                                     Zinger::DivineIntervention => {
-                                                                        let played_zinger_count = state.cards.played_zinger_count();
-
-                                                                        if played_zinger_count >= 7 {
+                                                                        if state.done_something_this_turn {
+                                                                            let message = b"You must use your entire turn to discard this, and you have already done something this turn!";
+                                                                            let mut vec = Vec::with_capacity(message.len());
+                                                                            vec.extend(message);
+                                                                            *sub_menu = PlayerSelectingSubMenu::Message(vec);
+                                                                        } else if state.cards.can_discard_divine_intervention() {
                                                                             let message = b"All of the other zingers have been played. You missed your chance to discard this!";
                                                                             let mut vec = Vec::with_capacity(message.len());
                                                                             vec.extend(message);
                                                                             *sub_menu = PlayerSelectingSubMenu::Message(vec);
                                                                         } else {
-                                                                            todo!("Zinger::DivineIntervention")
+                                                                            *sub_menu = PlayerSelectingSubMenu::DiscardDivineIntervention;
                                                                         }
                                                                     },
                                                                 }
@@ -2936,6 +2950,60 @@ pub fn update_and_render(
                                                         *sub_menu = PlayerSelectingSubMenu::Root;
                                                     }
                                                 },
+                                                PlayerSelectingSubMenu::DiscardDivineIntervention => {
+                                                    commands.draw_nine_slice(
+                                                        gfx::NineSlice::Window,
+                                                        MESSAGE_WINDOW
+                                                    );
+
+                                                    let base_xy = MESSAGE_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+
+                                                    let message_base_xy = base_xy;
+
+                                                    let mut message_base_rect = fit_to_rest_of_window(
+                                                        message_base_xy,
+                                                        MESSAGE_WINDOW,
+                                                    );
+
+                                                    message_base_rect.h -= CONFIRM_BUTTON_HEIGHT;
+
+                                                    let message = b"This will spend your turn to discard the\nDivine Intervention card, instead of using it\nto stop a different zingerfrom happening.\n\nAre you sure?";
+
+                                                    commands.print_centered(
+                                                        message,
+                                                        message_base_rect,
+                                                        WHITE,
+                                                    );
+
+                                                    let submit_base_xy = base_xy + message_base_rect.h;
+
+                                                    let group = new_group!();
+
+                                                    group.ctx.set_next_hot(Submit);
+
+                                                    if do_button(
+                                                        group,
+                                                        ButtonSpec {
+                                                            id: Submit,
+                                                            rect: fit_to_rest_of_window(
+                                                                submit_base_xy,
+                                                                MESSAGE_WINDOW,
+                                                            ),
+                                                            text: b"Discard",
+                                                        }
+                                                    ) {
+                                                        discard_divine_intervention(
+                                                            &mut state.cards,
+                                                            &mut state.animations,
+                                                            HandId::Player
+                                                        );
+                                                        to_next_turn!(state);
+                                                    } else if input.pressed_this_frame(Button::B) {
+                                                        *sub_menu = PlayerSelectingSubMenu::Root;
+                                                    } else {
+                                                        // do nothing
+                                                    }
+                                                }
                                             }
                                         },
                                         PlayerMenu::Net {
@@ -3907,7 +3975,8 @@ pub fn update_and_render(
                                                             Zinger::DivineIntervention => {
                                                                 if state.done_something_this_turn {
                                                                     // Cannot play it
-                                                                } else if should_shed_zingers(
+                                                                } else if state.cards.can_discard_divine_intervention()
+                                                                && should_shed_zingers(
                                                                     &state.cards,
                                                                     state.cards.hand(hand_id),
                                                                     &state.stack,
@@ -5006,3 +5075,5 @@ const NO_FISHING_WINDOW: unscaled::Rect = {
         h: H(WIN_H),
     }
 };
+
+const CONFIRM_BUTTON_HEIGHT: H = H(64);

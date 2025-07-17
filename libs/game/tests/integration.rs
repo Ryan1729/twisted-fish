@@ -1,6 +1,6 @@
 use gfx::{Commands};
 use platform_types::{Button, Input, Speaker};
-use models::{Card, HandId, Zinger, zinger_card};
+use models::{Zinger, zinger_card};
 use game::*;
 
 const SOME_SEED: xs::Seed = [42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42];
