@@ -439,7 +439,7 @@ mod question {
 }
 use question::Question;
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct PlayerSelection {
     target: CpuId,
     card: AnytimeCard,
@@ -473,7 +473,7 @@ impl Menu {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PlayerMenu {
     Selecting { sub_menu: PlayerSelectingSubMenu },
     Asking {
@@ -502,7 +502,7 @@ impl Default for PlayerMenu {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum PlayerSelectingSubMenu {
     #[default]
     Root,
@@ -511,7 +511,7 @@ pub enum PlayerSelectingSubMenu {
     DiscardDivineIntervention,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum PlayerAskingSubMenu {
     #[default]
     Root,
@@ -710,7 +710,7 @@ impl PlayKind {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Play {
     pub sub_turn_ids: [HandId; HandId::COUNT as usize],
     pub sub_turn_index: u8,
@@ -1499,7 +1499,7 @@ fn find_almost_complete_baskets_works_on_this_smaller_example() {
     );
 }
 
-#[derive(Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 enum AnytimeCard {
     #[default]
     GameWarden,
@@ -2755,7 +2755,7 @@ pub fn update_and_render(
                 }
             }
             None => {
-                match state.stack.pop() {
+                match dbg!(state.stack.pop()) {
                     None => {
                         // Since the stack is empty, the turn_id player gets to play
                         match CpuId::try_from(state.turn_id) {
@@ -2768,6 +2768,7 @@ pub fn update_and_render(
                                 if let Some(player_card) = hand.get(selected) {
                                     state.has_started = true;
                                     let id = HandId::Player;
+                                    dbg!(&menu);
                                     match menu {
                                         PlayerMenu::Selecting {
                                             ref mut sub_menu,
@@ -3416,6 +3417,7 @@ pub fn update_and_render(
                                             ref mut question,
                                             ref mut sub_menu,
                                         } => {
+                                            dbg!("PlayerMenu::Asking");
                                             let used = *used;
 
                                             macro_rules! p_handle_negative_response {
@@ -3528,6 +3530,7 @@ pub fn update_and_render(
                                                         y: base_xy.y
                                                     };
 
+                                                    dbg!("maybe press submit");
                                                     if do_button(
                                                         group,
                                                         ButtonSpec {
@@ -3539,6 +3542,7 @@ pub fn update_and_render(
                                                             text: b"Submit",
                                                         }
                                                     ) {
+                                                        dbg!("maybe discard_no_fishing");
                                                         if state.cards.hand(question.target)
                                                             .contains(zingers::NO_FISHING)
                                                         && should_use_no_fishing_against(
@@ -3551,6 +3555,7 @@ pub fn update_and_render(
                                                             Predicate::RankSuit(rank, question.suit),
                                                             state.cards.active_count(),
                                                         ) {
+                                                            dbg!("discard_no_fishing");
                                                             discard_no_fishing(
                                                                 &mut state.cards,
                                                                 &mut state.animations,
@@ -4305,6 +4310,7 @@ pub fn update_and_render(
                     }
                     // Resolve the card on the top of the stack
                     Some(play) => {
+                        if true { panic!() }
                         let mut go_again = false;
                         match play.kind {
                             PlayKind::FishedUnsuccessfully{ .. } => {

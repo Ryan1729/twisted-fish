@@ -1,6 +1,6 @@
 use gfx::{Commands};
 use platform_types::{Button, Input, Speaker};
-use models::{Zinger, zinger_card};
+use models::{Rank, Suit, Zinger, fish_card, zinger_card};
 use game::*;
 
 const SOME_SEED: xs::Seed = [42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42];
@@ -35,6 +35,35 @@ fn player_play_divine_intervention() {
     // TODO? Asserts of some kind?
 }
 
+#[test]
+fn player_respond_to_no_fishing() {
+    let mut u_and_r = UAndR::new(SOME_SEED);
+
+    force_into_start_of_hand(&mut u_and_r.state, fish_card(Rank::Dogfish, Suit::Red), FullHandId::Cpu1);
+    force_into_start_of_hand(&mut u_and_r.state, fish_card(Rank::Dogfish, Suit::Yellow), FullHandId::Player);
+    force_into_start_of_hand(&mut u_and_r.state, zinger_card(Zinger::NoFishing), FullHandId::Cpu1);
+
+    // Start asking for the card so that CPU 1 will use No Fishing
+    u_and_r.call(Button::A);
+    // Move to the submit button, assuming it is set to Cpu1 and Red by default
+    u_and_r.call(Button::RIGHT);
+    u_and_r.call_until_animations_are_done();
+dbg!();
+    u_and_r.call(Button::RIGHT);
+    u_and_r.call_until_animations_are_done();
+    // Press The submit button
+dbg!();
+    u_and_r.call(Button::A);
+    u_and_r.call_until_animations_are_done();
+
+    u_and_r.call_no_button();
+dbg!();
+
+
+    // If this didn't panic, the test passes.
+    // TODO? Asserts of some kind?
+}
+
 /// A testhelper to call game::update_and_render
 struct UAndR {
     commands: Commands,
@@ -62,6 +91,10 @@ impl UAndR {
     fn call(&mut self, button: Button) {
         self.input.gamepad.insert(button);
 
+        self.call_no_button();
+    }
+
+    fn call_no_button(&mut self) {
         update_and_render(
             &mut self.commands,
             &mut self.state,
@@ -70,6 +103,12 @@ impl UAndR {
         );
 
         self.input.previous_gamepad = self.input.gamepad;
+    }
+
+    fn call_until_animations_are_done(&mut self) {
+        while !self.state.animations.all_done() {
+            self.call_no_button();
+        }
     }
 }
 

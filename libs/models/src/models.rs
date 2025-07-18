@@ -619,6 +619,8 @@ pub enum HandId {
     Cpu3,
 }
 
+pub type TurnId = HandId;
+
 impl From<CpuId> for HandId {
     fn from(cpu_id: CpuId) -> Self {
         match cpu_id {
