@@ -723,6 +723,26 @@ impl Play {
     }
 }
 
+// For debugging
+#[allow(dead_code)]
+#[derive(Default, Debug, PartialEq, Eq)]
+enum HardcodedMode {
+    #[default]
+    Release,
+    PlayerMultipleZingers,
+    Cpu1GameWarden,
+    PlayerGlassBottomBoat,
+    PlayerGameWardenAndGlassBottomBoat,
+    Cpu2DeadScubaDiverAndNoFishing,
+    PlayerNetAndNoFishing,
+    PlayerStuckWithDivineIntervention,
+    PlayerAllZingers,
+    Cpu1NoFishingAndDogfishes,
+}
+use HardcodedMode::*;
+
+const HARDCODED_MODE: HardcodedMode = Cpu1NoFishingAndDogfishes;
+
 #[derive(Clone, Default)]
 pub struct State {
     pub rng: Xs,
@@ -745,26 +765,9 @@ impl State {
         #[allow(unused_variables)]
         mut seed: Seed
     ) -> State {
-        // For debugging
-        #[allow(dead_code)]
-        enum HardcodedMode {
-            Release,
-            PlayerMultipleZingers,
-            Cpu1GameWarden,
-            PlayerGlassBottomBoat,
-            PlayerGameWardenAndGlassBottomBoat,
-            Cpu2DeadScubaDiverAndNoFishing,
-            PlayerNetAndNoFishing,
-            PlayerStuckWithDivineIntervention,
-            PlayerAllZingers,
-        }
-        use HardcodedMode::*;
-
-        let mode = PlayerAllZingers;
-
         let mut initial_hand_size: u8 = 8; //16;
 
-        match mode {
+        match HARDCODED_MODE {
             Release => {},
             PlayerMultipleZingers => {
                 // Gives player multiple zingers. (8)
@@ -792,7 +795,8 @@ impl State {
                 seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
             },
             PlayerStuckWithDivineIntervention
-            | PlayerAllZingers => {},
+            | PlayerAllZingers
+            | Cpu1NoFishingAndDogfishes => {},
         }
 
         let mut rng = xs::from_seed(seed);
@@ -811,7 +815,7 @@ impl State {
             .. <_>::default()
         };
 
-        match mode {
+        match HARDCODED_MODE {
             PlayerStuckWithDivineIntervention => {
                 for zinger in models::zingers::ALL {
                     force_into_start_of_hand(
@@ -830,6 +834,14 @@ impl State {
                     force_into_start_of_hand(&mut state, zinger, FullHandId::Player);
                 }
             },
+            Cpu1NoFishingAndDogfishes => {
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Purple), FullHandId::Player);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Red), FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Green), FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Blue), FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Yellow), FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::zingers::NO_FISHING, FullHandId::Cpu1);
+            }
             _ => {}
         }
 
@@ -2530,7 +2542,10 @@ pub fn update_and_render(
 
     for anim in state.animations.iter() {
         if anim.is_active() {
-            if anim.shown {
+            if anim.shown 
+            // This clause is just for debugging and should be removable later
+            || HARDCODED_MODE != HardcodedMode::Release
+            {
                 commands.draw_card(anim.card, anim.at);
             } else {
                 commands.draw_card_back(anim.at);
@@ -2542,7 +2557,8 @@ pub fn update_and_render(
         let hand = state.cards.hand(id);
         let len = hand.len();
 
-        if cfg!(debug_assertions) {
+        if cfg!(debug_assertions)
+        || HARDCODED_MODE != HardcodedMode::Release {
             for (i, card) in hand.enumerated_iter() {
                 commands.draw_card(
                     card,
@@ -2755,7 +2771,7 @@ pub fn update_and_render(
                 }
             }
             None => {
-                match dbg!(state.stack.pop()) {
+                match state.stack.pop() {
                     None => {
                         // Since the stack is empty, the turn_id player gets to play
                         match CpuId::try_from(state.turn_id) {
@@ -2768,7 +2784,7 @@ pub fn update_and_render(
                                 if let Some(player_card) = hand.get(selected) {
                                     state.has_started = true;
                                     let id = HandId::Player;
-                                    dbg!(&menu);
+
                                     match menu {
                                         PlayerMenu::Selecting {
                                             ref mut sub_menu,
@@ -3545,7 +3561,7 @@ pub fn update_and_render(
                                                         dbg!("maybe discard_no_fishing");
                                                         if state.cards.hand(question.target)
                                                             .contains(zingers::NO_FISHING)
-                                                        && should_use_no_fishing_against(
+                                                        && dbg!(should_use_no_fishing_against(
                                                             state.memories.memory(
                                                                 CpuId::try_from(question.target)
                                                                 .expect("target should be a Cpu player")
@@ -3554,7 +3570,7 @@ pub fn update_and_render(
                                                             HandId::Player,
                                                             Predicate::RankSuit(rank, question.suit),
                                                             state.cards.active_count(),
-                                                        ) {
+                                                        )) {
                                                             dbg!("discard_no_fishing");
                                                             discard_no_fishing(
                                                                 &mut state.cards,
@@ -4310,7 +4326,6 @@ pub fn update_and_render(
                     }
                     // Resolve the card on the top of the stack
                     Some(play) => {
-                        if true { panic!() }
                         let mut go_again = false;
                         match play.kind {
                             PlayKind::FishedUnsuccessfully{ .. } => {
