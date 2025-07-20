@@ -24,7 +24,7 @@ macro_rules! allow_to_respond {
 }
 
 macro_rules! cpu_handle_negative_response {
-    ($state: ident, $menu: ident, $id: ident, $rank: ident, $suit: expr) => {
+    ($state: ident, $menu: ident, $id: ident, $predicate: expr) => {
         let hand_id = $id.into();
 
         if can_and_should_play_two_fisted_fisherman(
@@ -51,8 +51,7 @@ macro_rules! cpu_handle_negative_response {
             });
             allow_to_respond!($state);
         } else {
-            let suit = $suit;
-            let target_card = fish_card($rank, suit);
+            let predicate = $predicate;
             let my_len = $state.cards.hand(hand_id).len();
 
             let card_option = $state.cards.deck.draw();
@@ -73,8 +72,8 @@ macro_rules! cpu_handle_negative_response {
                     .. <_>::default()
                 });
 
-                if card == target_card {
-                    $state.memories.fished_for(hand_id, $rank, suit);
+                if predicate.matches(card) {
+                    $state.memories.fished_for(hand_id, card);
 
                     *$menu = CpuMenu::WaitingWhenGotWhatWasFishingFor;
                     $state.done_something_this_turn = true;
@@ -296,46 +295,84 @@ mod question {
 
     #[derive(Clone, Debug)]
     pub struct Question {
-        pub target: HandId,
-        pub suit: Suit,
+        pub targeting: Targeting,
+        pub predicate: Predicate,
         description: Vec<u8>,
     }
 
-    impl Default for Question {
-        fn default() -> Self {
+    impl Question {
+        pub fn new(
+            targeting: Targeting,
+            predicate: Predicate,
+        ) -> Self {
             Self {
-                target: HandId::Cpu1,
-                suit: Suit::default(),
+                targeting,
+                predicate,
                 description: Vec::default(),
             }
         }
-    }
 
-    impl Question {
+        pub fn target(&self) -> HandId {
+            self.target_with_used.target()
+        }
+
         pub fn fresh_ask_description(
-            &mut self,
-            rank: Rank
+            &mut self
         ) -> &[u8] {
             self.description.clear();
             self.description.reserve(128);
 
             self.description.extend_from_slice(
-                HandId::TEXT[usize::from(self.target as u8)]
+                HandId::TEXT[usize::from(self.targeting.target as u8)]
             );
 
             self.description.extend_from_slice(
-                b", do you have the "
+                b", do you have "
             );
 
-            self.description.extend_from_slice(
-                Suit::TEXT[usize::from(self.suit as u8)]
-            );
+            match self.predicate {
+                Predicate::RankSuit(rank, suit) => {
+                    self.description.extend_from_slice(
+                        b"the "
+                    );
 
-            self.description.push(b' ');
+                    self.description.extend_from_slice(
+                        Suit::TEXT[usize::from(self.suit as u8)]
+                    );
+        
+                    self.description.push(b' ');
+        
+                    self.description.extend_from_slice(
+                        Rank::TEXT[usize::from(rank as u8)]
+                    );
+                },
+                Predicate::Net(NetPredicate::Suit(suit)) => {
+                    self.description.extend_from_slice(
+                        b"a "
+                    );
 
-            self.description.extend_from_slice(
-                Rank::TEXT[usize::from(rank as u8)]
-            );
+                    self.description.extend_from_slice(
+                        Suit::TEXT[usize::from(self.suit as u8)]
+                    );
+
+                    self.description.extend_from_slice(
+                        b" card"
+                    );
+                },
+                Predicate::Net(NetPredicate::Rank(rank)) => {
+                    self.description.extend_from_slice(
+                        b"a "
+                    );
+
+                    self.description.extend_from_slice(
+                        Rank::TEXT[usize::from(self.rank as u8)]
+                    );
+
+                    self.description.extend_from_slice(
+                        b" card"
+                    );
+                },
+            }
 
             self.description.push(b'?');
 
@@ -389,7 +426,6 @@ mod question {
 
         pub fn fresh_fished_description(
             &mut self,
-            rank: Rank,
             drew: Option<Card>,
             width: W,
         ) -> &[u8] {
@@ -482,8 +518,11 @@ pub enum PlayerMenu {
         sub_menu: PlayerAskingSubMenu,
     },
     Fished {
-        used: Card,
         question: Question,
+        drew: Option<Card>
+    },
+    GotNoFishinged {
+        predicate: Predicate,
         drew: Option<Card>
     },
     Net {
@@ -680,14 +719,30 @@ pub struct Selection {
     player_menu: PlayerMenu,
 }
 
+/// "Used" being the card the targetted player used to go fish with.
+#[derive(Clone, Copy, Debug)]
+pub enum TargetWithUsed {
+    Player(Card),
+    Cpu(CpuId),
+}
+
+impl TargetWithUsed {
+    pub fn target(&self) -> HandId {
+        use TargetWithUsed::*;
+        match self {
+            Player(..) => HandId::Player,
+            Cpu(cpu_id) => cpu_id.into(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum PlayKind {
     FishedUnsuccessfully {
         source: HandId,
     },
     NoFishing {
-        targeting: Targeting,
-        predicate: Predicate,
+        question: Question,
     },
     TwoFistedFisherman {
         source: HandId,
@@ -3443,8 +3498,7 @@ pub fn update_and_render(
                                                     let drew = state.cards.deck.draw();
 
                                                     *menu = PlayerMenu::Fished{
-                                                        used,
-                                                        question: core::mem::take(question),
+                                                        question: question.clone(),
                                                         drew,
                                                     };
                                                     state.done_something_this_turn = true;
@@ -3559,35 +3613,35 @@ pub fn update_and_render(
                                                         }
                                                     ) {
                                                         dbg!("maybe discard_no_fishing");
-                                                        if state.cards.hand(question.target)
+                                                        if state.cards.hand(question.target())
                                                             .contains(zingers::NO_FISHING)
                                                         && dbg!(should_use_no_fishing_against(
                                                             state.memories.memory(
-                                                                CpuId::try_from(question.target)
+                                                                CpuId::try_from(question.target())
                                                                 .expect("target should be a Cpu player")
                                                             ),
-                                                            state.cards.hand(question.target),
+                                                            state.cards.hand(question.target()),
                                                             HandId::Player,
-                                                            Predicate::RankSuit(rank, question.suit),
+                                                            question.predicate,
                                                             state.cards.active_count(),
                                                         )) {
                                                             dbg!("discard_no_fishing");
+                                                            // TODO add `used` here to the after animation payload.
+                                                            // Maybe the whole `question`?
                                                             discard_no_fishing(
                                                                 &mut state.cards,
                                                                 &mut state.animations,
-                                                                question.target.with_target(HandId::Player),
-                                                                Predicate::RankSuit(rank, question.suit)
+                                                                question.targeting.target.with_target(HandId::Player),
+                                                                question.predicate
                                                             );
                                                         } else {
                                                             let player_len = state.cards.player.len();
-                                                            let target_hand = state.cards.hand_mut(question.target);
+                                                            let target_hand = state.cards.hand_mut(question.target());
 
                                                             state.memories.asked_for(
                                                                 HandId::Player,
-                                                                Predicate::RankSuit(rank, question.suit)
+                                                                question.predicate
                                                             );
-
-                                                            let target_card = fish_card(rank, question.suit);
 
                                                             let mut found = None;
                                                             for i in 0..target_hand.len() {
@@ -3607,11 +3661,10 @@ pub fn update_and_render(
                                                             if let Some((card, i)) = found {
                                                                 state.memories.found(
                                                                     HandId::Player,
-                                                                    rank,
-                                                                    question.suit
+                                                                    card
                                                                 );
                                                                 let at = get_card_position(
-                                                                    spread(question.target),
+                                                                    spread(question.target()),
                                                                     target_hand.len(),
                                                                     i,
                                                                 );
@@ -3667,32 +3720,46 @@ pub fn update_and_render(
 
                                                         match dir {
                                                             Dir::Up => match GRID[el_i] {
-                                                                Section::Target => match question.target {
-                                                                    HandId::Cpu1 => { question.target = HandId::Cpu2; },
-                                                                    HandId::Cpu2 => { question.target = HandId::Cpu3; },
-                                                                    HandId::Cpu3 => { question.target = HandId::Cpu1; },
+                                                                Section::Target => match question.target() {
+                                                                    HandId::Cpu1 => { question.targeting.target = HandId::Cpu2; },
+                                                                    HandId::Cpu2 => { question.targeting.target = HandId::Cpu3; },
+                                                                    HandId::Cpu3 => { question.targeting.target = HandId::Cpu1; },
                                                                     HandId::Player => {
                                                                         // Player cannot ask the player.
                                                                         debug_assert!(false);
                                                                     }
                                                                 },
                                                                 Section::Suit => {
-                                                                    question.suit = question.suit.wrapping_inc()
+                                                                    match question.predicate {
+                                                                        Predicate::RankSuit(rank, suit) => {
+                                                                            question.predicate = Predicate::RankSuit(rank, suit.wrapping_inc());
+                                                                        }
+                                                                        _ => {
+                                                                            debug_assert!(false, "Unexpected value for predicate: {:?}", question.predicate);
+                                                                        }
+                                                                    }
                                                                 },
                                                                 Section::Submit => {}
                                                             },
                                                             Dir::Down => match GRID[el_i] {
-                                                                Section::Target => match question.target {
-                                                                    HandId::Cpu1 => { question.target = HandId::Cpu3; },
-                                                                    HandId::Cpu2 => { question.target = HandId::Cpu1; },
-                                                                    HandId::Cpu3 => { question.target = HandId::Cpu2; },
+                                                                Section::Target => match question.target() {
+                                                                    HandId::Cpu1  => { question.targeting.target = HandId::Cpu3; },
+                                                                    HandId::Cpu2 => { question.targeting.target = HandId::Cpu1; },
+                                                                    HandId::Cpu3 => { question.targeting.target = HandId::Cpu2; },
                                                                     HandId::Player => {
                                                                         // Player cannot ask the player.
                                                                         debug_assert!(false);
                                                                     }
                                                                 },
                                                                 Section::Suit => {
-                                                                    question.suit = question.suit.wrapping_dec()
+                                                                    match question.predicate {
+                                                                        Predicate::RankSuit(rank, suit) => {
+                                                                            question.predicate = Predicate::RankSuit(rank, suit.wrapping_dec());
+                                                                        }
+                                                                        _ => {
+                                                                            debug_assert!(false, "Unexpected value for predicate: {:?}", question.predicate);
+                                                                        }
+                                                                    }
                                                                 },
                                                                 Section::Submit => {}
                                                             },
@@ -3777,21 +3844,16 @@ pub fn update_and_render(
                                             }
                                         },
                                         PlayerMenu::Fished {
-                                            used,
                                             ref mut question,
                                             drew,
                                         } => {
-                                            let used = *used;
-                                            let rank = models::get_rank(used)
-                                                .expect("Fished used card should always have a rank!");
-
                                             commands.draw_nine_slice(gfx::NineSlice::Window, GO_FISH_WINDOW);
 
                                             let base_xy = GO_FISH_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
 
                                             let target_card_xy = base_xy;
 
-                                            let target_card = fish_card(rank, question.suit);
+                                            let target_card = question.predicate.display_card();
 
                                             commands.draw_card(
                                                 target_card,
@@ -3827,7 +3889,6 @@ pub fn update_and_render(
                                             );
 
                                             let description = question.fresh_fished_description(
-                                                rank,
                                                 *drew,
                                                 description_base_rect.w,
                                             );
@@ -3841,14 +3902,11 @@ pub fn update_and_render(
 
                                             if input.pressed_this_frame(Button::A)
                                             || input.pressed_this_frame(Button::B) {
-                                                let target_card = fish_card(rank, question.suit);
-
                                                 if let Some(true) = drew
-                                                    .map(|card| card == target_card) {
-                                                    state.memories.fished_for(
+                                                    .map(|card| question.predicate.matches(card)) {
+                                                    state.memories.found(
                                                         HandId::Player,
-                                                        rank,
-                                                        question.suit
+                                                        card,
                                                     );
                                                     state.selection.card_index = state.cards.player.len().saturating_sub(1);
                                                     state.selection.player_menu = PlayerMenu::default();
@@ -3921,10 +3979,13 @@ pub fn update_and_render(
                                             //TODO restore
                                             if let Some((rank, suit, target)) = state.memories.memory(id)
                                                 .informed_question(hand, hand_id) {
-                                                let mut question = Question::default();
-
-                                                question.suit = suit;
-                                                question.target = target;
+                                                let mut question = Question::new(
+                                                    Targeting {
+                                                        target,
+                                                        source: hand_id,
+                                                    },
+                                                    Predicate::RankSuit(rank, suit),
+                                                );
 
                                                 *menu = CpuMenu::Asking(
                                                     rank,
@@ -3957,13 +4018,14 @@ pub fn update_and_render(
                                                         // TODO? Decide what suit to ask for intelligently
                                                         // in this case? Does it matter given that asking
                                                         // for a card you have as a distraction is viable?
-                                                        // Maybe only ask for a card you have when your
+                                                        // Maybe only ask for a card you have when you
                                                         // have 4 in your hand already?
                                                         let suit = Suit::from_rng(&mut state.rng);
 
-                                                        let mut question = Question::default();
-                                                        question.target = target_id;
-                                                        question.suit = suit;
+                                                        let question = Question::new(
+                                                            ,
+                                                            Predicate::RankSuit(rank, suit),
+                                                        );
 
                                                         *menu = CpuMenu::Asking(
                                                             rank,
@@ -4052,20 +4114,21 @@ pub fn update_and_render(
 
                                                 state.memories.asked_for(
                                                     id.into(),
-                                                    Predicate::RankSuit(rank, question.suit)
+                                                    question.predicate,
                                                 );
 
-                                                let target_card = fish_card(rank, question.suit);
                                                 let my_len = state.cards.hand(id.into()).len();
 
-                                                let target_hand = state.cards.hand_mut(question.target);
+                                                let target_hand = state.cards.hand_mut(question.target());
 
                                                 let mut found = None;
                                                 // TODO? randomize order here to make it harder to learn their
                                                 // whole hand with glass bottom boat
                                                 for i in 0..target_hand.len() {
                                                     let was_found = target_hand.get(i)
-                                                        .map(|card| card == target_card)
+                                                        // TODO Intelligently decide which card to give based on
+                                                        // memories
+                                                        .map(|card| question.predicate.matches(card))
                                                         .unwrap_or_default();
                                                     if was_found {
                                                         found = Some((
@@ -4079,10 +4142,10 @@ pub fn update_and_render(
                                                 }
 
                                                 if let Some((card, i)) = found {
-                                                    state.memories.found(id.into(), rank, question.suit);
+                                                    state.memories.found(id.into(), card);
 
                                                     let at = get_card_position(
-                                                        spread(question.target),
+                                                        spread(question.target()),
                                                         target_hand.len(),
                                                         i,
                                                     );
@@ -4104,14 +4167,14 @@ pub fn update_and_render(
                                                     state.cpu_menu = CpuMenu::WaitingForSuccesfulAsk;
                                                     state.done_something_this_turn = true;
                                                 } else {
-                                                    cpu_handle_negative_response!(state, menu, id, rank, question.suit);
+                                                    cpu_handle_negative_response!(state, menu, id, rank, question.predicate);
                                                 }
                                             }
                                         }
 
                                         match (
-                                            question.target,
-                                            state.cards.hand(question.target).contains(zingers::NO_FISHING),
+                                            question.target(),
+                                            state.cards.hand(question.target()).contains(zingers::NO_FISHING),
                                         ) {
                                             (HandId::Player, true) => {
                                                 commands.draw_nine_slice(gfx::NineSlice::Window, NO_FISHING_WINDOW);
@@ -4169,8 +4232,8 @@ pub fn update_and_render(
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
-                                                        question.target.with_target(id.into()),
-                                                        Predicate::RankSuit(*rank, question.suit)
+                                                        question.target().with_target(id.into()),
+                                                        question.predicate
                                                     );
                                                 } else if input.pressed_this_frame(Button::B) {
                                                     handle_ask!();
@@ -4185,19 +4248,19 @@ pub fn update_and_render(
                                                 if has_no_fishing
                                                 && should_use_no_fishing_against(
                                                     state.memories.memory(
-                                                        CpuId::try_from(question.target)
+                                                        CpuId::try_from(question.target())
                                                         .expect("target should be a Cpu player")
                                                     ),
-                                                    state.cards.hand(question.target),
+                                                    state.cards.hand(question.target()),
                                                     id.into(),
-                                                    Predicate::RankSuit(*rank, question.suit),
+                                                    question.predicate,
                                                     state.cards.active_count(),
                                                 ) {
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
-                                                        question.target.with_target(id.into()),
-                                                        Predicate::RankSuit(*rank, question.suit)
+                                                        question.target().with_target(id.into()),
+                                                        question.predicate,
                                                     );
                                                 } else {
                                                     commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
@@ -4332,10 +4395,39 @@ pub fn update_and_render(
                                 assert!(state.stack.is_empty());
                                 // Just move to the next turn
                             },
-                            PlayKind::NoFishing{ targeting: Targeting{ source: _, target }, predicate } => {
-                                match CpuId::try_from(target) {
+                            PlayKind::NoFishing{ question } => {
+                                match CpuId::try_from(question.targeting.target) {
                                     Err(()) => {
-                                        todo!("probably move p_handle_negative_response!(); here")
+                                        let menu = &mut state.selection.player_menu;
+
+                                        // A copy of p_handle_negative_response!();
+                                        // TODO? reduce this duplication?
+                                        let player_len = state.cards.player.len();
+
+                                        let drew = state.cards.deck.draw();
+
+                                        *menu = PlayerMenu::Fished{
+                                            question: question.clone(),
+                                            drew,
+                                        };
+                                        state.done_something_this_turn = true;
+
+                                        if let Some(card) = drew {
+                                            let at = DECK_XY;
+
+                                            let target = get_card_insert_position(
+                                                spread(HandId::Player),
+                                                player_len
+                                            );
+
+                                            state.animations.push(Animation {
+                                                card,
+                                                at,
+                                                target,
+                                                action: AnimationAction::AddToHand(HandId::Player),
+                                                .. <_>::default()
+                                            });
+                                        }
                                     }
                                     Ok(asker_id) => {
                                         match predicate {
@@ -4470,8 +4562,7 @@ pub fn update_and_render(
                                             if let Some((rank, suit, i)) = found {
                                                 state.memories.found(
                                                     source,
-                                                    rank,
-                                                    suit
+                                                    models::fish_card(rank, suit)
                                                 );
                                                 let at = get_card_position(
                                                     spread(target),

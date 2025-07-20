@@ -819,6 +819,18 @@ impl Default for NetPredicate {
 }
 
 impl NetPredicate {
+    pub fn matches(self, card: Card) -> bool {
+        use NetPredicate::*;
+        match self {
+            Suit(suit) => Some(suit) == get_suit(card),
+            Rank(rank) => Some(rank) == get_rank(card),
+        }
+    }
+
+    pub fn display_card(self) -> Card {
+        zingers::THE_NET
+    }
+
     pub const COUNT: u8 = 18;
 
     pub const ALL: [Self; Self::COUNT as usize] = [
@@ -1085,4 +1097,22 @@ impl LurePredicate {
 pub enum Predicate {
     RankSuit(Rank, Suit),
     Net(NetPredicate),
+}
+
+impl Predicate {
+    pub fn matches(self, card: Card) -> bool {
+        use Predicate::*;
+        match self {
+            RankSuit(rank, suit) => card == fish_card(rank, suit),
+            Net(net_predicate) => net_predicate.matches(card),
+        }
+    }
+
+    pub fn display_card(self) -> Card {
+        use Predicate::*;
+        match self {
+            RankSuit(rank, suit) => fish_card(rank, suit),
+            Net(net_predicate) => net_predicate.display_card(),
+        }
+    }
 }

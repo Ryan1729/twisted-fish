@@ -359,15 +359,10 @@ impl Memories {
         }
     }
 
-    pub fn found(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
+    /// A player successfully got a card when asking and this was revealed to all.
+    pub fn found(&mut self, hand_id: HandId, card: Card) {
         for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).known(hand_id, models::fish_card(rank, suit));
-        }
-    }
-
-    pub fn fished_for(&mut self, hand_id: HandId, rank: Rank, suit: Suit) {
-        for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).known(hand_id, models::fish_card(rank, suit));
+            self.memory_mut(cpu_id).known(hand_id, card);
         }
     }
 
