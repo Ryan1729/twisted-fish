@@ -746,6 +746,19 @@ impl TryFrom<HandId> for CpuId {
     }
 }
 
+impl TryFrom<&HandId> for CpuId {
+    type Error = ();
+
+    fn try_from(hand_id: &HandId) -> Result<Self, Self::Error> {
+        match hand_id {
+            HandId::Player => Err(()),
+            HandId::Cpu1 => Ok(CpuId::One),
+            HandId::Cpu2 => Ok(CpuId::Two),
+            HandId::Cpu3 => Ok(CpuId::Three),
+        }
+    }
+}
+
 impl Iterator for CpuId {
     type Item = CpuId;
 
