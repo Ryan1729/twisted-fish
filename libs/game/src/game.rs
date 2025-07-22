@@ -389,16 +389,16 @@ mod question {
             if let Some(card) = drew {
                 if self.predicate.matches(card) {
                     self.description.extend_from_slice(
-                        b"and you got what you asked for!"
+                        b" and you got what you asked for!"
                     );
                 } else {
                     self.description.extend_from_slice(
-                        b"but you didn't get it."
+                        b" but you didn't get it."
                     );
                 }
             } else {
                 self.description.extend_from_slice(
-                    b"but the fish pond was empty!"
+                    b" but the fish pond was empty!"
                 );
             }
 
@@ -421,9 +421,9 @@ mod question {
                     self.description.extend_from_slice(
                         Suit::TEXT[usize::from(suit as u8)]
                     );
-        
+
                     self.description.push(b' ');
-        
+
                     self.description.extend_from_slice(
                         Rank::TEXT[usize::from(rank as u8)]
                     );
@@ -774,10 +774,12 @@ enum HardcodedMode {
     PlayerStuckWithDivineIntervention,
     PlayerAllZingers,
     Cpu1NoFishingAndDogfishes,
+    Cpu1NoFishingAndDogfishesPlayerAllOtherZingers,
+    Cpu1PlayNetPlayerNoFishing,
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = Cpu1NoFishingAndDogfishes;
+const HARDCODED_MODE: HardcodedMode = Cpu1PlayNetPlayerNoFishing;
 
 #[derive(Clone, Default)]
 pub struct State {
@@ -832,7 +834,9 @@ impl State {
             },
             PlayerStuckWithDivineIntervention
             | PlayerAllZingers
-            | Cpu1NoFishingAndDogfishes => {},
+            | Cpu1NoFishingAndDogfishes
+            | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers
+            | Cpu1PlayNetPlayerNoFishing => {},
         }
 
         let mut rng = xs::from_seed(seed);
@@ -878,7 +882,44 @@ impl State {
                 force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Yellow), FullHandId::Cpu1);
                 force_into_start_of_hand(&mut state, models::zingers::NO_FISHING, FullHandId::Cpu1);
             }
-            _ => {}
+            Cpu1NoFishingAndDogfishesPlayerAllOtherZingers => {
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Purple), FullHandId::Player);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Red), FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Green), FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Blue), FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Yellow), FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::zingers::NO_FISHING, FullHandId::Cpu1);
+
+                for zinger in models::zingers::ALL {
+                    if zinger == models::zingers::NO_FISHING { continue }
+                    force_into_start_of_hand(&mut state, zinger, FullHandId::Player);
+                }
+            }
+            Cpu1PlayNetPlayerNoFishing => {
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Purple), FullHandId::Player);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Red), FullHandId::Cpu2);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Green), FullHandId::Cpu2);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Blue), FullHandId::Cpu2);
+
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Yellow), FullHandId::Cpu3);
+
+                force_into_start_of_hand(&mut state, models::zingers::THE_NET, FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::zingers::NO_FISHING, FullHandId::Player);
+                force_into_start_of_hand(&mut state, models::zingers::TWO_FISTED_FISHERMAN, FullHandId::Player);
+
+                // The idea is for the player to ask Cpu 2 for all the dog fish, then ask Cpu1 with Two Fisted
+                // Fisherman. From there Cpu1 should be able to infer that Cpu 3 has th last one, so it makes sense
+                // to use The Net to ask the Player or Cpu 3 for Dogfish, and then scoop them all up. Presumably it
+                // wouldn't often be good strats to ditch a zinger as bait, and so it's okay to fall for someone
+                // theoretically doing that
+            }
+            PlayerMultipleZingers
+            | Cpu1GameWarden
+            | PlayerGlassBottomBoat
+            | PlayerGameWardenAndGlassBottomBoat
+            | Cpu2DeadScubaDiverAndNoFishing
+            | PlayerNetAndNoFishing
+            | Release => {}
         }
 
         for card_i in 0..initial_hand_size {
@@ -1920,7 +1961,7 @@ fn discard_no_fishing(
                 question: Question::new(
                     targeting,
                     predicate,
-                )            
+                )
             }
         }),
     )
@@ -2509,8 +2550,15 @@ fn should_use_no_fishing_against(
             hand.contains(fish_card(rank, suit))
             && memory.is_likely_to_fill_rank_soon(target, rank)
         },
-        Predicate::Net(_predicate) => {
-            todo!("should_use_no_fishing_against Net(_predicate)");
+        Predicate::Net(NetPredicate::Rank(rank)) => {
+            Suit::ALL.iter().any(|&suit| hand.contains(fish_card(rank, suit)))
+            && memory.is_likely_to_fill_rank_soon(target, rank)
+        },
+        Predicate::Net(NetPredicate::Suit(suit)) => {
+            Rank::ALL.iter().any(|&rank|
+                hand.contains(fish_card(rank, suit))
+                && memory.is_likely_to_fill_rank_soon(target, rank)
+            )
         },
     }
 }
@@ -2581,7 +2629,7 @@ pub fn update_and_render(
 
     for anim in state.animations.iter() {
         if anim.is_active() {
-            if anim.shown 
+            if anim.shown
             // This clause is just for debugging and should be removable later
             || HARDCODED_MODE != HardcodedMode::Release
             {
@@ -3479,7 +3527,6 @@ pub fn update_and_render(
                                             ref mut question,
                                             ref mut sub_menu,
                                         } => {
-                                            dbg!("PlayerMenu::Asking");
                                             let used = *used;
 
                                             macro_rules! p_handle_negative_response {
@@ -3595,7 +3642,6 @@ pub fn update_and_render(
                                                         y: base_xy.y
                                                     };
 
-                                                    dbg!("maybe press submit");
                                                     if do_button(
                                                         group,
                                                         ButtonSpec {
@@ -3607,10 +3653,9 @@ pub fn update_and_render(
                                                             text: b"Submit",
                                                         }
                                                     ) {
-                                                        dbg!("maybe discard_no_fishing");
                                                         if state.cards.hand(question.target())
                                                             .contains(zingers::NO_FISHING)
-                                                        && dbg!(should_use_no_fishing_against(
+                                                        && should_use_no_fishing_against(
                                                             state.memories.memory(
                                                                 CpuId::try_from(question.target())
                                                                 .expect("target should be a Cpu player")
@@ -3619,10 +3664,7 @@ pub fn update_and_render(
                                                             HandId::Player,
                                                             question.predicate,
                                                             state.cards.active_count(),
-                                                        )) {
-                                                            dbg!("discard_no_fishing");
-                                                            // TODO add `used` here to the after animation payload.
-                                                            // Maybe the whole `question`?
+                                                        ) {
                                                             discard_no_fishing(
                                                                 &mut state.cards,
                                                                 &mut state.animations,
@@ -4038,6 +4080,7 @@ pub fn update_and_render(
                                                                 // it here than wait to respond to our own turn?
                                                             }
                                                             Zinger::TheNet | Zinger::TheLure => {
+                                                                // TODO actually play the Net in cases where it seems like a good idea
                                                                 if state.done_something_this_turn {
                                                                     // Cannot play it
                                                                 } else if should_play_super_ask(
@@ -4392,7 +4435,7 @@ pub fn update_and_render(
                                     Err(()) => {
                                         let menu = &mut state.selection.player_menu;
 
-                                        // A copy of p_handle_negative_response!();
+                                        // Started as a copy of p_handle_negative_response!();
                                         // TODO? reduce this duplication?
                                         let player_len = state.cards.player.len();
 
@@ -4403,6 +4446,8 @@ pub fn update_and_render(
                                             drew,
                                         };
                                         state.done_something_this_turn = true;
+                                        // Ensure that we actually show the fished menu
+                                        go_again = true;
 
                                         if let Some(card) = drew {
                                             let at = DECK_XY;
@@ -4439,6 +4484,39 @@ pub fn update_and_render(
                             PlayKind::TheNet{ targeting: Targeting{ source, target }, predicate } => {
                                 match CpuId::try_from(target) {
                                     Err(()) => {
+                                        //let menu = &mut state.selection.player_menu;
+//
+                                        //// Started as a copy of p_handle_negative_response!();
+                                        //// TODO? reduce this duplication?
+                                        //let player_len = state.cards.player.len();
+//
+                                        //let drew = state.cards.deck.draw();
+//
+                                        //*menu = PlayerMenu::Fished{
+                                            //question: question.clone(),
+                                            //drew,
+                                        //};
+                                        //state.done_something_this_turn = true;
+                                        //// Ensure that we actually show the fished menu
+                                        //go_again = true;
+//
+                                        //if let Some(card) = drew {
+                                            //let at = DECK_XY;
+//
+                                            //let target = get_card_insert_position(
+                                                //spread(HandId::Player),
+                                                //player_len
+                                            //);
+//
+                                            //state.animations.push(Animation {
+                                                //card,
+                                                //at,
+                                                //target,
+                                                //action: AnimationAction::AddToHand(HandId::Player),
+                                                //.. <_>::default()
+                                            //});
+                                        //}
+
                                         todo!("probably move p_handle_negative_response!(); here")
                                     }
                                     Ok(target_id) => {
