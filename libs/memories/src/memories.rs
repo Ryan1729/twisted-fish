@@ -54,7 +54,7 @@ impl Default for Location {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Memory {
     locations: [Location; DECK_SIZE as _],
 }
@@ -329,7 +329,7 @@ mod informed_question_returns_the_expected_result {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Memories {
     cpu1: Memory,
     cpu2: Memory,

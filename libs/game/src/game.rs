@@ -1848,24 +1848,36 @@ fn anytime_play(
     None
 }
 
-fn should_play_super_ask(
+fn useful_the_net_play(
     cards: &Cards,
     hand: &Hand,
     stack: &[Play],
     memories: &Memories,
     own_id: CpuId,
-) -> bool {
-    should_shed_zingers(
+) -> Option<HandId> {
+    if should_shed_zingers(
         cards,
         hand,
         stack
-    ) || {
-        let hand_id = HandId::from(own_id);
-        memories
-            .memory(own_id)
-            .likely_to_fill_basket_soon(hand_id)
-            .is_some()
+    ) {
+        let targets = HandId::from(own_id).besides();
+
+        let memory = memories.memory(own_id);
+        dbg!(memory, memory.is_likely_to_fill_rank_soon(HandId::Player, Rank::Dogfish));
+        for rank in Rank::ALL {
+            for suit in Suit::ALL {
+                if hand.contains(fish_card(rank, suit)) {
+                    for target in targets {
+                        if memory.is_likely_to_fill_rank_soon(target, rank) {
+                            return Some(target)
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    None
 }
 
 fn should_shed_zingers(
@@ -4000,6 +4012,7 @@ pub fn update_and_render(
                                 let menu = &mut state.cpu_menu;
                                 match menu {
                                     CpuMenu::Selecting => {
+                                        dbg!(CpuMenu::Selecting, id);
                                         // Showing this avoids a flicker for the one frame the Cpu
                                         // is selecting when they stop waiting.
                                         // Maybe enforce that the Cpu windows must all be the same size?
@@ -4032,7 +4045,14 @@ pub fn update_and_render(
                                             }
 
                                             if let CpuMenu::Selecting = *menu {
-                                                let mut zinger_to_play = None;
+                                                #[derive(Debug)]
+                                                enum ZingerToPlay {
+                                                    DoNotPlay,
+                                                    DivineIntervention,
+                                                    Net(HandId),
+                                                    Lure(HandId),
+                                                }
+                                                let mut zinger_to_play = ZingerToPlay::DoNotPlay;
                                                 // TODO? randomize order through the cards here to make Cpu
                                                 // player less predictable?
 
@@ -4079,18 +4099,38 @@ pub fn update_and_render(
                                                                 // TODO? is there a case where we'd rather play
                                                                 // it here than wait to respond to our own turn?
                                                             }
-                                                            Zinger::TheNet | Zinger::TheLure => {
+                                                            Zinger::TheNet => {
+                                                                dbg!("Thinking about Zinger::TheNet");
                                                                 // TODO actually play the Net in cases where it seems like a good idea
                                                                 if state.done_something_this_turn {
                                                                     // Cannot play it
-                                                                } else if should_play_super_ask(
+                                                                } else if let Some(target) = useful_the_net_play(
                                                                     &state.cards,
                                                                     state.cards.hand(hand_id),
                                                                     &state.stack,
                                                                     &state.memories,
                                                                     id,
                                                                 ) {
-                                                                    zinger_to_play = Some(zinger);
+                                                                    zinger_to_play = ZingerToPlay::Net(target);
+                                                                    break
+                                                                } else {
+                                                                    // Don't discard it
+                                                                }
+                                                            }
+                                                            Zinger::TheLure => {
+                                                                // TODO actually play the Lure in cases where it seems like a good idea
+                                                                if state.done_something_this_turn {
+                                                                    // Cannot play it
+                                                                } else if let Some(target) = //should_play_lure(
+                                                                    //&state.cards,
+                                                                    //state.cards.hand(hand_id),
+                                                                    //&state.stack,
+                                                                    //&state.memories,
+                                                                    //id,
+                                                                //) 
+                                                                None
+                                                                {
+                                                                    zinger_to_play = ZingerToPlay::Lure(target);
                                                                     break
                                                                 } else {
                                                                     // Don't discard it
@@ -4105,7 +4145,7 @@ pub fn update_and_render(
                                                                     state.cards.hand(hand_id),
                                                                     &state.stack,
                                                                 ) {
-                                                                    zinger_to_play = Some(zinger);
+                                                                    zinger_to_play = ZingerToPlay::DivineIntervention;
                                                                     break
                                                                 } else {
                                                                     // Don't discard it
@@ -4123,7 +4163,7 @@ pub fn update_and_render(
                                                 }
 
                                                 match zinger_to_play {
-                                                    Some(Zinger::DivineIntervention) => {
+                                                    ZingerToPlay::DivineIntervention => {
                                                         discard_divine_intervention(
                                                             &mut state.cards,
                                                             &mut state.animations,
@@ -4133,16 +4173,19 @@ pub fn update_and_render(
                                                         // discard action, so don't
                                                         // do anything to the stack.
                                                     }
-                                                    //Some(Zinger::TheLure) => {
+                                                    ZingerToPlay::Net(_target) => {
+                                                        todo!();
+                                                    }
+                                                    //ZingerToPlay::Lure(target) => {
                                                         //state.stack.push()
                                                     //}
-                                                    Some(zinger) => {
-                                                        todo!("cpu handle selecting {zinger:?}");
-                                                    }
-                                                    None => {
+                                                    ZingerToPlay::DoNotPlay => {
                                                         if let CpuMenu::Selecting = *menu {
                                                             *menu = CpuMenu::DeadInTheWater;
                                                         }
+                                                    }
+                                                    ZingerToPlay::Lure(_target) => {
+                                                        todo!("cpu handle selecting {zinger_to_play:?}");
                                                     }
                                                 }
                                             }
