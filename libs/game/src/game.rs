@@ -832,11 +832,14 @@ impl State {
                 // Gives player the net and no fishing. (8)
                 seed = [130, 162, 218, 177, 150, 236, 216, 65, 146, 44, 249, 132, 212, 138, 4, 62];
             },
+            Cpu1PlayNetPlayerNoFishing => {
+                // Cpus play other zingers right after the intended setup, but they don't interrupt things
+                seed = [176, 254, 59, 99, 208, 28, 218, 65, 184, 231, 249, 78, 128, 155, 3, 62];
+            }
             PlayerStuckWithDivineIntervention
             | PlayerAllZingers
             | Cpu1NoFishingAndDogfishes
-            | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers
-            | Cpu1PlayNetPlayerNoFishing => {},
+            | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers => {},
         }
 
         let mut rng = xs::from_seed(seed);
@@ -1855,26 +1858,25 @@ fn useful_the_net_play(
     memories: &Memories,
     own_id: CpuId,
 ) -> Option<HandId> {
+    let targets = HandId::from(own_id).besides();
+
+    let memory = memories.memory(own_id);
+
+    for rank in Rank::ALL {
+        for target in targets {
+            if memory.is_likely_to_fill_rank_soon(target, rank) {
+                return Some(target)
+            }
+        }
+    }
+
     if should_shed_zingers(
         cards,
         hand,
         stack
     ) {
-        let targets = HandId::from(own_id).besides();
-
-        let memory = memories.memory(own_id);
-        dbg!(memory, memory.is_likely_to_fill_rank_soon(HandId::Player, Rank::Dogfish));
-        for rank in Rank::ALL {
-            for suit in Suit::ALL {
-                if hand.contains(fish_card(rank, suit)) {
-                    for target in targets {
-                        if memory.is_likely_to_fill_rank_soon(target, rank) {
-                            return Some(target)
-                        }
-                    }
-                }
-            }
-        }
+        // TODO randomize? strategize?
+        return Some(targets[0]);
     }
 
     None
@@ -4012,7 +4014,6 @@ pub fn update_and_render(
                                 let menu = &mut state.cpu_menu;
                                 match menu {
                                     CpuMenu::Selecting => {
-                                        dbg!(CpuMenu::Selecting, id);
                                         // Showing this avoids a flicker for the one frame the Cpu
                                         // is selecting when they stop waiting.
                                         // Maybe enforce that the Cpu windows must all be the same size?
@@ -4100,7 +4101,6 @@ pub fn update_and_render(
                                                                 // it here than wait to respond to our own turn?
                                                             }
                                                             Zinger::TheNet => {
-                                                                dbg!("Thinking about Zinger::TheNet");
                                                                 // TODO actually play the Net in cases where it seems like a good idea
                                                                 if state.done_something_this_turn {
                                                                     // Cannot play it
@@ -4127,7 +4127,7 @@ pub fn update_and_render(
                                                                     //&state.stack,
                                                                     //&state.memories,
                                                                     //id,
-                                                                //) 
+                                                                //)
                                                                 None
                                                                 {
                                                                     zinger_to_play = ZingerToPlay::Lure(target);
