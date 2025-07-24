@@ -542,7 +542,7 @@ pub enum PlayerAskingSubMenu {
 pub enum CpuMenu {
     #[default]
     Selecting,
-    Asking(Rank, Question),
+    Asking(Question),
     DeadInTheWater,
     WaitingForSuccesfulAsk,
     WaitingWhenGotWhatWasFishingFor,
@@ -1857,18 +1857,20 @@ fn useful_the_net_play(
     stack: &[Play],
     memories: &Memories,
     own_id: CpuId,
-) -> Option<HandId> {
+) -> Option<(HandId, NetPredicate)> {
     let targets = HandId::from(own_id).besides();
 
     let memory = memories.memory(own_id);
 
+    // TODO? sort by point total, descending?
     for rank in Rank::ALL {
         for target in targets {
             if memory.is_likely_to_fill_rank_soon(target, rank) {
-                return Some(target)
+                return Some((target, NetPredicate::Rank(rank)))
             }
         }
     }
+    // TODO? Is there really no time we'd preferentially want to use the Suit predicate?
 
     if should_shed_zingers(
         cards,
@@ -1876,7 +1878,7 @@ fn useful_the_net_play(
         stack
     ) {
         // TODO randomize? strategize?
-        return Some(targets[0]);
+        return Some((targets[0], NetPredicate::Suit(Suit::ALL[0])));
     }
 
     None
@@ -4028,21 +4030,22 @@ pub fn update_and_render(
                                             *menu = CpuMenu::DeadInTheWater;
                                         } else {
                                             //TODO restore
-                                            if let Some((rank, suit, target)) = state.memories.memory(id)
-                                                .informed_question(hand, hand_id) {
-                                                let question = Question::new(
-                                                    Targeting {
-                                                        target,
-                                                        source: hand_id,
-                                                    },
-                                                    Predicate::RankSuit(rank, suit),
-                                                );
+                                            if let CpuMenu::Selecting = *menu {
+                                                if let Some((rank, suit, target)) = state.memories.memory(id)
+                                                    .informed_question(hand, hand_id) {
+                                                    let question = Question::new(
+                                                        Targeting {
+                                                            target,
+                                                            source: hand_id,
+                                                        },
+                                                        Predicate::RankSuit(rank, suit),
+                                                    );
 
-                                                *menu = CpuMenu::Asking(
-                                                    rank,
-                                                    question,
-                                                );
-                                                state.done_something_this_turn = true;
+                                                    *menu = CpuMenu::Asking(
+                                                        question,
+                                                    );
+                                                    state.done_something_this_turn = true;
+                                                }
                                             }
 
                                             if let CpuMenu::Selecting = *menu {
@@ -4050,7 +4053,7 @@ pub fn update_and_render(
                                                 enum ZingerToPlay {
                                                     DoNotPlay,
                                                     DivineIntervention,
-                                                    Net(HandId),
+                                                    Net(HandId, NetPredicate),
                                                     Lure(HandId),
                                                 }
                                                 let mut zinger_to_play = ZingerToPlay::DoNotPlay;
@@ -4089,7 +4092,6 @@ pub fn update_and_render(
                                                         );
 
                                                         *menu = CpuMenu::Asking(
-                                                            rank,
                                                             question,
                                                         );
                                                         state.done_something_this_turn = true;
@@ -4104,14 +4106,14 @@ pub fn update_and_render(
                                                                 // TODO actually play the Net in cases where it seems like a good idea
                                                                 if state.done_something_this_turn {
                                                                     // Cannot play it
-                                                                } else if let Some(target) = useful_the_net_play(
+                                                                } else if let Some((target, net_predicate)) = useful_the_net_play(
                                                                     &state.cards,
                                                                     state.cards.hand(hand_id),
                                                                     &state.stack,
                                                                     &state.memories,
                                                                     id,
                                                                 ) {
-                                                                    zinger_to_play = ZingerToPlay::Net(target);
+                                                                    zinger_to_play = ZingerToPlay::Net(target, net_predicate);
                                                                     break
                                                                 } else {
                                                                     // Don't discard it
@@ -4173,8 +4175,16 @@ pub fn update_and_render(
                                                         // discard action, so don't
                                                         // do anything to the stack.
                                                     }
-                                                    ZingerToPlay::Net(_target) => {
-                                                        todo!();
+                                                    ZingerToPlay::Net(target, predicate) => {
+                                                        discard_net(
+                                                            &mut state.cards,
+                                                            &mut state.animations,
+                                                            Targeting {
+                                                                source: hand_id,
+                                                                target,
+                                                            },
+                                                            predicate,
+                                                        );
                                                     }
                                                     //ZingerToPlay::Lure(target) => {
                                                         //state.stack.push()
@@ -4191,7 +4201,7 @@ pub fn update_and_render(
                                             }
                                         }
                                     },
-                                    CpuMenu::Asking(_rank, ref mut question) => {
+                                    CpuMenu::Asking(ref mut question) => {
                                         macro_rules! handle_ask {
                                             () => {
                                                 state.memories.asked_for(
@@ -4527,40 +4537,15 @@ pub fn update_and_render(
                             PlayKind::TheNet{ targeting: Targeting{ source, target }, predicate } => {
                                 match CpuId::try_from(target) {
                                     Err(()) => {
-                                        //let menu = &mut state.selection.player_menu;
-//
-                                        //// Started as a copy of p_handle_negative_response!();
-                                        //// TODO? reduce this duplication?
-                                        //let player_len = state.cards.player.len();
-//
-                                        //let drew = state.cards.deck.draw();
-//
-                                        //*menu = PlayerMenu::Fished{
-                                            //question: question.clone(),
-                                            //drew,
-                                        //};
-                                        //state.done_something_this_turn = true;
-                                        //// Ensure that we actually show the fished menu
-                                        //go_again = true;
-//
-                                        //if let Some(card) = drew {
-                                            //let at = DECK_XY;
-//
-                                            //let target = get_card_insert_position(
-                                                //spread(HandId::Player),
-                                                //player_len
-                                            //);
-//
-                                            //state.animations.push(Animation {
-                                                //card,
-                                                //at,
-                                                //target,
-                                                //action: AnimationAction::AddToHand(HandId::Player),
-                                                //.. <_>::default()
-                                            //});
-                                        //}
-
-                                        todo!("probably move p_handle_negative_response!(); here")
+                                        let menu = &mut state.cpu_menu;
+                                        *menu = CpuMenu::Asking(
+                                            Question::new(
+                                                Targeting{ source, target },
+                                                Predicate::Net(predicate),
+                                            ),
+                                        );
+                                        state.done_something_this_turn = true;
+                                        go_again = true;
                                     }
                                     Ok(target_id) => {
                                         macro_rules! net_handle_negative_response {
