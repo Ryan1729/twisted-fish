@@ -242,6 +242,22 @@ impl Memory {
         score >= KNOWN_SCORE * (Suit::ALL.len() - 2) as u32
     }
 
+    pub fn is_unknown(
+        &self,
+        rank: Rank,
+        suit: Suit,
+    ) -> bool {
+        use Location::*;
+        use Evidence::*;
+
+        match self.locations[models::fish_card(rank, suit) as usize] {
+            Incomplete(incomplete) => {
+                incomplete.iter().all(|x| matches!(x, Unknown))
+            },
+            _ => false,
+        }   
+    }
+
     pub fn informed_question(
         &self,
         my_hand: &Hand,

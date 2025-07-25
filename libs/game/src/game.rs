@@ -776,10 +776,11 @@ enum HardcodedMode {
     Cpu1NoFishingAndDogfishes,
     Cpu1NoFishingAndDogfishesPlayerAllOtherZingers,
     Cpu1PlayNetPlayerNoFishing,
+    Cpu1PlayLurePlayerNoFishing,
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = Cpu1PlayNetPlayerNoFishing;
+const HARDCODED_MODE: HardcodedMode = Cpu1PlayLurePlayerNoFishing;
 
 #[derive(Clone, Default)]
 pub struct State {
@@ -836,7 +837,8 @@ impl State {
                 // Cpus play other zingers right after the intended setup, but they don't interrupt things
                 seed = [176, 254, 59, 99, 208, 28, 218, 65, 184, 231, 249, 78, 128, 155, 3, 62];
             }
-            PlayerStuckWithDivineIntervention
+            Cpu1PlayLurePlayerNoFishing
+            | PlayerStuckWithDivineIntervention
             | PlayerAllZingers
             | Cpu1NoFishingAndDogfishes
             | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers => {},
@@ -907,6 +909,24 @@ impl State {
                 force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Yellow), FullHandId::Cpu3);
 
                 force_into_start_of_hand(&mut state, models::zingers::THE_NET, FullHandId::Cpu1);
+                force_into_start_of_hand(&mut state, models::zingers::NO_FISHING, FullHandId::Player);
+                force_into_start_of_hand(&mut state, models::zingers::TWO_FISTED_FISHERMAN, FullHandId::Player);
+
+                // The idea is for the player to ask Cpu 2 for all the dog fish, then ask Cpu1 with Two Fisted
+                // Fisherman. From there Cpu1 should be able to infer that Cpu 3 has th last one, so it makes sense
+                // to use The Net to ask the Player or Cpu 3 for Dogfish, and then scoop them all up. Presumably it
+                // wouldn't often be good strats to ditch a zinger as bait, and so it's okay to fall for someone
+                // theoretically doing that
+            }
+            Cpu1PlayLurePlayerNoFishing => {
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Purple), FullHandId::Player);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Red), FullHandId::Cpu2);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Green), FullHandId::Cpu2);
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Blue), FullHandId::Cpu2);
+
+                force_into_start_of_hand(&mut state, models::fish_card(Rank::Dogfish, Suit::Yellow), FullHandId::Cpu3);
+
+                force_into_start_of_hand(&mut state, models::zingers::THE_LURE, FullHandId::Cpu1);
                 force_into_start_of_hand(&mut state, models::zingers::NO_FISHING, FullHandId::Player);
                 force_into_start_of_hand(&mut state, models::zingers::TWO_FISTED_FISHERMAN, FullHandId::Player);
 
@@ -1879,6 +1899,68 @@ fn useful_the_net_play(
     ) {
         // TODO randomize? strategize?
         return Some((targets[0], NetPredicate::Suit(Suit::ALL[0])));
+    }
+
+    None
+}
+
+fn useful_the_lure_play(
+    cards: &Cards,
+    hand: &Hand,
+    stack: &[Play],
+    memories: &Memories,
+    own_id: CpuId,
+) -> Option<(HandId, LurePredicate)> {
+    let targets = HandId::from(own_id).besides();
+
+    let memory = memories.memory(own_id);
+
+    // TODO? sort by point total, descending?
+    for rank in Rank::ALL {
+        for suit in Suit::ALL {
+            // If the hand doesn't contain it, then that's a better play
+            if !hand.contains(fish_card(rank, suit)) {
+                for target in targets {
+                    if memory.is_likely_to_fill_rank_soon(target, rank) {
+                        return Some((target, LurePredicate { rank, suit, }));
+                    }
+                }
+            }
+        }
+    }
+    // TODO? Is there really no time we'd preferentially want to use the Suit predicate?
+
+    if should_shed_zingers(
+        cards,
+        hand,
+        stack
+    ) {
+        // if there's somethign useful to ask and we shoudl shed, ask the useful thing
+        for rank in Rank::ALL {
+            for suit in Suit::ALL {
+                if hand.contains(fish_card(rank, suit)) {
+                    for target in targets {
+                        if memory.is_likely_to_fill_rank_soon(target, rank) {
+                            return Some((target, LurePredicate { rank, suit, }));
+                        }
+                    }
+                }
+            }
+        }
+
+        // otherwise, ask for something we don't have, and don't know about
+        for rank in Rank::ALL {
+            for suit in Suit::ALL {
+                if !hand.contains(fish_card(rank, suit)) {
+                    if memory.is_unknown(rank, suit) {
+                        // TODO focus on whoever has the most cards?
+                        for target in targets {
+                            return Some((target, LurePredicate { rank, suit, }));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     None
@@ -4054,7 +4136,7 @@ pub fn update_and_render(
                                                     DoNotPlay,
                                                     DivineIntervention,
                                                     Net(HandId, NetPredicate),
-                                                    Lure(HandId),
+                                                    Lure(HandId, LurePredicate),
                                                 }
                                                 let mut zinger_to_play = ZingerToPlay::DoNotPlay;
                                                 // TODO? randomize order through the cards here to make Cpu
@@ -4120,19 +4202,17 @@ pub fn update_and_render(
                                                                 }
                                                             }
                                                             Zinger::TheLure => {
-                                                                // TODO actually play the Lure in cases where it seems like a good idea
                                                                 if state.done_something_this_turn {
                                                                     // Cannot play it
-                                                                } else if let Some(target) = //should_play_lure(
-                                                                    //&state.cards,
-                                                                    //state.cards.hand(hand_id),
-                                                                    //&state.stack,
-                                                                    //&state.memories,
-                                                                    //id,
-                                                                //)
-                                                                None
+                                                                } else if let Some((target, lure_predicate)) = useful_the_lure_play(
+                                                                    &state.cards,
+                                                                    state.cards.hand(hand_id),
+                                                                    &state.stack,
+                                                                    &state.memories,
+                                                                    id,
+                                                                )
                                                                 {
-                                                                    zinger_to_play = ZingerToPlay::Lure(target);
+                                                                    zinger_to_play = ZingerToPlay::Lure(target, lure_predicate);
                                                                     break
                                                                 } else {
                                                                     // Don't discard it
@@ -4186,15 +4266,12 @@ pub fn update_and_render(
                                                             predicate,
                                                         );
                                                     }
-                                                    //ZingerToPlay::Lure(target) => {
-                                                        //state.stack.push()
-                                                    //}
                                                     ZingerToPlay::DoNotPlay => {
                                                         if let CpuMenu::Selecting = *menu {
                                                             *menu = CpuMenu::DeadInTheWater;
                                                         }
                                                     }
-                                                    ZingerToPlay::Lure(_target) => {
+                                                    ZingerToPlay::Lure(_target, _lure_predicate) => {
                                                         todo!("cpu handle selecting {zinger_to_play:?}");
                                                     }
                                                 }
