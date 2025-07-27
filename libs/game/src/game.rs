@@ -1349,6 +1349,14 @@ pub enum PlayAnytimeFlags {
     DSD_GW = 5,
     DSD_GBB = 6,
     DSD_GBB_GW = 7,
+    DI = 8,
+    DI_GW = 9,
+    DI_GBB = 10,
+    DI_GBB_GW = 11,
+    DI_DSD = 12,
+    DI_DSD_GW = 13,
+    DI_DSD_GBB = 14,
+    DI_DSD_GBB_GW = 15,
 }
 
 impl core::ops::BitOrAssign for PlayAnytimeFlags {
@@ -1362,6 +1370,14 @@ impl core::ops::BitOrAssign for PlayAnytimeFlags {
             5 => DSD_GW,
             6 => DSD_GBB,
             7 => DSD_GBB_GW,
+            8 => DI,
+            9 => DI_GW,
+            10 => DI_GBB,
+            11 => DI_GBB_GW,
+            12 => DI_DSD,
+            13 => DI_DSD_GW,
+            14 => DI_DSD_GBB,
+            15 => DI_DSD_GBB_GW,
             _ => unreachable!()
         };
     }
@@ -1380,8 +1396,8 @@ impl PlayAnytimeFlags {
     fn is_single(self) -> bool {
         use PlayAnytimeFlags::*;
         match self {
-            GW | GBB | DSD => true,
-            GBB_GW | DSD_GW | DSD_GBB | DSD_GBB_GW => false,
+            GW | GBB | DSD | DI => true,
+            _ => false,
         }
     }
 }
@@ -1410,6 +1426,7 @@ pub struct AvailablePlayAnytime {
     warden_i: CardIndex,
     boat_i: CardIndex,
     scuba_i: CardIndex,
+    divine_i: CardIndex,
     almost_complete_baskets: AlmostCompleteBaskets,
 }
 
@@ -1420,6 +1437,7 @@ impl AvailablePlayAnytime {
             warden_i,
             boat_i: CardIndex::default(),
             scuba_i: CardIndex::default(),
+            divine_i: CardIndex::default(),
             almost_complete_baskets: [None; Rank::COUNT as _],
         }
     }
@@ -1430,6 +1448,7 @@ impl AvailablePlayAnytime {
             warden_i: CardIndex::default(),
             boat_i,
             scuba_i: CardIndex::default(),
+            divine_i: CardIndex::default(),
             almost_complete_baskets: [None; Rank::COUNT as _],
         }
     }
@@ -1443,7 +1462,19 @@ impl AvailablePlayAnytime {
             warden_i: CardIndex::default(),
             boat_i: CardIndex::default(),
             scuba_i,
+            divine_i: CardIndex::default(),
             almost_complete_baskets,
+        }
+    }
+
+    fn divine_intervention(divine_i: CardIndex) -> Self {
+        AvailablePlayAnytime{
+            flags: PlayAnytimeFlags::DI,
+            warden_i: CardIndex::default(),
+            boat_i: CardIndex::default(),
+            scuba_i: CardIndex::default(),
+            divine_i,
+            almost_complete_baskets: [None; Rank::COUNT as _],
         }
     }
 
@@ -1492,6 +1523,18 @@ impl AvailablePlayAnytime {
                             apa.almost_complete_baskets = almost_complete;
                         },
                     }
+                }
+            }
+
+            if possible_zinger_card == zingers::DIVINE_INTERVENTION {
+                match output {
+                    None => {
+                        output = Some(AvailablePlayAnytime::divine_intervention(i));
+                    },
+                    Some(ref mut apa) => {
+                        apa.flags |= PlayAnytimeFlags::DI;
+                        apa.divine_i = i;
+                    },
                 }
             }
         }
@@ -1623,6 +1666,7 @@ enum AnytimeCard {
     GameWarden,
     GlassBottomBoat,
     DeadScubaDiver,
+    DivineIntervention,
 }
 
 impl AnytimeCard {
@@ -1639,6 +1683,11 @@ impl AnytimeCard {
             (AnytimeCard::DeadScubaDiver, DSD | DSD_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::DeadScubaDiver,
             (AnytimeCard::DeadScubaDiver, GW | GBB_GW) => AnytimeCard::GameWarden,
             (AnytimeCard::DeadScubaDiver, GBB) => AnytimeCard::GlassBottomBoat,
+            (AnytimeCard::DivineIntervention, DI_DSD | DI_DSD_GW | DI_DSD_GBB | DI_DSD_GBB_GW) => AnytimeCard::DivineIntervention,
+            (AnytimeCard::DivineIntervention, DSD | DSD_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::DeadScubaDiver,
+            (AnytimeCard::DivineIntervention, GW | GBB_GW) => AnytimeCard::GameWarden,
+            (AnytimeCard::DivineIntervention, GBB) => AnytimeCard::GlassBottomBoat,
+            _ => todo!("clamp_to"),
         }
     }
 
@@ -1655,6 +1704,7 @@ impl AnytimeCard {
             (AnytimeCard::DeadScubaDiver, GW | GBB_GW | DSD_GW | DSD_GBB_GW) => AnytimeCard::GameWarden,
             (AnytimeCard::DeadScubaDiver, GBB | DSD_GBB) => AnytimeCard::GlassBottomBoat,
             (AnytimeCard::DeadScubaDiver, DSD) => AnytimeCard::DeadScubaDiver,
+            _ => todo!("wrapping_inc"),
         }
     }
 
@@ -1671,6 +1721,7 @@ impl AnytimeCard {
             (AnytimeCard::DeadScubaDiver, GBB | GBB_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::GlassBottomBoat,
             (AnytimeCard::DeadScubaDiver, GW | DSD_GW) => AnytimeCard::GameWarden,
             (AnytimeCard::DeadScubaDiver, DSD) => AnytimeCard::DeadScubaDiver,
+            _ => todo!("wrapping_dec"),
         }
     }
 }
@@ -2231,7 +2282,7 @@ fn do_play_anytime_menu(
         Section::Card, Section::Target, Section::Submit,
     ];
 
-    // Clamp things to initial good vales, from the defaults.
+    // Clamp things to initial good values, from the defaults.
     {
         player_selection.card.clamp_to(available.flags);
 
@@ -2274,7 +2325,8 @@ fn do_play_anytime_menu(
             Section::Card => AnytimeCard,
             Section::Target => match player_selection.card {
                 AnytimeCard::GameWarden
-                | AnytimeCard::GlassBottomBoat => CpuIdSelect,
+                | AnytimeCard::GlassBottomBoat
+                | AnytimeCard::DivineIntervention => CpuIdSelect,
                 AnytimeCard::DeadScubaDiver => RankSelect,
             },
             Section::Submit => Submit,
@@ -2368,6 +2420,13 @@ fn do_play_anytime_menu(
                 card_xy,
             );
         }
+        PlayAnytimeFlags::DI => {
+            player_selection.card = AnytimeCard::DivineIntervention;
+            group.commands.draw_card(
+                zingers::DIVINE_INTERVENTION,
+                card_xy,
+            );
+        }
         _multiple => {
             match player_selection.card {
                 AnytimeCard::GameWarden => {
@@ -2388,6 +2447,12 @@ fn do_play_anytime_menu(
                         card_xy,
                     );
                 },
+                AnytimeCard::DivineIntervention => {
+                    group.commands.draw_card(
+                        zingers::DIVINE_INTERVENTION,
+                        card_xy,
+                    );
+                },
             }
 
             ui::draw_quick_select(
@@ -2405,7 +2470,8 @@ fn do_play_anytime_menu(
     let submit_base_xy;
     match player_selection.card {
         AnytimeCard::GameWarden
-        | AnytimeCard::GlassBottomBoat => {
+        | AnytimeCard::GlassBottomBoat
+                        | AnytimeCard::DivineIntervention                 => {
             let target_xy = base_xy + CARD_WIDTH
                 + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
 
@@ -2528,6 +2594,7 @@ fn do_play_anytime_menu(
                 );
                 return Done;
             }
+            _ => todo!("do AnytimeCard::DivineIntervention"),
         }
     } else if group.input.pressed_this_frame(Button::B) {
         // TODO? Separate decline button?
@@ -2557,7 +2624,8 @@ fn do_play_anytime_menu(
                 Section::Target => {
                     match player_selection.card {
                         AnytimeCard::GameWarden
-                        | AnytimeCard::GlassBottomBoat => {
+                        | AnytimeCard::GlassBottomBoat
+                        | AnytimeCard::DivineIntervention => {
                             player_selection.target
                                 = player_selection.target.wrapping_inc();
                         },
@@ -2579,7 +2647,8 @@ fn do_play_anytime_menu(
                 Section::Target => {
                     match player_selection.card {
                         AnytimeCard::GameWarden
-                        | AnytimeCard::GlassBottomBoat => {
+                        | AnytimeCard::GlassBottomBoat
+                        | AnytimeCard::DivineIntervention => {
                             player_selection.target
                                 = player_selection.target.wrapping_dec();
                         },
@@ -2633,7 +2702,8 @@ fn do_play_anytime_menu(
             Section::Card => AnytimeCard,
             Section::Target => match player_selection.card {
                 AnytimeCard::GameWarden
-                | AnytimeCard::GlassBottomBoat => CpuIdSelect,
+                | AnytimeCard::GlassBottomBoat
+                | AnytimeCard::DivineIntervention => CpuIdSelect,
                 AnytimeCard::DeadScubaDiver => RankSelect,
             },
             Section::Submit => Submit,
@@ -4139,8 +4209,12 @@ pub fn update_and_render(
                                                             Zinger::TwoFistedFisherman => {
                                                                 // Can't play that now. Wait until asking for something.
                                                             }
+                                                            Zinger::GlassBottomBoat 
+                                                            | Zinger::NoFishing
+                                                            | Zinger::TheGameWarden => {
                                                             // TODO Play other Zingers sometimes.
-                                                            _ => { todo!("Attempted to play {zinger:?}") }
+                                                                todo!("Attempted to play {zinger:?}")
+                                                            }
                                                         }
                                                     } else {
                                                         debug_assert!(false, "Non-fish, non-zinger card!? {card}");
