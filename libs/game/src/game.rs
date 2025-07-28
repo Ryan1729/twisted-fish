@@ -1359,6 +1359,28 @@ pub enum PlayAnytimeFlags {
     DI_DSD_GBB_GW = 15,
 }
 
+impl PlayAnytimeFlags {
+    fn is_single(self) -> bool {
+        use PlayAnytimeFlags::*;
+        match self {
+            GW | GBB | DSD | DI => true,
+            _ => false,
+        }
+    }
+
+    fn contains(self, card: AnytimeCard) -> bool {
+        use PlayAnytimeFlags::*;
+        (match card {
+            AnytimeCard::GameWarden => GW,
+            AnytimeCard::GlassBottomBoat => GBB,
+            AnytimeCard::DeadScubaDiver => DSD,
+            AnytimeCard::DivineIntervention => DI
+        } as u8)
+        & self as u8
+        != 0
+    }
+}
+
 impl core::ops::BitOrAssign for PlayAnytimeFlags {
     fn bitor_assign(&mut self, rhs: Self) {
         use PlayAnytimeFlags::*;
@@ -1392,13 +1414,36 @@ impl core::ops::BitOr for PlayAnytimeFlags {
     }
 }
 
-impl PlayAnytimeFlags {
-    fn is_single(self) -> bool {
+impl core::ops::BitAndAssign for PlayAnytimeFlags {
+    fn bitand_assign(&mut self, rhs: Self) {
         use PlayAnytimeFlags::*;
-        match self {
-            GW | GBB | DSD | DI => true,
-            _ => false,
-        }
+        *self = match (*self as u8) & (rhs as u8) {
+            1 => GW,
+            2 => GBB,
+            3 => GBB_GW,
+            4 => DSD,
+            5 => DSD_GW,
+            6 => DSD_GBB,
+            7 => DSD_GBB_GW,
+            8 => DI,
+            9 => DI_GW,
+            10 => DI_GBB,
+            11 => DI_GBB_GW,
+            12 => DI_DSD,
+            13 => DI_DSD_GW,
+            14 => DI_DSD_GBB,
+            15 => DI_DSD_GBB_GW,
+            _ => unreachable!()
+        };
+    }
+}
+
+impl core::ops::BitAnd for PlayAnytimeFlags {
+    type Output = Self;
+
+    fn bitand(mut self, rhs: Self) -> Self::Output {
+        self &= rhs;
+        self
     }
 }
 
@@ -1670,59 +1715,82 @@ enum AnytimeCard {
 }
 
 impl AnytimeCard {
-    fn clamp_to(&mut self, flags: PlayAnytimeFlags) {
-        use PlayAnytimeFlags::*;
+    const ALL: [Self; 4] = [
+        Self::GameWarden,
+        Self::GlassBottomBoat,
+        Self::DeadScubaDiver,
+        Self::DivineIntervention,
+    ];
 
-        *self = match (*self, flags) {
-            (AnytimeCard::GameWarden, GW | GBB_GW | DSD_GW | DSD_GBB_GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::GameWarden, GBB | DSD_GBB) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::GameWarden, DSD) => AnytimeCard::DeadScubaDiver,
-            (AnytimeCard::GlassBottomBoat, GBB | GBB_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::GlassBottomBoat, DSD | DSD_GW) => AnytimeCard::DeadScubaDiver,
-            (AnytimeCard::GlassBottomBoat, GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::DeadScubaDiver, DSD | DSD_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::DeadScubaDiver,
-            (AnytimeCard::DeadScubaDiver, GW | GBB_GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::DeadScubaDiver, GBB) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::DivineIntervention, DI_DSD | DI_DSD_GW | DI_DSD_GBB | DI_DSD_GBB_GW) => AnytimeCard::DivineIntervention,
-            (AnytimeCard::DivineIntervention, DSD | DSD_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::DeadScubaDiver,
-            (AnytimeCard::DivineIntervention, GW | GBB_GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::DivineIntervention, GBB) => AnytimeCard::GlassBottomBoat,
-            _ => todo!("clamp_to"),
+    fn clamp_to(&mut self, flags: PlayAnytimeFlags) {
+        *self = match *self {
+            AnytimeCard::GameWarden => if flags.contains(AnytimeCard::GameWarden) {
+                AnytimeCard::GameWarden
+            } else if flags.contains(AnytimeCard::GlassBottomBoat) {
+                AnytimeCard::GlassBottomBoat
+            } else if flags.contains(AnytimeCard::DeadScubaDiver) {
+                AnytimeCard::DeadScubaDiver
+            } else { //if flags.contains(AnytimeCard::DivineIntervention) {
+                AnytimeCard::DivineIntervention
+            },
+            AnytimeCard::GlassBottomBoat => if flags.contains(AnytimeCard::GlassBottomBoat) {
+                AnytimeCard::GlassBottomBoat
+            } else if flags.contains(AnytimeCard::DeadScubaDiver) {
+                AnytimeCard::DeadScubaDiver
+            } else if flags.contains(AnytimeCard::DivineIntervention) {
+                AnytimeCard::DivineIntervention
+            } else { //if flags.contains(AnytimeCard::GlassBottomBoat) {
+                AnytimeCard::GlassBottomBoat
+            },
+            AnytimeCard::DeadScubaDiver => if flags.contains(AnytimeCard::DeadScubaDiver) {
+                AnytimeCard::DeadScubaDiver
+            } else if flags.contains(AnytimeCard::GlassBottomBoat) {
+                AnytimeCard::GlassBottomBoat
+            } else if flags.contains(AnytimeCard::DivineIntervention) {
+                AnytimeCard::DivineIntervention
+            } else { //if flags.contains(AnytimeCard::GameWarden) {
+                AnytimeCard::GameWarden
+            },
+            AnytimeCard::DivineIntervention => if flags.contains(AnytimeCard::DivineIntervention) {
+                AnytimeCard::DivineIntervention
+            } else if flags.contains(AnytimeCard::GlassBottomBoat) {
+                AnytimeCard::GlassBottomBoat
+            } else if flags.contains(AnytimeCard::DeadScubaDiver) {
+                AnytimeCard::DeadScubaDiver
+            } else { //if flags.contains(AnytimeCard::GameWarden) {
+                AnytimeCard::GameWarden
+            },
         }
     }
 
     fn wrapping_inc(self, flags: PlayAnytimeFlags) -> Self {
-        use PlayAnytimeFlags::*;
+        let mut index = AnytimeCard::ALL.iter().position(|&s| s == self).unwrap_or_default();
 
-        match (self, flags) {
-            (AnytimeCard::GameWarden, GBB | GBB_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::GameWarden, DSD | DSD_GW) => AnytimeCard::DeadScubaDiver,
-            (AnytimeCard::GameWarden, GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::GlassBottomBoat, DSD_GBB | DSD_GBB_GW | DSD | DSD_GW) => AnytimeCard::DeadScubaDiver,
-            (AnytimeCard::GlassBottomBoat, GW | GBB_GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::GlassBottomBoat, GBB) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::DeadScubaDiver, GW | GBB_GW | DSD_GW | DSD_GBB_GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::DeadScubaDiver, GBB | DSD_GBB) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::DeadScubaDiver, DSD) => AnytimeCard::DeadScubaDiver,
-            _ => todo!("wrapping_inc"),
-        }
+        while {
+            index += 1;
+            if index >= AnytimeCard::ALL.len() {
+                index = 0;
+            }
+
+            !flags.contains(AnytimeCard::ALL[index])
+        } {}
+
+        AnytimeCard::ALL[index]
     }
 
     fn wrapping_dec(self, flags: PlayAnytimeFlags) -> Self {
-        use PlayAnytimeFlags::*;
+        let mut index = AnytimeCard::ALL.iter().position(|&s| s == self).unwrap_or_default();
 
-        match (self, flags) {
-            (AnytimeCard::GameWarden, DSD_GBB | DSD_GBB_GW | DSD | DSD_GW) => AnytimeCard::DeadScubaDiver,
-            (AnytimeCard::GameWarden, GBB | GBB_GW) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::GameWarden, GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::GlassBottomBoat, GW | GBB_GW | DSD_GW | DSD_GBB_GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::GlassBottomBoat, DSD | DSD_GBB) => AnytimeCard::DeadScubaDiver,
-            (AnytimeCard::GlassBottomBoat, GBB) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::DeadScubaDiver, GBB | GBB_GW | DSD_GBB | DSD_GBB_GW) => AnytimeCard::GlassBottomBoat,
-            (AnytimeCard::DeadScubaDiver, GW | DSD_GW) => AnytimeCard::GameWarden,
-            (AnytimeCard::DeadScubaDiver, DSD) => AnytimeCard::DeadScubaDiver,
-            _ => todo!("wrapping_dec"),
-        }
+        while {
+            index = index.wrapping_sub(1);
+            if index >= AnytimeCard::ALL.len() {
+                index = AnytimeCard::ALL.len() - 1;
+            }
+
+            !flags.contains(AnytimeCard::ALL[index])
+        } {}
+
+        AnytimeCard::ALL[index]
     }
 }
 
@@ -4209,7 +4277,7 @@ pub fn update_and_render(
                                                             Zinger::TwoFistedFisherman => {
                                                                 // Can't play that now. Wait until asking for something.
                                                             }
-                                                            Zinger::GlassBottomBoat 
+                                                            Zinger::GlassBottomBoat
                                                             | Zinger::NoFishing
                                                             | Zinger::TheGameWarden => {
                                                             // TODO Play other Zingers sometimes.
