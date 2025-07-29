@@ -787,6 +787,8 @@ use HardcodedMode::*;
 
 const HARDCODED_MODE: HardcodedMode = Cpu1PlayLurePlayerNoFishing;
 
+type Stack = Vec<Play>;
+
 #[derive(Clone, Default)]
 pub struct State {
     pub rng: Xs,
@@ -799,7 +801,7 @@ pub struct State {
     pub turn_id: HandId,
     pub sub_turn_ids: [HandId; HandId::COUNT as usize],
     pub sub_turn_index: u8,
-    pub stack: Vec<Play>,
+    pub stack: Stack,
     pub cpu_menu: CpuMenu,
     pub done_something_this_turn: bool,
 }
@@ -916,6 +918,8 @@ impl State {
                 force_into_start_of_hand(&mut state, models::zingers::THE_NET, FullHandId::Cpu1);
                 force_into_start_of_hand(&mut state, models::zingers::NO_FISHING, FullHandId::Player);
                 force_into_start_of_hand(&mut state, models::zingers::TWO_FISTED_FISHERMAN, FullHandId::Player);
+                // Extra, but handy
+                force_into_start_of_hand(&mut state, models::zingers::DIVINE_INTERVENTION, FullHandId::Player);
 
                 // The idea is for the player to ask Cpu 2 for all the dog fish, then ask Cpu1 with Two Fisted
                 // Fisherman. From there Cpu1 should be able to infer that Cpu 3 has the last one, so it makes sense
@@ -934,6 +938,8 @@ impl State {
                 force_into_start_of_hand(&mut state, models::zingers::THE_LURE, FullHandId::Cpu1);
                 force_into_start_of_hand(&mut state, models::zingers::NO_FISHING, FullHandId::Player);
                 force_into_start_of_hand(&mut state, models::zingers::TWO_FISTED_FISHERMAN, FullHandId::Player);
+                // Extra, but handy
+                force_into_start_of_hand(&mut state, models::zingers::DIVINE_INTERVENTION, FullHandId::Player);
 
                 // The idea is for the player to ask Cpu 2 for all the dog fish, then ask Cpu1 with Two Fisted
                 // Fisherman. From there Cpu1 should be able to infer that Cpu 3 has the last one, so it makes sense
@@ -1465,6 +1471,16 @@ fn almost_complete_basket_count(baskets: AlmostCompleteBaskets) -> RankCount {
     count
 }
 
+type DivineTargets = core::num::NonZeroU8;
+
+// SAFETY: None of the values passed to new_unchecked can be 0.
+const DT_NO_FISHING: DivineTargets = unsafe { DivineTargets::new_unchecked(1 << 0) };
+const DT_TWO_FISTED_FISHERMAN: DivineTargets = unsafe { DivineTargets::new_unchecked(1 << 1) };
+const DT_THE_NET: DivineTargets = unsafe { DivineTargets::new_unchecked(1 << 2) };
+const DT_THE_LURE: DivineTargets = unsafe { DivineTargets::new_unchecked(1 << 3) };
+
+const DT_DEFAULT: DivineTargets = DT_NO_FISHING;
+
 #[derive(Clone, Copy, Debug)]
 pub struct AvailablePlayAnytime {
     flags: PlayAnytimeFlags,
@@ -1473,6 +1489,7 @@ pub struct AvailablePlayAnytime {
     scuba_i: CardIndex,
     divine_i: CardIndex,
     almost_complete_baskets: AlmostCompleteBaskets,
+    divine_targets: DivineTargets,
 }
 
 impl AvailablePlayAnytime {
@@ -1484,6 +1501,7 @@ impl AvailablePlayAnytime {
             scuba_i: CardIndex::default(),
             divine_i: CardIndex::default(),
             almost_complete_baskets: [None; Rank::COUNT as _],
+            divine_targets: DT_DEFAULT,
         }
     }
 
@@ -1495,6 +1513,7 @@ impl AvailablePlayAnytime {
             scuba_i: CardIndex::default(),
             divine_i: CardIndex::default(),
             almost_complete_baskets: [None; Rank::COUNT as _],
+            divine_targets: DT_DEFAULT,
         }
     }
 
@@ -1509,10 +1528,11 @@ impl AvailablePlayAnytime {
             scuba_i,
             divine_i: CardIndex::default(),
             almost_complete_baskets,
+            divine_targets: DT_DEFAULT,
         }
     }
 
-    fn divine_intervention(divine_i: CardIndex) -> Self {
+    fn divine_intervention(divine_i: CardIndex, divine_targets: DivineTargets) -> Self {
         AvailablePlayAnytime{
             flags: PlayAnytimeFlags::DI,
             warden_i: CardIndex::default(),
@@ -1520,10 +1540,11 @@ impl AvailablePlayAnytime {
             scuba_i: CardIndex::default(),
             divine_i,
             almost_complete_baskets: [None; Rank::COUNT as _],
+            divine_targets,
         }
     }
 
-    fn in_hand(hand: &Hand) -> Option<AvailablePlayAnytime> {
+    fn in_hand(hand: &Hand, stack: &Stack) -> Option<AvailablePlayAnytime> {
         let mut output = None;
 
         for (i, possible_zinger_card) in hand.enumerated_iter() {
@@ -1571,15 +1592,35 @@ impl AvailablePlayAnytime {
                 }
             }
 
-            if possible_zinger_card == zingers::DIVINE_INTERVENTION {
-                match output {
-                    None => {
-                        output = Some(AvailablePlayAnytime::divine_intervention(i));
-                    },
-                    Some(ref mut apa) => {
-                        apa.flags |= PlayAnytimeFlags::DI;
-                        apa.divine_i = i;
-                    },
+            if possible_zinger_card == zingers::DIVINE_INTERVENTION
+            {
+                let mut divine_targets_raw = 0;
+
+                for play in stack.iter() {
+                    if let Some(divine_target) = {
+                        match play.kind {
+                            PlayKind::NoFishing { .. } => Some(DT_NO_FISHING),
+                            PlayKind::TwoFistedFisherman { .. } => Some(DT_TWO_FISTED_FISHERMAN),
+                            PlayKind::TheNet { .. } => Some(DT_THE_NET),
+                            PlayKind::TheLure { .. } => Some(DT_THE_LURE),
+                            _ => None,
+                        }
+                    } {
+                        divine_targets_raw |= divine_target.get();
+                    }
+                }
+
+                if let Ok(divine_targets) = DivineTargets::try_from(divine_targets_raw) {
+                    match output {
+                        None => {
+                            output = Some(AvailablePlayAnytime::divine_intervention(i, divine_targets));
+                        },
+                        Some(ref mut apa) => {
+                            apa.flags |= PlayAnytimeFlags::DI;
+                            apa.divine_i = i;
+                            apa.divine_targets = divine_targets;
+                        },
+                    }
                 }
             }
         }
@@ -2539,7 +2580,7 @@ fn do_play_anytime_menu(
     match player_selection.card {
         AnytimeCard::GameWarden
         | AnytimeCard::GlassBottomBoat
-                        | AnytimeCard::DivineIntervention                 => {
+        | AnytimeCard::DivineIntervention => {
             let target_xy = base_xy + CARD_WIDTH
                 + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
 
@@ -2972,7 +3013,10 @@ pub fn update_and_render(
                     match CpuId::try_from(responder_id) {
                         Err(()) => {
                             if let (Some(available), false) = (
-                                AvailablePlayAnytime::in_hand(state.cards.hand(HandId::Player)),
+                                AvailablePlayAnytime::in_hand(
+                                    state.cards.hand(HandId::Player),
+                                    &state.stack,
+                                ),
                                 state.selection.player_selection.declined
                             ) {
                                 match do_play_anytime_menu(
