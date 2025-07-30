@@ -467,6 +467,7 @@ pub struct PlayerSelection {
     declined: bool,
     viewing: Option<Card>,
     rank: Rank,
+    divine_target: DivineTarget,
 }
 
 #[derive(Clone)]
@@ -1214,6 +1215,7 @@ mod ui {
         RankSelect,
         NetPredicate,
         LurePredicate,
+        ZingerCardSelect,
     }
 
     #[derive(Copy, Clone, Default, Debug)]
@@ -1480,6 +1482,79 @@ const DT_THE_NET: DivineTargets = unsafe { DivineTargets::new_unchecked(1 << 2) 
 const DT_THE_LURE: DivineTargets = unsafe { DivineTargets::new_unchecked(1 << 3) };
 
 const DT_DEFAULT: DivineTargets = DT_NO_FISHING;
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+enum DivineTarget {
+    #[default]
+    NoFishing,
+    TwoFistedFisherman,
+    TheNet,
+    TheLure,
+    //GlassBottomBoat,
+    //GameWarden,
+}
+
+impl DivineTarget {
+    const ALL: [Self; 4] = [
+        Self::NoFishing,
+        Self::TwoFistedFisherman,
+        Self::TheNet,
+        Self::TheLure,
+    ];
+
+    fn wrapping_inc(self, targets: DivineTargets) -> Self {
+        let mut index = Self::ALL.iter().position(|&s| s == self).unwrap_or_default();
+
+        while {
+            index = index.wrapping_add(1);
+            if index >= Self::ALL.len() {
+                index = 0;
+            }
+
+            !Self::ALL[index].contained_in(targets)
+        } {}
+
+        Self::ALL[index]
+    }
+
+    fn wrapping_dec(self, targets: DivineTargets) -> Self {
+        let mut index = Self::ALL.iter().position(|&s| s == self).unwrap_or_default();
+
+        while {
+            index = index.wrapping_sub(1);
+            if index >= Self::ALL.len() {
+                index = Self::ALL.len() - 1;
+            }
+
+            !Self::ALL[index].contained_in(targets)
+        } {}
+
+        Self::ALL[index]
+    }
+
+    fn contained_in(self, targets: DivineTargets) -> bool {
+        let flag = match self {
+            Self::NoFishing => DT_NO_FISHING,
+            Self::TwoFistedFisherman => DT_TWO_FISTED_FISHERMAN,
+            Self::TheNet => DT_THE_NET,
+            Self::TheLure => DT_THE_LURE,
+            
+        };
+
+        (flag.get() & targets.get()) != 0
+    }
+}
+
+impl From<DivineTarget> for Card {
+    fn from(divine_target: DivineTarget) -> Self {
+        match divine_target {
+            DivineTarget::NoFishing => zingers::NO_FISHING,
+            DivineTarget::TwoFistedFisherman => zingers::TWO_FISTED_FISHERMAN,
+            DivineTarget::TheNet => zingers::THE_NET,
+            DivineTarget::TheLure => zingers::THE_LURE,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct AvailablePlayAnytime {
@@ -2408,7 +2483,8 @@ fn do_play_anytime_menu(
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
             CpuIdSelect
-            | RankSelect => Some(Section::Target),
+            | RankSelect
+            | ZingerCardSelect => Some(Section::Target),
             Submit => Some(Section::Submit),
             Zero
             | AskSuit
@@ -2579,8 +2655,7 @@ fn do_play_anytime_menu(
     let submit_base_xy;
     match player_selection.card {
         AnytimeCard::GameWarden
-        | AnytimeCard::GlassBottomBoat
-        | AnytimeCard::DivineIntervention => {
+        | AnytimeCard::GlassBottomBoat => {
             let target_xy = base_xy + CARD_WIDTH
                 + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
 
@@ -2622,6 +2697,26 @@ fn do_play_anytime_menu(
             ];
 
             submit_base_xy = base_xy + CARD_WIDTH + RANK_SELECT_WH.w;
+        }
+        AnytimeCard::DivineIntervention => {
+            let target_xy = base_xy + CARD_WIDTH
+                + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
+            
+            group.commands.draw_card(
+                player_selection.divine_target.into(),
+                target_xy,
+            );
+
+            ui::draw_quick_select(
+                group,
+                Rect::xy_wh(
+                    target_xy,
+                    CARD_QUICK_SELECT_WH,
+                ),
+                ZingerCardSelect
+            );
+
+            submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
         }
     }
 
@@ -2703,7 +2798,7 @@ fn do_play_anytime_menu(
                 );
                 return Done;
             }
-            _ => todo!("do AnytimeCard::DivineIntervention"),
+            AnytimeCard::DivineIntervention => todo!("do AnytimeCard::DivineIntervention"),
         }
     } else if group.input.pressed_this_frame(Button::B) {
         // TODO? Separate decline button?
@@ -2712,7 +2807,8 @@ fn do_play_anytime_menu(
         let old_el = match group.ctx.hot {
             AnytimeCard => Some(Section::Card),
             CpuIdSelect
-            | RankSelect => Some(Section::Target),
+            | RankSelect
+            | ZingerCardSelect => Some(Section::Target),
             ui::Id::Submit => Some(Section::Submit),
             Zero
             | AskSuit
@@ -2733,8 +2829,7 @@ fn do_play_anytime_menu(
                 Section::Target => {
                     match player_selection.card {
                         AnytimeCard::GameWarden
-                        | AnytimeCard::GlassBottomBoat
-                        | AnytimeCard::DivineIntervention => {
+                        | AnytimeCard::GlassBottomBoat => {
                             player_selection.target
                                 = player_selection.target.wrapping_inc();
                         },
@@ -2744,6 +2839,10 @@ fn do_play_anytime_menu(
                                     available.almost_complete_baskets
                                 );
                         },
+                        AnytimeCard::DivineIntervention => {
+                            player_selection.divine_target
+                                = player_selection.divine_target.wrapping_inc(available.divine_targets);
+                        }
                     }
                 },
                 Section::Submit => {}
@@ -2756,8 +2855,7 @@ fn do_play_anytime_menu(
                 Section::Target => {
                     match player_selection.card {
                         AnytimeCard::GameWarden
-                        | AnytimeCard::GlassBottomBoat
-                        | AnytimeCard::DivineIntervention => {
+                        | AnytimeCard::GlassBottomBoat => {
                             player_selection.target
                                 = player_selection.target.wrapping_dec();
                         },
@@ -2767,6 +2865,10 @@ fn do_play_anytime_menu(
                                     available.almost_complete_baskets
                                 );
                         },
+                        AnytimeCard::DivineIntervention => {
+                            player_selection.divine_target
+                                = player_selection.divine_target.wrapping_dec(available.divine_targets);
+                        }
                     }
                 },
                 Section::Submit => {}
@@ -2811,9 +2913,9 @@ fn do_play_anytime_menu(
             Section::Card => AnytimeCard,
             Section::Target => match player_selection.card {
                 AnytimeCard::GameWarden
-                | AnytimeCard::GlassBottomBoat
-                | AnytimeCard::DivineIntervention => CpuIdSelect,
+                | AnytimeCard::GlassBottomBoat => CpuIdSelect,
                 AnytimeCard::DeadScubaDiver => RankSelect,
+                AnytimeCard::DivineIntervention => ZingerCardSelect,
             },
             Section::Submit => Submit,
         });
