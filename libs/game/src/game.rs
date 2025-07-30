@@ -783,10 +783,11 @@ enum HardcodedMode {
     Cpu1NoFishingAndDogfishesPlayerAllOtherZingers,
     Cpu1PlayNetPlayerNoFishing,
     Cpu1PlayLurePlayerNoFishing,
+    PlayerDivineInterventionCpu1OtherZingers,
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = Cpu1PlayLurePlayerNoFishing;
+const HARDCODED_MODE: HardcodedMode = PlayerDivineInterventionCpu1OtherZingers;
 
 type Stack = Vec<Play>;
 
@@ -849,7 +850,8 @@ impl State {
             | PlayerStuckWithDivineIntervention
             | PlayerAllZingers
             | Cpu1NoFishingAndDogfishes
-            | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers => {},
+            | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers
+            | PlayerDivineInterventionCpu1OtherZingers => {},
         }
 
         let mut rng = xs::from_seed(seed);
@@ -947,6 +949,19 @@ impl State {
                 // to use The Net to ask the Player or Cpu 3 for Dogfish, and then scoop them all up. Presumably it
                 // wouldn't often be good strats to ditch a zinger as bait, and so it's okay to fall for someone
                 // theoretically doing that
+            }
+            PlayerDivineInterventionCpu1OtherZingers => {
+                for zinger in models::zingers::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        zinger,
+                        if zinger == models::zingers::DIVINE_INTERVENTION {
+                            FullHandId::Player
+                        } else {
+                            FullHandId::Cpu1
+                        }
+                    );
+                }
             }
             PlayerMultipleZingers
             | Cpu1GameWarden
@@ -1502,6 +1517,16 @@ impl DivineTarget {
         Self::TheLure,
     ];
 
+    fn clamp_to(&mut self, targets: DivineTargets) {
+        for (i, element) in Self::ALL.iter().enumerate() {
+            if (targets.get() & (1 << i)) != 0 {
+                *self = *element;
+            }
+        }
+
+        debug_assert!(false, "targets was empty?!");
+    }
+
     fn wrapping_inc(self, targets: DivineTargets) -> Self {
         let mut index = Self::ALL.iter().position(|&s| s == self).unwrap_or_default();
 
@@ -1538,7 +1563,7 @@ impl DivineTarget {
             Self::TwoFistedFisherman => DT_TWO_FISTED_FISHERMAN,
             Self::TheNet => DT_THE_NET,
             Self::TheLure => DT_THE_LURE,
-            
+
         };
 
         (flag.get() & targets.get()) != 0
@@ -1711,6 +1736,10 @@ impl AvailablePlayAnytime {
             .into_iter()
             .filter(Option::is_some)
             .count() as u8
+    }
+
+    fn divine_target_count(&self) -> u32 {
+        self.divine_targets.count_ones().get()
     }
 }
 
@@ -2470,6 +2499,8 @@ fn do_play_anytime_menu(
     {
         player_selection.card.clamp_to(available.flags);
 
+        player_selection.divine_target.clamp_to(available.divine_targets);
+
         if available.almost_complete_baskets[(player_selection.rank as u8) as usize]
             .is_none() {
             for (i, entry) in available.almost_complete_baskets.iter().enumerate() {
@@ -2503,6 +2534,12 @@ fn do_play_anytime_menu(
         if player_selection.card == AnytimeCard::DeadScubaDiver
         && el_i == 1
         && available.basket_count() <= 1 {
+            el_i = GRID_LEN - 1;
+        }
+
+        if player_selection.card == AnytimeCard::DivineIntervention
+        && el_i == 1
+        && available.divine_target_count() <= 1 {
             el_i = GRID_LEN - 1;
         }
 
@@ -2576,7 +2613,6 @@ fn do_play_anytime_menu(
         + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CARD_QUICK_SELECT_WH.h)/ 2);
 
     let card_xy = card_quick_select_xy + CHEVRON_H;
-
 
     group.commands.draw_nine_slice(
         gfx::NineSlice::Window,
@@ -2699,22 +2735,24 @@ fn do_play_anytime_menu(
             submit_base_xy = base_xy + CARD_WIDTH + RANK_SELECT_WH.w;
         }
         AnytimeCard::DivineIntervention => {
-            let target_xy = base_xy + CARD_WIDTH
-                + ((PLAYER_PLAY_ANYTIME_WINDOW.h - CPU_ID_SELECT_WH.h)/ 2);
-            
+            let target_card_quick_select_xy = card_quick_select_xy + CARD_WIDTH + (CARD_WIDTH / 2);
+            let target_card_xy = card_xy + CARD_WIDTH + (CARD_WIDTH / 2);
+
             group.commands.draw_card(
                 player_selection.divine_target.into(),
-                target_xy,
+                target_card_xy,
             );
 
-            ui::draw_quick_select(
-                group,
-                Rect::xy_wh(
-                    target_xy,
-                    CARD_QUICK_SELECT_WH,
-                ),
-                ZingerCardSelect
-            );
+            if available.divine_target_count() > 1 {
+                ui::draw_quick_select(
+                    group,
+                    Rect::xy_wh(
+                        target_card_quick_select_xy,
+                        CARD_QUICK_SELECT_WH,
+                    ),
+                    ZingerCardSelect
+                );
+            }
 
             submit_base_xy = base_xy + CARD_WIDTH + CPU_ID_SELECT_WH.w;
         }
