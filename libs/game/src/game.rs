@@ -2476,6 +2476,7 @@ fn do_play_anytime_menu(
     mut group: &mut ui::Group,
     cards: &mut Cards,
     animations: &mut Animations,
+    stack: &mut Stack,
     rng: &mut Xs,
     player_selection: &mut PlayerSelection,
     available: AvailablePlayAnytime,
@@ -2836,7 +2837,30 @@ fn do_play_anytime_menu(
                 );
                 return Done;
             }
-            AnytimeCard::DivineIntervention => todo!("do AnytimeCard::DivineIntervention"),
+            AnytimeCard::DivineIntervention => {
+
+                stack.retain(
+                    |play| {
+                        // Doing this as opposed to matching on a tuple, lets match be exhaustive,
+                        // which gives us good compile errors.
+                        match player_selection.divine_target {
+                            DivineTarget::NoFishing => matches!(play.kind, PlayKind::NoFishing {..}),
+                            DivineTarget::TwoFistedFisherman => matches!(play.kind, PlayKind::TwoFistedFisherman {..}),
+                            DivineTarget::TheNet => matches!(play.kind, PlayKind::TheNet {..}),
+                            DivineTarget::TheLure => matches!(play.kind, PlayKind::TheLure {..}),
+                            //DivineTarget::GlassBottomBoat => matches!(play.kind, PlayKind::GlassBottomBoat {..}),
+                            //DivineTarget::GameWarden => matches!(play.kind, PlayKind::GameWarden {..}),
+                        }
+                    }
+                );
+
+                discard_divine_intervention(
+                    cards,
+                    animations,
+                    HandId::Player
+                );
+                return Done;
+            },
         }
     } else if group.input.pressed_this_frame(Button::B) {
         // TODO? Separate decline button?
@@ -3163,6 +3187,7 @@ pub fn update_and_render(
                                     new_group!(),
                                     &mut state.cards,
                                     &mut state.animations,
+                                    &mut state.stack,
                                     &mut state.rng,
                                     &mut state.selection.player_selection,
                                     available,
@@ -3457,6 +3482,7 @@ pub fn update_and_render(
                                                         new_group!(),
                                                         &mut state.cards,
                                                         &mut state.animations,
+                                                        &mut state.stack,
                                                         &mut state.rng,
                                                         player_selection,
                                                         *available
