@@ -752,6 +752,34 @@ impl PlayKind {
     }
 }
 
+impl TryFrom<PlayKind> for DivineTarget {
+    type Error = ();
+
+    fn try_from(play_kind: PlayKind) -> Result<Self, Self::Error> {
+        match play_kind {
+            PlayKind::NoFishing { .. } => Ok(DivineTarget::NoFishing),
+            PlayKind::TwoFistedFisherman { .. } => Ok(DivineTarget::TwoFistedFisherman),
+            PlayKind::TheNet { .. } => Ok(DivineTarget::TheNet),
+            PlayKind::TheLure { .. } => Ok(DivineTarget::TheLure),
+            PlayKind::FishedUnsuccessfully { .. } => Err(()),
+        }
+    }
+}
+
+impl TryFrom<PlayKind> for DivineTargets {
+    type Error = ();
+
+    fn try_from(play_kind: PlayKind) -> Result<Self, Self::Error> {
+        match play_kind {
+            PlayKind::NoFishing { .. } => Ok(DT_NO_FISHING),
+            PlayKind::TwoFistedFisherman { .. } => Ok(DT_TWO_FISTED_FISHERMAN),
+            PlayKind::TheNet { .. } => Ok(DT_THE_NET),
+            PlayKind::TheLure { .. } => Ok(DT_THE_LURE),
+            PlayKind::FishedUnsuccessfully { .. } => Err(()),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Play {
     pub sub_turn_ids: [HandId; HandId::COUNT as usize],
@@ -1697,16 +1725,8 @@ impl AvailablePlayAnytime {
                 let mut divine_targets_raw = 0;
 
                 for play in stack.iter() {
-                    if let Some(divine_target) = {
-                        match play.kind {
-                            PlayKind::NoFishing { .. } => Some(DT_NO_FISHING),
-                            PlayKind::TwoFistedFisherman { .. } => Some(DT_TWO_FISTED_FISHERMAN),
-                            PlayKind::TheNet { .. } => Some(DT_THE_NET),
-                            PlayKind::TheLure { .. } => Some(DT_THE_LURE),
-                            _ => None,
-                        }
-                    } {
-                        divine_targets_raw |= divine_target.get();
+                    if let Ok(divine_targets) = DivineTargets::try_from(play.kind.clone()) {
+                        divine_targets_raw |= divine_targets.get();
                     }
                 }
 
@@ -2431,6 +2451,51 @@ fn discard_given_card(
     debug_assert!(false, "Didn't find card {}!", card);
 }
 
+fn play_divine_intervention(
+    cards: &mut Cards,
+    animations: &mut Animations,
+    stack: &mut Stack,
+    source: HandId,
+    divine_target: DivineTarget,
+) {
+    discard_divine_intervention(
+        cards,
+        animations,
+        source,
+    );
+
+    if divine_target == DivineTarget::TwoFistedFisherman {
+        for play in stack.iter_mut() {
+            if let Play {
+                kind: PlayKind::TwoFistedFisherman {
+                    cancelled,
+                    ..
+                },
+                ..
+            } = play {
+                *cancelled = true;
+            }
+        }
+    } else {
+        // Cancel the card we targetted by
+        // removing it from the stack.
+        stack.retain(
+            |play| {
+                // Doing this as opposed to matching on a tuple, lets match be exhaustive,
+                // which gives us good compile errors.
+                match divine_target {
+                    DivineTarget::NoFishing => matches!(play.kind, PlayKind::NoFishing {..}),
+                    DivineTarget::TwoFistedFisherman => matches!(play.kind, PlayKind::TwoFistedFisherman {..}),
+                    DivineTarget::TheNet => matches!(play.kind, PlayKind::TheNet {..}),
+                    DivineTarget::TheLure => matches!(play.kind, PlayKind::TheLure {..}),
+                    //DivineTarget::GlassBottomBoat => matches!(play.kind, PlayKind::GlassBottomBoat {..}),
+                    //DivineTarget::GameWarden => matches!(play.kind, PlayKind::GameWarden {..}),
+                }
+            }
+        );
+    }
+}
+
 fn play_dead_scuba_diver(
     cards: &mut Cards,
     id: HandId,
@@ -2838,27 +2903,14 @@ fn do_play_anytime_menu(
                 return Done;
             }
             AnytimeCard::DivineIntervention => {
-
-                stack.retain(
-                    |play| {
-                        // Doing this as opposed to matching on a tuple, lets match be exhaustive,
-                        // which gives us good compile errors.
-                        match player_selection.divine_target {
-                            DivineTarget::NoFishing => matches!(play.kind, PlayKind::NoFishing {..}),
-                            DivineTarget::TwoFistedFisherman => matches!(play.kind, PlayKind::TwoFistedFisherman {..}),
-                            DivineTarget::TheNet => matches!(play.kind, PlayKind::TheNet {..}),
-                            DivineTarget::TheLure => matches!(play.kind, PlayKind::TheLure {..}),
-                            //DivineTarget::GlassBottomBoat => matches!(play.kind, PlayKind::GlassBottomBoat {..}),
-                            //DivineTarget::GameWarden => matches!(play.kind, PlayKind::GameWarden {..}),
-                        }
-                    }
-                );
-
-                discard_divine_intervention(
+                play_divine_intervention(
                     cards,
                     animations,
-                    HandId::Player
+                    stack,
+                    HandId::Player,
+                    player_selection.divine_target,
                 );
+
                 return Done;
             },
         }
@@ -3264,27 +3316,27 @@ pub fn update_and_render(
                                         Selection::Response(())
                                     },
                                     AnytimePlaySelection::DivineIntervention => {
-                                        discard_divine_intervention(
-                                            &mut state.cards,
-                                            &mut state.animations,
-                                            source.into()
-                                        );
+                                        // TODO? More intelligent selection here? Like how often are there multiple options?
+                                        if let Ok(divine_target) =
+                                            state.stack
+                                            .last()
+                                            .ok_or(())
+                                            .and_then(|Play { kind, .. }| {
+                                                kind.clone().try_into()
+                                            })
+                                        {
+                                            play_divine_intervention(
+                                                &mut state.cards,
+                                                &mut state.animations,
+                                                &mut state.stack,
+                                                source.into(),
+                                                divine_target,
+                                            );
 
-                                        if let Some(Play {
-                                            kind: PlayKind::TwoFistedFisherman {
-                                                cancelled,
-                                                ..
-                                            },
-                                            ..
-                                        }) = state.stack.last_mut() {
-                                            *cancelled = true;
+                                            Selection::Response(())
                                         } else {
-                                            // Cancel the card we targetted by
-                                            // removing it from the stack.
-                                            state.stack.pop();
+                                            Selection::Nothing
                                         }
-
-                                        Selection::Response(())
                                     }
                                 }
                             } else {
