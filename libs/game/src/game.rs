@@ -620,6 +620,10 @@ impl Cards {
     fn can_discard_divine_intervention(&self) -> bool {
         self.played_zinger_count() >= 7
     }
+
+    fn can_play_game_warden(&self) -> bool {
+        !self.discard.is_empty()
+    }
 }
 
 pub enum FullHandId {
@@ -812,10 +816,11 @@ enum HardcodedMode {
     Cpu1PlayNetPlayerNoFishing,
     Cpu1PlayLurePlayerNoFishing,
     PlayerDivineInterventionCpu1OtherZingers,
+    Cpu1GameWardenPlayerOtherZingers,
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = PlayerDivineInterventionCpu1OtherZingers;
+const HARDCODED_MODE: HardcodedMode = Cpu1GameWardenPlayerOtherZingers;
 
 type Stack = Vec<Play>;
 
@@ -879,7 +884,8 @@ impl State {
             | PlayerAllZingers
             | Cpu1NoFishingAndDogfishes
             | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers
-            | PlayerDivineInterventionCpu1OtherZingers => {},
+            | PlayerDivineInterventionCpu1OtherZingers
+            | Cpu1GameWardenPlayerOtherZingers => {},
         }
 
         let mut rng = xs::from_seed(seed);
@@ -987,6 +993,19 @@ impl State {
                             FullHandId::Player
                         } else {
                             FullHandId::Cpu1
+                        }
+                    );
+                }
+            }
+            Cpu1GameWardenPlayerOtherZingers => {
+                for zinger in models::zingers::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        zinger,
+                        if zinger == models::zingers::THE_GAME_WARDEN {
+                            FullHandId::Cpu1
+                        } else {
+                            FullHandId::Player
                         }
                     );
                 }
@@ -1672,19 +1691,23 @@ impl AvailablePlayAnytime {
         }
     }
 
-    fn in_hand(hand: &Hand, stack: &Stack) -> Option<AvailablePlayAnytime> {
+    fn in_player_hand(cards: &Cards, stack: &Stack) -> Option<AvailablePlayAnytime> {
         let mut output = None;
+
+        let hand: &Hand = cards.hand(HandId::Player);
 
         for (i, possible_zinger_card) in hand.enumerated_iter() {
             if possible_zinger_card == zingers::THE_GAME_WARDEN {
-                match output {
-                    None => {
-                        output = Some(AvailablePlayAnytime::game_warden(i));
-                    },
-                    Some(ref mut apa) => {
-                        apa.flags |= PlayAnytimeFlags::GW;
-                        apa.warden_i = i;
-                    },
+                if cards.can_play_game_warden() {
+                    match output {
+                        None => {
+                            output = Some(AvailablePlayAnytime::game_warden(i));
+                        },
+                        Some(ref mut apa) => {
+                            apa.flags |= PlayAnytimeFlags::GW;
+                            apa.warden_i = i;
+                        },
+                    }
                 }
             }
 
@@ -3229,8 +3252,8 @@ pub fn update_and_render(
                     match CpuId::try_from(responder_id) {
                         Err(()) => {
                             if let (Some(available), false) = (
-                                AvailablePlayAnytime::in_hand(
-                                    state.cards.hand(HandId::Player),
+                                AvailablePlayAnytime::in_player_hand(
+                                    &state.cards,
                                     &state.stack,
                                 ),
                                 state.selection.player_selection.declined
@@ -4438,6 +4461,7 @@ pub fn update_and_render(
                                                 enum ZingerToPlay {
                                                     DoNotPlay,
                                                     DivineIntervention,
+                                                    GameWarden(HandId),
                                                     Net(HandId, NetPredicate),
                                                     Lure(HandId, LurePredicate),
                                                 }
@@ -4454,7 +4478,7 @@ pub fn update_and_render(
                                                     }
                                                 }
 
-                                                for card in hand.ordering_iter(ordering) {
+                                                'hand_loop: for card in hand.ordering_iter(ordering) {
                                                     if let Some(rank) = models::get_rank(card) {
                                                         let besides = HandId::besides(hand_id);
                                                         let target_id = besides[
@@ -4539,9 +4563,21 @@ pub fn update_and_render(
                                                             Zinger::TwoFistedFisherman => {
                                                                 // Can't play that now. Wait until asking for something.
                                                             }
+                                                            Zinger::TheGameWarden => {
+                                                                if state.cards.can_play_game_warden() {
+                                                                    for other_id in hand_id.besides() {
+                                                                        if state.memories.memory(id)
+                                                                           .likely_to_fill_basket_soon(other_id).is_some() {
+                                                                            zinger_to_play = ZingerToPlay::GameWarden(other_id);
+                                                                            break 'hand_loop;
+                                                                        }
+                                                                    }
+                                                                } else {
+                                                                    // Can't play it
+                                                                }
+                                                            }
                                                             Zinger::GlassBottomBoat
-                                                            | Zinger::NoFishing
-                                                            | Zinger::TheGameWarden => {
+                                                            | Zinger::NoFishing => {
                                                             // TODO Play other Zingers sometimes.
                                                                 todo!("Attempted to play {zinger:?}")
                                                             }
@@ -4552,6 +4588,17 @@ pub fn update_and_render(
                                                 }
 
                                                 match zinger_to_play {
+                                                    ZingerToPlay::GameWarden(target) => {
+                                                        perform_game_warden(
+                                                            &mut state.cards,
+                                                            &mut state.animations,
+                                                            &mut state.rng,
+                                                            Targeting {
+                                                                source: hand_id,
+                                                                target,
+                                                            },
+                                                        );
+                                                    }
                                                     ZingerToPlay::DivineIntervention => {
                                                         discard_divine_intervention(
                                                             &mut state.cards,
