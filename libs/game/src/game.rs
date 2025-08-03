@@ -817,10 +817,11 @@ enum HardcodedMode {
     Cpu1PlayLurePlayerNoFishing,
     PlayerDivineInterventionCpu1OtherZingers,
     Cpu1GameWardenPlayerOtherZingers,
+    Cpu1GlassBottomBoatPlayerOtherZingers,
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = Cpu1GameWardenPlayerOtherZingers;
+const HARDCODED_MODE: HardcodedMode = Cpu1GlassBottomBoatPlayerOtherZingers;
 
 type Stack = Vec<Play>;
 
@@ -885,7 +886,8 @@ impl State {
             | Cpu1NoFishingAndDogfishes
             | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers
             | PlayerDivineInterventionCpu1OtherZingers
-            | Cpu1GameWardenPlayerOtherZingers => {},
+            | Cpu1GameWardenPlayerOtherZingers
+            | Cpu1GlassBottomBoatPlayerOtherZingers => {},
         }
 
         let mut rng = xs::from_seed(seed);
@@ -1003,6 +1005,19 @@ impl State {
                         &mut state,
                         zinger,
                         if zinger == models::zingers::THE_GAME_WARDEN {
+                            FullHandId::Cpu1
+                        } else {
+                            FullHandId::Player
+                        }
+                    );
+                }
+            }
+            Cpu1GlassBottomBoatPlayerOtherZingers => {
+                for zinger in models::zingers::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        zinger,
+                        if zinger == models::zingers::GLASS_BOTTOM_BOAT {
                             FullHandId::Cpu1
                         } else {
                             FullHandId::Player
