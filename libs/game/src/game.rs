@@ -548,6 +548,7 @@ pub enum CpuMenu {
     WaitingForSuccesfulAsk,
     WaitingWhenGotWhatWasFishingFor,
     WaitingWhenPlayedTwoFistedFisherman,
+    WaitingWhenPlayedGlassBottomBoat,
 }
 
 #[derive(Clone, Default)]
@@ -880,14 +881,17 @@ impl State {
                 // Cpus play other zingers right after the intended setup, but they don't interrupt things
                 seed = [176, 254, 59, 99, 208, 28, 218, 65, 184, 231, 249, 78, 128, 155, 3, 62];
             }
+            Cpu1GlassBottomBoatPlayerOtherZingers => {
+                // Causes Cpu1 to use the Glass Bottom Boat when asking for the red eel, for currently unexamined reasons
+                seed = [231, 248, 53, 220, 104, 33, 218, 65, 210, 53, 53, 134, 13, 152, 3, 62];
+            }
             Cpu1PlayLurePlayerNoFishing
             | PlayerStuckWithDivineIntervention
             | PlayerAllZingers
             | Cpu1NoFishingAndDogfishes
             | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers
             | PlayerDivineInterventionCpu1OtherZingers
-            | Cpu1GameWardenPlayerOtherZingers
-            | Cpu1GlassBottomBoatPlayerOtherZingers => {},
+            | Cpu1GameWardenPlayerOtherZingers => {},
         }
 
         let mut rng = xs::from_seed(seed);
@@ -1132,6 +1136,7 @@ impl State {
                                     CpuMenu::WaitingForSuccesfulAsk
                                     | CpuMenu::WaitingWhenGotWhatWasFishingFor
                                     | CpuMenu::WaitingWhenPlayedTwoFistedFisherman
+                                    | CpuMenu::WaitingWhenPlayedGlassBottomBoat
                                 ) {
                                     self.cpu_menu = CpuMenu::Selecting;
                                     self.done_something_this_turn = true;
@@ -2902,6 +2907,7 @@ fn do_play_anytime_menu(
             AnytimeCard::GlassBottomBoat => {
                 let target_hand = cards.hand_mut(target);
                 let i = xs::range(rng, 0..(target_hand.len() as u32)) as _;
+                // TODO Confirm that this was checkied in this case.
                 let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
 
                 let at = get_card_position(
@@ -4477,6 +4483,7 @@ pub fn update_and_render(
                                                     DoNotPlay,
                                                     DivineIntervention,
                                                     GameWarden(HandId),
+                                                    GlassBottomBoat(HandId),
                                                     Net(HandId, NetPredicate),
                                                     Lure(HandId, LurePredicate),
                                                 }
@@ -4591,8 +4598,31 @@ pub fn update_and_render(
                                                                     // Can't play it
                                                                 }
                                                             }
-                                                            Zinger::GlassBottomBoat
-                                                            | Zinger::NoFishing => {
+                                                            Zinger::GlassBottomBoat => {
+                                                                // TODO use when it might tell us something interesting
+                                                                if true || should_shed_zingers(
+                                                                    &state.cards,
+                                                                    state.cards.hand(hand_id),
+                                                                    &state.stack
+                                                                ) {
+                                                                    let besides = hand_id.besides();
+                                                                    let offset = xs::range(&mut state.rng, 0..besides.len() as _) as usize;
+
+                                                                    for count in 0..besides.len() {
+                                                                        let target = besides[(count + offset) % besides.len()];
+    
+                                                                        if state.cards.hand(target).len() > 0 {
+                                                                            zinger_to_play = ZingerToPlay::GlassBottomBoat(target);
+                                                                            break 'hand_loop
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    // Can't play it
+                                                                } else {
+                                                                    // Hold on to it
+                                                                }
+                                                            }
+                                                            Zinger::NoFishing => {
                                                             // TODO Play other Zingers sometimes.
                                                                 todo!("Attempted to play {zinger:?}")
                                                             }
@@ -4633,6 +4663,34 @@ pub fn update_and_render(
                                                                 target,
                                                             },
                                                             predicate,
+                                                        );
+                                                    }
+                                                    ZingerToPlay::GlassBottomBoat(target) => {
+                                                        let target_hand = state.cards.hand_mut(target);
+                                                        let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
+                                                        let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
+                                        
+                                                        let at = get_card_position(
+                                                            spread(target),
+                                                            target_hand.len(),
+                                                            i,
+                                                        );
+                                        
+                                                        state.memories.memory_mut(id).known(target, card);
+
+                                                        state.animations.push(Animation {
+                                                            card,
+                                                            at,
+                                                            target: in_front_of(target),
+                                                            action: AnimationAction::AnimateBackToHand(target),
+                                                            shown: target == HandId::Player,
+                                                            .. <_>::default()
+                                                        });
+                                        
+                                                        discard_glass_bottom_boat(
+                                                            &mut state.cards,
+                                                            &mut state.animations,
+                                                            hand_id,
                                                         );
                                                     }
                                                     ZingerToPlay::DoNotPlay => {
@@ -4924,6 +4982,8 @@ pub fn update_and_render(
                                             description_base_rect,
                                             WHITE,
                                         );
+                                    },
+                                    CpuMenu::WaitingWhenPlayedGlassBottomBoat => {
                                     },
                                 }
                             }
