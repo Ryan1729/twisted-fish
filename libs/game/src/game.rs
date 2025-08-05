@@ -15,6 +15,15 @@ use platform_types::{
 };
 use xs::{Xs, Seed};
 
+/* Unlocalized TODOs:
+Maybe don't play divine intervention against two-fisted fisherman unless *you* were just asked something?
+Add a menu to show current baskets
+In debug mode, show what the CPU memories are, so we can understand why they do what they do
+    Really seems like they are sometimes asking for stuff that the same person was asked for, even when there have been no draws, becasue the "fish pond" is empty
+player being "Dead in the water" seems to lock up the game. And game ending seems to be messed up/not implemented in general
+
+*/
+
 macro_rules! allow_to_respond {
     ($state: ident) => {
         $state.sub_turn_ids = $state.turn_id.next_to_current();
@@ -627,6 +636,8 @@ impl Cards {
     }
 }
 
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FullHandId {
     Deck,
     Player,
@@ -819,10 +830,11 @@ enum HardcodedMode {
     PlayerDivineInterventionCpu1OtherZingers,
     Cpu1GameWardenPlayerOtherZingers,
     Cpu1GlassBottomBoatPlayerOtherZingers,
+    PlayerOnlyFourCardSharksCpu1CardShark,
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = Cpu1GlassBottomBoatPlayerOtherZingers;
+const HARDCODED_MODE: HardcodedMode = PlayerOnlyFourCardSharksCpu1CardShark;
 
 type Stack = Vec<Play>;
 
@@ -891,6 +903,7 @@ impl State {
             | Cpu1NoFishingAndDogfishes
             | Cpu1NoFishingAndDogfishesPlayerAllOtherZingers
             | PlayerDivineInterventionCpu1OtherZingers
+            | PlayerOnlyFourCardSharksCpu1CardShark
             | Cpu1GameWardenPlayerOtherZingers => {},
         }
 
@@ -1022,6 +1035,61 @@ impl State {
                         &mut state,
                         zinger,
                         if zinger == models::zingers::GLASS_BOTTOM_BOAT {
+                            FullHandId::Cpu1
+                        } else {
+                            FullHandId::Player
+                        }
+                    );
+                }
+            }
+            PlayerOnlyFourCardSharksCpu1CardShark => {
+                let dump_player = FullHandId::Cpu1; // Cpu2 instead?
+
+                // Ensure that no cards will be dealt after we force them to be where we want
+                for suit in Suit::ALL {
+                    for rank in Rank::ALL {
+                        force_into_start_of_hand(
+                            &mut state,
+                            fish_card(rank, suit),
+                            dump_player
+                        );
+                    }
+                }
+
+                // Get rid of all the zingers
+                for zinger in models::zingers::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        zinger,
+                        FullHandId::Discard,
+                    );
+                }
+
+                for suit in Suit::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        fish_card(Rank::CardShark, suit),
+                        if suit == Suit::Red {
+                            FullHandId::Cpu1
+                        } else {
+                            FullHandId::Player
+                        }
+                    );
+                }
+
+                for card in state.cards.player.clone().iter() {
+                    force_into_start_of_hand(
+                        &mut state,
+                        card,
+                        dump_player
+                    );
+                }
+
+                for suit in Suit::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        fish_card(Rank::CardShark, suit),
+                        if suit == Suit::Red {
                             FullHandId::Cpu1
                         } else {
                             FullHandId::Player
@@ -4600,7 +4668,7 @@ pub fn update_and_render(
                                                             }
                                                             Zinger::GlassBottomBoat => {
                                                                 // TODO use when it might tell us something interesting
-                                                                if true || should_shed_zingers(
+                                                                if should_shed_zingers(
                                                                     &state.cards,
                                                                     state.cards.hand(hand_id),
                                                                     &state.stack
@@ -4623,8 +4691,7 @@ pub fn update_and_render(
                                                                 }
                                                             }
                                                             Zinger::NoFishing => {
-                                                            // TODO Play other Zingers sometimes.
-                                                                todo!("Attempted to play {zinger:?}")
+                                                                // Can only play when an opponent is asking
                                                             }
                                                         }
                                                     } else {
