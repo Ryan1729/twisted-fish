@@ -18,10 +18,11 @@ use xs::{Xs, Seed};
 /* Unlocalized TODOs:
 Maybe don't play divine intervention against two-fisted fisherman unless *you* were just asked something?
 Add a menu to show current baskets
+    This seems like it will be useful, among other things, for understanding why some hardcoded states act weird
 In debug mode, show what the CPU memories are, so we can understand why they do what they do
     Really seems like they are sometimes asking for stuff that the same person was asked for, even when there have been no draws, becasue the "fish pond" is empty
 player being "Dead in the water" seems to lock up the game. And game ending seems to be messed up/not implemented in general
-
+Cpu should probably try to count cards in cases where players are dead in the water
 */
 
 macro_rules! allow_to_respond {
@@ -4476,7 +4477,7 @@ pub fn update_and_render(
                                     }
                                 } else {
                                     if state.has_started {
-                                        draw_dead_in_the_water(commands);
+                                        draw_dead_in_the_water(commands, state.turn_id);
 
                                         if input.pressed_this_frame(Button::A)
                                         || input.pressed_this_frame(Button::B) {
@@ -4500,6 +4501,8 @@ pub fn update_and_render(
                                                     action: AnimationAction::AddToHand(HandId::Player),
                                                     .. <_>::default()
                                                 });
+                                            } else {
+                                                to_next_turn!(state);
                                             }
                                         }
                                     } else {
@@ -4962,7 +4965,7 @@ pub fn update_and_render(
                                         }
                                     },
                                     CpuMenu::DeadInTheWater => {
-                                        draw_dead_in_the_water(commands);
+                                        draw_dead_in_the_water(commands, state.turn_id);
 
                                         // Just wait until player acknowledges turn.
                                         if input.pressed_this_frame(Button::A)
@@ -4990,6 +4993,8 @@ pub fn update_and_render(
                                                     action: AnimationAction::AddToHand(hand_id),
                                                     .. <_>::default()
                                                 });
+                                            } else {
+                                                to_next_turn!(state);
                                             }
                                         }
                                     },
@@ -5411,7 +5416,7 @@ pub fn update_and_render(
     }
 }
 
-fn draw_dead_in_the_water(commands: &mut Commands) {
+fn draw_dead_in_the_water(commands: &mut Commands, hand_id: HandId) {
     commands.draw_nine_slice(
         gfx::NineSlice::Window,
         DEAD_IN_THE_WATER_WINDOW
@@ -5426,8 +5431,15 @@ fn draw_dead_in_the_water(commands: &mut Commands) {
         DEAD_IN_THE_WATER_WINDOW,
     );
 
+    let message = match hand_id {
+        HandId::Player => b"You obligatorily say \"I am dead in the water.\"".as_slice(),
+        HandId::Cpu1 => b"Cpu1 says \"I am dead in the water.\"".as_slice(),
+        HandId::Cpu2 => b"Cpu2 says \"I am dead in the water.\"".as_slice(),
+        HandId::Cpu3 => b"Cpu3 says \"I am dead in the water.\"".as_slice(),
+    };
+
     commands.print_centered(
-        b"\"I am dead in the water.\"",
+        message,
         description_base_rect,
         WHITE,
     );
@@ -5926,7 +5938,7 @@ const CPU_TWO_FISTED_FISHERMAN_WINDOW: unscaled::Rect = {
 };
 
 const DEAD_IN_THE_WATER_WINDOW: unscaled::Rect = {
-    const OFFSET: unscaled::Inner = 128 - 16;
+    const OFFSET: unscaled::Inner = 64;
     unscaled::Rect {
         x: X(OFFSET),
         y: Y(OFFSET),
