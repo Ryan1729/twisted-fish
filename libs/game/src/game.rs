@@ -837,6 +837,8 @@ use HardcodedMode::*;
 
 const HARDCODED_MODE: HardcodedMode = PlayerOnlyFourCardSharksCpu1CardShark;
 
+const IS_DEBUG: bool = cfg!(debug_assertions) || !matches!(HardcodedMode::Release, HARDCODED_MODE);
+
 type Stack = Vec<Play>;
 
 #[derive(Clone, Default)]
@@ -854,6 +856,7 @@ pub struct State {
     pub stack: Stack,
     pub cpu_menu: CpuMenu,
     pub done_something_this_turn: bool,
+    pub paused: bool,
 }
 
 impl State {
@@ -3223,6 +3226,74 @@ pub fn update_and_render(
     input: Input,
     speaker: &mut Speaker
 ) {
+    match state.paused {
+        true => {
+            paused_update_and_render(
+                commands,
+                state,
+                input,
+                speaker,
+            );
+        },
+        false => {
+            playing_update_and_render(
+                commands,
+                state,
+                input,
+                speaker,
+            );
+        }
+    }
+}
+
+fn paused_update_and_render(
+    commands: &mut Commands,
+    state: &mut State,
+    input: Input,
+    _speaker: &mut Speaker
+) {
+    commands.print_centered(
+        b"Paused",
+        PAUSED_RECT,
+        WHITE,
+    );
+
+    if IS_DEBUG {
+        let y = Y(0) + PAUSED_HEIGHT;
+        let mut output = Vec::with_capacity(256);
+
+        for id in CpuId::ALL {
+            let memory = state.memories.memory(id);
+
+            memory.append_debug_info(&mut output);
+            output.push(b'\n');
+        }
+
+        dbg!(&output);
+
+        commands.print_centered(
+            &output,
+            unscaled::Rect {
+                x: X(0),
+                y,
+                w: W(command::WIDTH),
+                h: H(command::HEIGHT) - PAUSED_HEIGHT,
+            },
+            WHITE,
+        );
+    }
+
+    if input.pressed_this_frame(Button::START) {
+        state.paused = false;
+    }
+}
+
+fn playing_update_and_render(
+    commands: &mut Commands,
+    state: &mut State,
+    input: Input,
+    speaker: &mut Speaker
+) {
     macro_rules! new_group {
         () => {
             &mut ui::Group {
@@ -3250,7 +3321,7 @@ pub fn update_and_render(
         if anim.is_active() {
             if anim.shown
             // This clause is just for debugging and should be removable later
-            || HARDCODED_MODE != HardcodedMode::Release
+            || IS_DEBUG
             {
                 commands.draw_card(anim.card, anim.at);
             } else {
@@ -3263,8 +3334,7 @@ pub fn update_and_render(
         let hand = state.cards.hand(id);
         let len = hand.len();
 
-        if cfg!(debug_assertions)
-        || HARDCODED_MODE != HardcodedMode::Release {
+        if IS_DEBUG {
             for (i, card) in hand.enumerated_iter() {
                 commands.draw_card(
                     card,
@@ -5414,6 +5484,10 @@ pub fn update_and_render(
             }
         }
     }
+
+    if input.pressed_this_frame(Button::START) {
+        state.paused = true;
+    }
 }
 
 fn draw_dead_in_the_water(commands: &mut Commands, hand_id: HandId) {
@@ -6003,3 +6077,14 @@ const NO_FISHING_WINDOW: unscaled::Rect = {
 };
 
 const CONFIRM_BUTTON_HEIGHT: H = H(64);
+
+const PAUSED_HEIGHT: H = H(32);
+
+const PAUSED_RECT: unscaled::Rect = {
+    unscaled::Rect {
+        x: X(0),
+        y: Y(0),
+        w: W(command::WIDTH),
+        h: PAUSED_HEIGHT,
+    }
+};

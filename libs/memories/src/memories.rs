@@ -68,6 +68,26 @@ impl Default for Memory {
 }
 
 impl Memory {
+    pub fn append_debug_info(&self, output: &mut Vec<u8>) {
+        for card_i in 0..self.locations.len() {
+            match self.locations[card_i] {
+                Location::Known(hand_id) => {
+                    use std::io::Write;
+                    let _ = write!(output, "{:?}", models::CardOption::some(card_i as Card));
+
+                    output.extend_from_slice(
+                        b" is in "
+                    );
+
+                    output.extend_from_slice(
+                        hand_id.text()
+                    );
+                },
+                _ => {} // TODO
+            }
+        }
+    }
+
     fn question_for_known_card_with_rank(
         &self,
         rank: Rank,

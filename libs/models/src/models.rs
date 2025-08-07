@@ -44,7 +44,7 @@ pub fn gen_card(rng: &mut Xs) -> Card {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-struct CardOption(CardInner);
+pub struct CardOption(CardInner);
 
 compile_time_assert!{
     CardInner::MAX > DECK_SIZE
@@ -671,6 +671,10 @@ impl HandId {
         hand_id_text!(b"2"),
         hand_id_text!(b"3"),
     ];
+
+    pub fn text(self) -> &'static [u8] {
+        Self::TEXT[Self::ALL.iter().position(|x| &self == x).unwrap()]
+    }
 
     pub fn besides(self) -> [HandId; (Self::COUNT - 1) as usize] {
         match self {
