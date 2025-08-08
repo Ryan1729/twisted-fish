@@ -1,4 +1,4 @@
-use models::{Basket, Card, CpuId, Hand, HandId, NetPredicate, Predicate, Rank, Suit, DECK_SIZE};
+use models::{Basket, Card, CpuId, Hand, HandId, NetPredicate, Predicate, Rank, Suit, DECK_SIZE, append_card_text};
 
 /// It seems intuitive that counting an amount of asks larger than the amount of
 /// suits would not be needed, but I don't have an explicitly worked out reason for
@@ -69,11 +69,14 @@ impl Default for Memory {
 
 impl Memory {
     pub fn append_debug_info(&self, output: &mut Vec<u8>) {
+        use std::io::Write;
+
         for card_i in 0..self.locations.len() {
+            let mut no_line_this_time = false;
+
             match self.locations[card_i] {
                 Location::Known(hand_id) => {
-                    use std::io::Write;
-                    let _ = write!(output, "{:?}", models::CardOption::some(card_i as Card));
+                    append_card_text(output, card_i as Card);
 
                     output.extend_from_slice(
                         b" is in "
@@ -83,7 +86,57 @@ impl Memory {
                         hand_id.text()
                     );
                 },
-                _ => {} // TODO
+                Location::KnownGone => {
+                    append_card_text(output, card_i as Card);
+
+                    output.extend_from_slice(
+                        b" is in the discard pile or in a full basket."
+                    );
+                },
+                Location::Incomplete(incomplete) => {
+                    for (hand_i, evidence) in incomplete.iter().enumerate() {
+                        let hand_id = HandId::ALL[hand_i];
+
+                        match evidence {
+                            Evidence::Unknown => {
+                                // Nothing to say here
+                                no_line_this_time = true;
+                            },
+                            Evidence::AskedForSimilar(ask_count) => {
+                                output.extend_from_slice(
+                                    hand_id.text()
+                                );
+
+                                output.extend_from_slice(
+                                    b" asked for similar to "
+                                );
+
+                                append_card_text(output, card_i as Card);
+
+                                let _ = write!(
+                                    output,
+                                    " {ask_count:?} time{}",
+                                    if *ask_count == AskCount::One { "" } else { "s" }
+                                );
+                            },
+                            Evidence::DidNotHave => {
+                                output.extend_from_slice(
+                                    hand_id.text()
+                                );
+
+                                output.extend_from_slice(
+                                    b" did not have "
+                                );
+
+                                append_card_text(output, card_i as Card);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !no_line_this_time {
+                output.push(b'\n');
             }
         }
     }

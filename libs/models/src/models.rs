@@ -18,6 +18,12 @@ pub type CardInner = u8;
 
 pub type Card = CardInner;
 
+pub fn append_card_text(output: &mut Vec<u8>, card: Card) {
+    // TODO? just the card text?
+    use std::io::Write;
+    let _ = write!(output, "{:?}", CardOption::some(card));
+}
+
 pub fn fish_card(rank: Rank, suit: Suit) -> Card {
     suit as CardInner * RANK_COUNT + (rank as CardInner)
 }
