@@ -72,7 +72,7 @@ impl Memory {
         use std::io::Write;
 
         for card_i in 0..self.locations.len() {
-            let mut no_line_this_time = false;
+            let mut no_location_line_this_time = false;
 
             match self.locations[card_i] {
                 Location::Known(hand_id) => {
@@ -95,12 +95,14 @@ impl Memory {
                 },
                 Location::Incomplete(incomplete) => {
                     for (hand_i, evidence) in incomplete.iter().enumerate() {
+                        let mut no_incomplete_line_this_time = false;
+
                         let hand_id = HandId::ALL[hand_i];
 
                         match evidence {
                             Evidence::Unknown => {
                                 // Nothing to say here
-                                no_line_this_time = true;
+                                no_incomplete_line_this_time = true;
                             },
                             Evidence::AskedForSimilar(ask_count) => {
                                 output.extend_from_slice(
@@ -131,11 +133,17 @@ impl Memory {
                                 append_card_text(output, card_i as Card);
                             }
                         }
+
+                        if no_incomplete_line_this_time {
+                            no_location_line_this_time = true;
+                        } else {
+                            output.push(b'\n');
+                        }
                     }
                 }
             }
 
-            if !no_line_this_time {
+            if !no_location_line_this_time {
                 output.push(b'\n');
             }
         }

@@ -3269,8 +3269,6 @@ fn paused_update_and_render(
             output.push(b'\n');
         }
 
-        dbg!(&output);
-
         commands.print_centered(
             &output,
             unscaled::Rect {

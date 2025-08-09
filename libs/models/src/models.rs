@@ -19,9 +19,19 @@ pub type CardInner = u8;
 pub type Card = CardInner;
 
 pub fn append_card_text(output: &mut Vec<u8>, card: Card) {
-    // TODO? just the card text?
-    use std::io::Write;
-    let _ = write!(output, "{:?}", CardOption::some(card));
+    card_text(card).map(|s| output.extend_from_slice(s));
+}
+
+pub fn card_text(card: Card) -> Option<&'static [u8]> {
+    match (get_rank(card), get_suit(card), get_zinger(card)) {
+        (Some(rank), Some(suit), None) => {
+            Some(LurePredicate { suit, rank }.text())
+        }
+        (None, None, Some(zinger)) => {
+            Some(zinger.text())
+        }
+        _ => None,
+    }
 }
 
 pub fn fish_card(rank: Rank, suit: Suit) -> Card {
@@ -372,6 +382,36 @@ pub enum Zinger {
     TheLure,
     TheNet,
     TwoFistedFisherman,
+}
+
+macro_rules! zinger_text {
+    (0) => { "DeadScubaDiver" };
+    (1) => { "DivineIntervention" };
+    (2) => { "GlassBottomBoat" };
+    (3) => { "NoFishing" };
+    (4) => { "TheGameWarden" };
+    (5) => { "TheLure" };
+    (6) => { "TheNet" };
+    (7) => { "TwoFistedFisherman" };
+}
+
+impl Zinger {
+    const COUNT: u8 = zingers::ALL.len() as _;
+
+    pub const TEXT: [&[u8]; Self::COUNT as usize] = [
+        zinger_text!(0).as_bytes(),
+        zinger_text!(1).as_bytes(),
+        zinger_text!(2).as_bytes(),
+        zinger_text!(3).as_bytes(),
+        zinger_text!(4).as_bytes(),
+        zinger_text!(5).as_bytes(),
+        zinger_text!(6).as_bytes(),
+        zinger_text!(7).as_bytes(),
+    ];
+
+    pub fn text(self) -> &'static [u8] {
+        Self::TEXT[self as usize]
+    }
 }
 
 pub fn get_zinger(card: Card) -> Option<Zinger> {
@@ -1113,6 +1153,10 @@ impl LurePredicate {
         }
 
         unreachable!()
+    }
+
+    pub fn text(self) -> &'static [u8] {
+        Self::TEXT[self.index_of()]
     }
 }
 
