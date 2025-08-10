@@ -652,13 +652,77 @@ pub enum FullHandId {
     Discard,
 }
 
+impl FullHandId {
+    const ALL: [Self; 10] = [
+        Self::Deck,
+        Self::Player,
+        Self::Cpu1,
+        Self::Cpu2,
+        Self::Cpu3,
+        Self::PlayerBaskets,
+        Self::Cpu1Baskets,
+        Self::Cpu2Baskets,
+        Self::Cpu3Baskets,
+        Self::Discard,
+    ];
+
+    const TEXT: [&[u8]; 10] = [
+        b"Deck",
+        b"Player",
+        b"Cpu1",
+        b"Cpu2",
+        b"Cpu3",
+        b"PlayerBaskets",
+        b"Cpu1Baskets",
+        b"Cpu2Baskets",
+        b"Cpu3Baskets",
+        b"Discard",
+    ];
+
+    fn to_hand(self, cards: &Cards) -> &Hand {
+        use FullHandId::*;
+
+        match self {
+            Deck => &cards.deck,
+            Player => &cards.player,
+            Cpu1 => &cards.cpu1,
+            Cpu2 => &cards.cpu2,
+            Cpu3 => &cards.cpu3,
+            PlayerBaskets => &cards.player_baskets,
+            Cpu1Baskets => &cards.cpu1_baskets,
+            Cpu2Baskets => &cards.cpu2_baskets,
+            Cpu3Baskets => &cards.cpu3_baskets,
+            Discard => &cards.discard,
+        }
+    }
+
+    fn to_hand_mut(self, cards: &mut Cards) -> &mut Hand {
+        use FullHandId::*;
+
+        match self {
+            Deck => &mut cards.deck,
+            Player => &mut cards.player,
+            Cpu1 => &mut cards.cpu1,
+            Cpu2 => &mut cards.cpu2,
+            Cpu3 => &mut cards.cpu3,
+            PlayerBaskets => &mut cards.player_baskets,
+            Cpu1Baskets => &mut cards.cpu1_baskets,
+            Cpu2Baskets => &mut cards.cpu2_baskets,
+            Cpu3Baskets => &mut cards.cpu3_baskets,
+            Discard => &mut cards.discard,
+        }
+    }
+
+    fn text(self) -> &'static [u8] {
+        Self::TEXT[self as usize]
+    }
+}
+
 pub fn force_into_start_of_hand(
     state: &mut State,
     target_card: Card,
     hand_id: FullHandId
 ) {
-    use FullHandId::*;
-
     let hands = [
         &mut state.cards.deck,
         &mut state.cards.player,
@@ -683,18 +747,7 @@ pub fn force_into_start_of_hand(
         }
     }
 
-    let target_hand = match hand_id {
-        Deck => &mut state.cards.deck,
-        Player => &mut state.cards.player,
-        Cpu1 => &mut state.cards.cpu1,
-        Cpu2 => &mut state.cards.cpu2,
-        Cpu3 => &mut state.cards.cpu3,
-        PlayerBaskets => &mut state.cards.player_baskets,
-        Cpu1Baskets => &mut state.cards.cpu1_baskets,
-        Cpu2Baskets => &mut state.cards.cpu2_baskets,
-        Cpu3Baskets => &mut state.cards.cpu3_baskets,
-        Discard => &mut state.cards.discard,
-    };
+    let target_hand = hand_id.to_hand_mut(&mut state.cards);
 
     target_hand.swap_insert_top(extracted_card.expect("card should have been found"));
 }
@@ -841,6 +894,49 @@ const IS_DEBUG: bool = cfg!(debug_assertions) || !matches!(HardcodedMode::Releas
 
 type Stack = Vec<Play>;
 
+#[derive(Copy, Clone, Default)]
+pub enum PausedKind {
+    #[default]
+    Baskets,
+    Memories,
+}
+
+impl PausedKind {
+    fn wrapping_dec(self) -> Self {
+        match self {
+            Self::Baskets => Self::Memories,
+            Self::Memories => Self::Baskets,
+        }
+    }
+
+    fn wrapping_inc(self) -> Self {
+        match self {
+            Self::Baskets => Self::Memories,
+            Self::Memories => Self::Baskets,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Default)]
+pub enum PausedStateKind {
+    #[default]
+    Un,
+    Paused(PausedKind),
+}
+
+impl PausedStateKind {
+    /// The default value to use when switching from Un-paused to paused.
+    const PAUSED_DEFAULT: Self = Self::Paused(PausedKind::Baskets);
+}
+
+#[derive(Clone, Default)]
+pub struct Paused {
+    kind: PausedStateKind,
+    // TODO probably gonna store the scroll state etc. here
+    //baskets: BasketsState,
+    //memories: MemoriesState,
+}
+
 #[derive(Clone, Default)]
 pub struct State {
     pub rng: Xs,
@@ -856,7 +952,7 @@ pub struct State {
     pub stack: Stack,
     pub cpu_menu: CpuMenu,
     pub done_something_this_turn: bool,
-    pub paused: bool,
+    pub paused: Paused,
 }
 
 impl State {
@@ -3226,16 +3322,17 @@ pub fn update_and_render(
     input: Input,
     speaker: &mut Speaker
 ) {
-    match state.paused {
-        true => {
+    match state.paused.kind {
+        PausedStateKind::Paused(paused_kind) => {
             paused_update_and_render(
                 commands,
                 state,
                 input,
                 speaker,
+                paused_kind
             );
         },
-        false => {
+        PausedStateKind::Un => {
             playing_update_and_render(
                 commands,
                 state,
@@ -3250,7 +3347,8 @@ fn paused_update_and_render(
     commands: &mut Commands,
     state: &mut State,
     input: Input,
-    _speaker: &mut Speaker
+    _speaker: &mut Speaker,
+    paused_kind: PausedKind,
 ) {
     commands.print_centered(
         b"Paused",
@@ -3262,11 +3360,36 @@ fn paused_update_and_render(
         let y = Y(0) + PAUSED_HEIGHT;
         let mut output = Vec::with_capacity(256);
 
-        for id in CpuId::ALL {
-            let memory = state.memories.memory(id);
+        match paused_kind {
+            PausedKind::Baskets => {
+                for hand_id in FullHandId::ALL {
+                    let hand = hand_id.to_hand(&state.cards);
 
-            memory.append_debug_info(&mut output);
-            output.push(b'\n');
+                    output.extend_from_slice(hand_id.text());
+                    output.extend_from_slice(b": ");
+
+                    if hand.is_empty() {
+                        output.extend_from_slice(b"(empty)\n");
+                        continue
+                    }
+
+                    let mut sep: &[u8] = b"";
+                    for card in hand.iter() {
+                        output.extend_from_slice(sep);
+                        models::append_card_text(&mut output, card);
+                        sep = b", ";
+                    }
+                    output.push(b'\n');
+                }
+            }
+            PausedKind::Memories => {
+                for id in CpuId::ALL {
+                    let memory = state.memories.memory(id);
+
+                    memory.append_debug_info(&mut output);
+                    output.push(b'\n');
+                }
+            }
         }
 
         commands.print_centered(
@@ -3281,8 +3404,12 @@ fn paused_update_and_render(
         );
     }
 
-    if input.pressed_this_frame(Button::START) {
-        state.paused = false;
+    if input.pressed_this_frame(Button::LEFT) {
+        state.paused.kind = PausedStateKind::Paused(paused_kind.wrapping_dec());
+    } else if input.pressed_this_frame(Button::RIGHT) {
+        state.paused.kind = PausedStateKind::Paused(paused_kind.wrapping_inc());
+    } else if input.pressed_this_frame(Button::START) {
+        state.paused.kind = PausedStateKind::Un;
     }
 }
 
@@ -4749,13 +4876,13 @@ fn playing_update_and_render(
 
                                                                     for count in 0..besides.len() {
                                                                         let target = besides[(count + offset) % besides.len()];
-    
+
                                                                         if state.cards.hand(target).len() > 0 {
                                                                             zinger_to_play = ZingerToPlay::GlassBottomBoat(target);
                                                                             break 'hand_loop
                                                                         }
                                                                     }
-                                                                    
+
                                                                     // Can't play it
                                                                 } else {
                                                                     // Hold on to it
@@ -4807,13 +4934,13 @@ fn playing_update_and_render(
                                                         let target_hand = state.cards.hand_mut(target);
                                                         let i = xs::range(&mut state.rng, 0..(target_hand.len() as u32)) as _;
                                                         let card = target_hand.remove(i).expect("hand should have already been checked to see if it was not empty!");
-                                        
+
                                                         let at = get_card_position(
                                                             spread(target),
                                                             target_hand.len(),
                                                             i,
                                                         );
-                                        
+
                                                         state.memories.memory_mut(id).known(target, card);
 
                                                         state.animations.push(Animation {
@@ -4824,7 +4951,7 @@ fn playing_update_and_render(
                                                             shown: target == HandId::Player,
                                                             .. <_>::default()
                                                         });
-                                        
+
                                                         discard_glass_bottom_boat(
                                                             &mut state.cards,
                                                             &mut state.animations,
@@ -5484,7 +5611,7 @@ fn playing_update_and_render(
     }
 
     if input.pressed_this_frame(Button::START) {
-        state.paused = true;
+        state.paused.kind = PausedStateKind::PAUSED_DEFAULT;
     }
 }
 
