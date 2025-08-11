@@ -55,7 +55,7 @@ impl Commands {
         let mut h = CHAR_H.get();
         // If it's one of the accented characters ...
         if character > 0xE0 {
-            // ... we want to shift back into the extras characters we stuffed into 
+            // ... we want to shift back into the extras characters we stuffed into
             // the gfx where non-printables go, ...
             character -= 0xD0;
 
@@ -129,12 +129,12 @@ impl Commands {
         let longest_line = platform_types::longest_line_of(bytes);
 
         let unscaled::Rect { x, y, w, h } = rect;
-    
+
         let mut xy = unscaled::XY {
             x: x + (w / 2),
             y: y + (h / 2),
         };
-    
+
         // TODO reduce duplication with `center_line_in_rect`?
         xy -= (CHAR_ADVANCE_W * longest_line.len() as _).get() / 2;
         let count = bytes_lines(bytes).count();
@@ -630,7 +630,7 @@ impl Commands {
 
         self.sspr(
             sprite::XY {
-                x: image_x, 
+                x: image_x,
                 y: image_y,
             },
             Rect::from_unscaled(unscaled::Rect {
@@ -653,7 +653,7 @@ impl Commands {
 
         self.sspr(
             sprite::XY {
-                x: image_x, 
+                x: image_x,
                 y: image_y,
             },
             Rect::from_unscaled(unscaled::Rect {
@@ -740,7 +740,7 @@ impl Commands {
                 let mut x = xy.x;
                 let mut backing_x_offset = unscaled::W(0);
                 let mut image_x_offset = unscaled::W(0);
-                
+
                 for suit in Suit::ALL {
                     let suit_u8 = u8::from(suit);
 
@@ -765,11 +765,11 @@ impl Commands {
                         + unscaled::Inner::from(suit_u8)
                         * card::IMAGE_W.get()
                         + image_x_offset;
-            
+
                     let image_sprite_y = card::IMAGE_BASE_Y
                         + unscaled::Inner::from(u8::from(rank))
                         * card::IMAGE_H.get();
-            
+
                     let image_w = IMAGE_WS[usize::from(suit_u8)];
 
                     self.sspr(
@@ -821,7 +821,7 @@ impl Commands {
 
         self.sspr(
             sprite::XY {
-                x: image_x, 
+                x: image_x,
                 y: image_y,
             },
             Rect::from_unscaled(unscaled::Rect {
@@ -855,7 +855,7 @@ impl NineSlice {
     };
 
     fn top_left(self) -> sprite::XY {
-        NineSlice::BASE 
+        NineSlice::BASE
         + NineSlice::GRID_W
         * match self {
             NineSlice::Window => 0,
@@ -907,8 +907,8 @@ impl Commands {
 
         macro_rules! step_by {
             (
-                for $element: ident in $start: ident .. $end: ident 
-                step_by $by: ident 
+                for $element: ident in $start: ident .. $end: ident
+                step_by $by: ident
                 $body: block
             ) => ({
                 let mut $element = $start;
@@ -942,7 +942,7 @@ impl Commands {
                     top,
                     r!(fill_x, y),
                 );
-    
+
                 self.sspr(
                     bottom,
                     r!(fill_x, above_bottom_corner),
@@ -957,7 +957,7 @@ impl Commands {
                     middle_left,
                     r!(x, fill_y),
                 );
-    
+
                 self.sspr(
                     middle_right,
                     r!(before_right_corner, fill_y),
@@ -1131,4 +1131,84 @@ pub fn center_line_in_rect(
     xy -= CHAR_H.get() / 2;
 
     xy
+}
+
+pub mod text {
+    use super::*;
+
+    pub fn print_lines(
+        commands: &mut Commands,
+        base_xy: unscaled::XY,
+        top_index_with_offset: usize,
+        to_print: &[u8]
+    ) {
+        for (y, line) in lines(to_print)
+            .skip((top_index_with_offset as u16 / CHAR_ADVANCE_H.get().get()) as usize)
+            .take(command::h_to_usize(command::HEIGHT * CHAR_ADVANCE_H))
+            .enumerate()
+        {
+            let y = y as unscaled::Inner;
+
+            let offset = top_index_with_offset as u16 % CHAR_ADVANCE_H.get().get();
+
+            commands.print_line(
+                line,
+                base_xy
+                // TODO investigate scrolling shimmering which seems to be
+                // related to this part. Do we need to make the scrolling
+                // speed up, then slow down or something? or is the offset
+                // calculation just wrong?  Maybe it won't look right unless
+                // we add more in-between frames?
+                + unscaled::H(
+                    ((y + 1) * CHAR_ADVANCE_H.get().get())
+                    - offset
+                    - 1
+                )
+                + CHAR_SPACING_H.get(),
+                0 // No override
+            );
+        }
+    }
+
+    #[allow(unused)]
+    pub fn reflow(bytes: &[u8], width: usize) -> Vec<u8> {
+        if width == 0 || bytes.is_empty() {
+            return Vec::new();
+        }
+
+        let mut output = Vec::with_capacity(bytes.len() + bytes.len() / width);
+
+        let mut x = 0;
+        for word in split_whitespace(bytes) {
+            x += word.len();
+
+            if x == width && x == word.len() {
+                output.extend(word.iter());
+                continue;
+            }
+
+            if x >= width {
+                output.push(b'\n');
+
+                x = word.len();
+            } else if x > word.len() {
+                output.push(b' ');
+
+                x += 1;
+            }
+            output.extend(word.iter());
+        }
+
+        output
+    }
+
+    pub fn split_whitespace(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
+        bytes
+            .split(|b| b.is_ascii_whitespace())
+            .filter(|word| !word.is_empty())
+    }
+
+    pub fn lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
+        bytes.split(|&b| b == b'\n')
+    }
 }

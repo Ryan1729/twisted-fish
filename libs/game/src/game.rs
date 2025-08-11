@@ -930,11 +930,18 @@ impl PausedStateKind {
 }
 
 #[derive(Clone, Default)]
+struct ScrollState {
+    top_index_with_offset: usize,
+}
+
+type BasketsState = ScrollState;
+type MemoriesState = ScrollState;
+
+#[derive(Clone, Default)]
 pub struct Paused {
     kind: PausedStateKind,
-    // TODO probably gonna store the scroll state etc. here
-    //baskets: BasketsState,
-    //memories: MemoriesState,
+    baskets: BasketsState,
+    memories: MemoriesState,
 }
 
 #[derive(Clone, Default)]
@@ -3360,6 +3367,11 @@ fn paused_update_and_render(
         let y = Y(0) + PAUSED_HEIGHT;
         let mut output = Vec::with_capacity(256);
 
+        let base_xy = unscaled::XY {
+            x: X(0),
+            y,
+        };
+
         match paused_kind {
             PausedKind::Baskets => {
                 for hand_id in FullHandId::ALL {
@@ -3381,6 +3393,13 @@ fn paused_update_and_render(
                     }
                     output.push(b'\n');
                 }
+
+                gfx::text::print_lines(
+                    commands,
+                    base_xy,
+                    state.paused.baskets.top_index_with_offset,
+                    &output,
+                );
             }
             PausedKind::Memories => {
                 for id in CpuId::ALL {
@@ -3389,26 +3408,42 @@ fn paused_update_and_render(
                     memory.append_debug_info(&mut output);
                     output.push(b'\n');
                 }
+
+                gfx::text::print_lines(
+                    commands,
+                    base_xy,
+                    state.paused.memories.top_index_with_offset,
+                    &output,
+                );
             }
         }
 
-        commands.print_centered(
-            &output,
-            unscaled::Rect {
-                x: X(0),
-                y,
-                w: W(command::WIDTH),
-                h: H(command::HEIGHT) - PAUSED_HEIGHT,
-            },
-            WHITE,
-        );
+        macro_rules! scroll_state {
+            () => {
+                match paused_kind {
+                    PausedKind::Baskets => {
+                        &mut state.paused.baskets
+                    },
+                    PausedKind::Memories => {
+                        &mut state.paused.memories
+                    },
+                }
+            }
+        }
+
+        if input.pressed_this_frame(Button::B) {
+            state.paused.kind = PausedStateKind::Paused(paused_kind.wrapping_dec());
+        } else if input.pressed_this_frame(Button::A) {
+            state.paused.kind = PausedStateKind::Paused(paused_kind.wrapping_inc());
+        } else if input.gamepad.contains(Button::DOWN) {
+            scroll_state!().top_index_with_offset += 1;
+        } else if input.gamepad.contains(Button::UP) {
+            scroll_state!().top_index_with_offset =
+                scroll_state!().top_index_with_offset.saturating_sub(1);
+        }
     }
 
-    if input.pressed_this_frame(Button::LEFT) {
-        state.paused.kind = PausedStateKind::Paused(paused_kind.wrapping_dec());
-    } else if input.pressed_this_frame(Button::RIGHT) {
-        state.paused.kind = PausedStateKind::Paused(paused_kind.wrapping_inc());
-    } else if input.pressed_this_frame(Button::START) {
+    if input.pressed_this_frame(Button::START) {
         state.paused.kind = PausedStateKind::Un;
     }
 }

@@ -1,5 +1,5 @@
-use gfx::{Commands, CHAR_ADVANCE_H, CHAR_SPACING_H, CHAR_SPACING};
-use platform_types::{Button, Input, Speaker, SFX, unscaled, command};
+use gfx::{Commands, CHAR_SPACING};
+use platform_types::{Button, Input, Speaker, SFX, unscaled};
 pub use platform_types::StateParams;
 
 #[derive(Clone, Copy, Default)]
@@ -201,77 +201,15 @@ Everything Else
 Ryan Wiedemann (Ryan1729 on github)
 ";
 
-    for (y, line) in text::lines(HELP)
-        .skip((top_index_with_offset as u16 / CHAR_ADVANCE_H.get().get()) as usize)
-        .take(command::h_to_usize(command::HEIGHT * CHAR_ADVANCE_H))
-        .enumerate()
-    {
-        let y = y as unscaled::Inner;
+    let base_xy = unscaled::XY {
+        x: unscaled::X(CHAR_SPACING as _),
+        y: unscaled::Y(0),
+    };
 
-        let offset = top_index_with_offset as u16 % CHAR_ADVANCE_H.get().get();
-
-        commands.print_line(
-            line,
-            unscaled::XY {
-                x: unscaled::X(CHAR_SPACING as _),
-                y: unscaled::Y(0),
-            }
-            // TODO investigate scrolling shimmering which seems to be
-            // related to this part. Do we need to make the scrolling
-            // speed up, then slow down or something? or is the offset
-            // calculation just wrong?  Maybe it won't look right unless
-            // we add more in-between frames?
-            + unscaled::H(
-                ((y + 1) * CHAR_ADVANCE_H.get().get())
-                - offset
-                - 1
-            )
-            + CHAR_SPACING_H.get(),
-            0 // No override
-        );
-    }
-}
-
-mod text {
-    #[allow(unused)]
-    pub fn reflow(bytes: &[u8], width: usize) -> Vec<u8> {
-        if width == 0 || bytes.is_empty() {
-            return Vec::new();
-        }
-
-        let mut output = Vec::with_capacity(bytes.len() + bytes.len() / width);
-
-        let mut x = 0;
-        for word in split_whitespace(bytes) {
-            x += word.len();
-
-            if x == width && x == word.len() {
-                output.extend(word.iter());
-                continue;
-            }
-
-            if x >= width {
-                output.push(b'\n');
-
-                x = word.len();
-            } else if x > word.len() {
-                output.push(b' ');
-
-                x += 1;
-            }
-            output.extend(word.iter());
-        }
-
-        output
-    }
-
-    pub fn split_whitespace(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
-        bytes
-            .split(|b| b.is_ascii_whitespace())
-            .filter(|word| !word.is_empty())
-    }
-
-    pub fn lines(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
-        bytes.split(|&b| b == b'\n')
-    }
+    gfx::text::print_lines(
+        commands,
+        base_xy,
+        top_index_with_offset,
+        HELP,
+    );
 }
