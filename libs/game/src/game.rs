@@ -17,10 +17,9 @@ use xs::{Xs, Seed};
 
 /* Unlocalized TODOs:
 Maybe don't play divine intervention against two-fisted fisherman unless *you* were just asked something?
-Add a menu to show current baskets
-    This seems like it will be useful, among other things, for understanding why some hardcoded states act weird
-In debug mode, show what the CPU memories are, so we can understand why they do what they do
-    Really seems like they are sometimes asking for stuff that the same person was asked for, even when there have been no draws, becasue the "fish pond" is empty
+Really seems like they are sometimes asking for stuff that the same person was asked for, even when there have been no draws, becasue the "fish pond" is empty
+    Upon reflection, part of the issue is that we don't record what that player asked other players for already at all
+        Or should we be able to derive what to ask for from other parts than that?
 player being "Dead in the water" seems to lock up the game. And game ending seems to be messed up/not implemented in general
 Cpu should probably try to count cards in cases where players are dead in the water
 */
@@ -34,7 +33,7 @@ macro_rules! allow_to_respond {
 }
 
 macro_rules! cpu_handle_negative_response {
-    ($state: ident, $menu: ident, $id: ident, $predicate: expr) => {
+    ($state: ident, $menu: ident, $id: ident => $target: expr, $predicate: expr) => {
         let hand_id = $id.into();
 
         if can_and_should_play_two_fisted_fisherman(
@@ -66,7 +65,11 @@ macro_rules! cpu_handle_negative_response {
 
             let card_option = $state.cards.deck.draw();
 
+            $state.memories.did_not_have($target, predicate);
+
             if let Some(card) = card_option {
+                $state.memories.drew_card(hand_id);
+
                 let at = DECK_XY;
 
                 let target = get_card_insert_position(
@@ -869,6 +872,8 @@ impl Play {
 enum HardcodedMode {
     #[default]
     Release,
+    // Like Release mode, but where IS_DEBUG is true
+    DebugRelease,
     PlayerMultipleZingers,
     Cpu1GameWarden,
     PlayerGlassBottomBoat,
@@ -888,7 +893,7 @@ enum HardcodedMode {
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = PlayerOnlyFourCardSharksCpu1CardShark;
+const HARDCODED_MODE: HardcodedMode = DebugRelease;//PlayerOnlyFourCardSharksCpu1CardShark;
 
 const IS_DEBUG: bool = cfg!(debug_assertions) || !matches!(HardcodedMode::Release, HARDCODED_MODE);
 
@@ -970,7 +975,7 @@ impl State {
         let mut initial_hand_size: u8 = 8; //16;
 
         match HARDCODED_MODE {
-            Release => {},
+            Release | DebugRelease => {},
             PlayerMultipleZingers => {
                 // Gives player multiple zingers. (8)
                 seed = [150, 148, 11, 45, 255, 227, 216, 65, 225, 81, 35, 202, 235, 145, 4, 62];
@@ -1210,7 +1215,7 @@ impl State {
             | PlayerGameWardenAndGlassBottomBoat
             | Cpu2DeadScubaDiverAndNoFishing
             | PlayerNetAndNoFishing
-            | Release => {}
+            | Release | DebugRelease => {}
         }
 
         for card_i in 0..initial_hand_size {
@@ -4279,13 +4284,11 @@ fn playing_update_and_render(
 
                                                     let drew = state.cards.deck.draw();
 
-                                                    *menu = PlayerMenu::Fished{
-                                                        question: question.clone(),
-                                                        drew,
-                                                    };
-                                                    state.done_something_this_turn = true;
+                                                    state.memories.did_not_have(question.targeting.target.clone(), question.predicate.clone());
 
                                                     if let Some(card) = drew {
+                                                        state.memories.drew_card(question.targeting.source.clone());
+
                                                         let at = DECK_XY;
 
                                                         let target = get_card_insert_position(
@@ -4301,6 +4304,12 @@ fn playing_update_and_render(
                                                             .. <_>::default()
                                                         });
                                                     }
+
+                                                    *menu = PlayerMenu::Fished{
+                                                        question: question.clone(),
+                                                        drew,
+                                                    };
+                                                    state.done_something_this_turn = true;
                                                 }
                                             }
 
@@ -4717,6 +4726,8 @@ fn playing_update_and_render(
                                             state.selection.player_menu = PlayerMenu::default();
 
                                             if let Some(card) = drew {
+                                                state.memories.drew_card(HandId::Player);
+
                                                 let at = DECK_XY;
 
                                                 let target = get_card_insert_position(
@@ -5071,7 +5082,7 @@ fn playing_update_and_render(
                                                     state.cpu_menu = CpuMenu::WaitingForSuccesfulAsk;
                                                     state.done_something_this_turn = true;
                                                 } else {
-                                                    cpu_handle_negative_response!(state, menu, id, question.predicate);
+                                                    cpu_handle_negative_response!(state, menu, id => question.targeting.target, question.predicate);
                                                 }
                                             }
                                         }
@@ -5209,6 +5220,8 @@ fn playing_update_and_render(
                                             state.cpu_menu = CpuMenu::default();
 
                                             if let Some(card) = drew {
+                                                state.memories.drew_card(hand_id);
+
                                                 let at = DECK_XY;
 
                                                 let target = get_card_insert_position(
@@ -5318,7 +5331,11 @@ fn playing_update_and_render(
                                         // Ensure that we actually show the fished menu
                                         go_again = true;
 
+                                        state.memories.did_not_have(question.targeting.target, question.predicate);
+
                                         if let Some(card) = drew {
+                                            state.memories.drew_card(question.targeting.source);
+
                                             let at = DECK_XY;
 
                                             let target = get_card_insert_position(
@@ -5337,7 +5354,7 @@ fn playing_update_and_render(
                                     }
                                     Ok(asker_id) => {
                                         let menu = &mut state.cpu_menu;
-                                        cpu_handle_negative_response!(state, menu, asker_id, question.predicate);
+                                        cpu_handle_negative_response!(state, menu, asker_id => question.targeting.target, question.predicate);
                                     }
                                 }
                             }
@@ -5370,7 +5387,11 @@ fn playing_update_and_render(
 
                                                 let drew = state.cards.deck.draw();
 
+                                                state.memories.did_not_have(target, models::Predicate::Net(predicate));
+
                                                 if let Some(card) = drew {
+                                                    state.memories.drew_card(source);
+
                                                     let at = DECK_XY;
 
                                                     let target = get_card_insert_position(
@@ -5511,7 +5532,10 @@ fn playing_update_and_render(
 
                                         let drew = state.cards.deck.draw();
 
+                                        state.memories.did_not_have(target, models::Predicate::RankSuit(predicate.rank, predicate.suit));
+
                                         if let Some(card) = drew {
+                                            state.memories.drew_card(source);
                                             let at = DECK_XY;
 
                                             let target = get_card_insert_position(

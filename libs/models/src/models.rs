@@ -110,7 +110,7 @@ pub type AlmostCompleteBasket = [CardIndex; (Suit::COUNT - 1) as _];
 pub type AlmostCompleteBaskets = [Option<AlmostCompleteBasket>; Rank::COUNT as _];
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Rank {
     // Worth 5 points {
     #[default]
@@ -270,7 +270,7 @@ pub fn get_rank(card: Card) -> Option<Rank> {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Suit {
     #[default]
     Red,
@@ -869,7 +869,7 @@ impl CpuId {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NetPredicate {
     Suit(Suit),
     Rank(Rank),
@@ -1160,7 +1160,7 @@ impl LurePredicate {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Predicate {
     RankSuit(Rank, Suit),
     Net(NetPredicate),

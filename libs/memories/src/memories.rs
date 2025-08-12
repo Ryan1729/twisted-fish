@@ -54,15 +54,26 @@ impl Default for Location {
     }
 }
 
+type PredicateSet = std::collections::BTreeSet<Predicate>;
+
+#[derive(Clone, Debug, Default)]
+enum HandKnowledge {
+    #[default]
+    CouldBeAnything,
+    DidNotHave(PredicateSet),
+}
+
 #[derive(Clone, Debug)]
 pub struct Memory {
     locations: [Location; DECK_SIZE as _],
+    hand_knowledge: [HandKnowledge; HandId::ALL.len()],
 }
 
 impl Default for Memory {
     fn default() -> Self {
         Self {
             locations: [Location::default(); models::DECK_SIZE as _],
+            hand_knowledge: core::array::from_fn(|_| <_>::default()),
         }
     }
 }
@@ -178,20 +189,33 @@ impl Memory {
         let mut best = None;
         // TODO? randomize order of suits? Prioritize them somehow?
         for suit in Suit::ALL {
-            let location = self.locations[models::fish_card(rank, suit) as usize];
+            let card = models::fish_card(rank, suit);
+
+            let location = self.locations[card as usize];
             match location {
                 Location::Incomplete(incomplete) => {
                     let my_index = my_id as _;
-                    for (i, evidence) in incomplete.iter().enumerate() {
-                        if i == my_index { continue }
+                    for (hand_i, evidence) in incomplete.iter().enumerate() {
+                        if hand_i == my_index { continue }
+
+                        match &self.hand_knowledge[hand_i] {
+                            HandKnowledge::DidNotHave(predicates) => {
+                                for predicate in predicates {
+                                    if predicate.matches(card) {
+                                        continue
+                                    }
+                                }
+                            },
+                            HandKnowledge::CouldBeAnything => {},
+                        }
 
                         match (*evidence, best) {
                             (Evidence::AskedForSimilar(count), None) => {
-                                best = Some((count, (suit, HandId::ALL[i])));
+                                best = Some((count, (suit, HandId::ALL[hand_i])));
                             },
                             (Evidence::AskedForSimilar(count), Some((prev_count, _))) => {
                                 if count > prev_count {
-                                    best = Some((count, (suit, HandId::ALL[i])));
+                                    best = Some((count, (suit, HandId::ALL[hand_i])));
                                 }
                             }
                             (Evidence::Unknown | Evidence::DidNotHave, _) => {}
@@ -265,6 +289,26 @@ impl Memory {
                 }
             },
         }
+    }
+
+    pub fn did_not_have(&mut self, hand_id: HandId, predicate: Predicate) {
+        match self.hand_knowledge[hand_id as usize] {
+            HandKnowledge::DidNotHave(ref mut predicates) => {
+                predicates.insert(predicate);
+            }
+            HandKnowledge::CouldBeAnything => {
+                let mut predicates: PredicateSet = <_>::default();
+
+                predicates.insert(predicate);
+
+                self.hand_knowledge[hand_id as usize] = HandKnowledge::DidNotHave(predicates);
+            }
+        }
+    }
+
+    pub fn drew_card(&mut self, hand_id: HandId) {
+        // TODO We could take completed baskets into account, and the known locations, and then count cards.
+        self.hand_knowledge[hand_id as usize] = HandKnowledge::CouldBeAnything;
     }
 
     pub fn known(&mut self, hand_id: HandId, card: Card) {
@@ -450,9 +494,17 @@ impl Memories {
         }
     }
 
+    /// A (different) player asked for something.
     pub fn asked_for(&mut self, hand_id: HandId, predicate: Predicate) {
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).asked_for(hand_id, predicate);
+        }
+    }
+
+    /// A (different) player drew a new card we haven't seen.
+    pub fn drew_card(&mut self, hand_id: HandId) {
+        for cpu_id in CpuId::ALL {
+            self.memory_mut(cpu_id).drew_card(hand_id);
         }
     }
 
@@ -463,6 +515,14 @@ impl Memories {
         }
     }
 
+    /// A player was asked for a card but didn't have it, and this was revealed to all.
+    pub fn did_not_have(&mut self, hand_id: HandId, predicate: Predicate) {
+        for cpu_id in CpuId::ALL {
+            self.memory_mut(cpu_id).did_not_have(hand_id, predicate);
+        }
+    }
+
+    /// Note the basket was removed
     pub fn basket_removed(&mut self, basket: Basket) {
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).basket_removed(basket);
