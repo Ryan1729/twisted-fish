@@ -160,13 +160,34 @@ impl Memory {
         }
     }
 
+    fn prioritized_suits(
+        rank: Rank,
+        my_hand: &Hand,
+    ) -> [Suit; Suit::ALL.len()] {
+        let mut suits = Suit::ALL;
+
+        // Put the suits we don't have first, so we do the right thing when we have 4 of them.
+        suits.sort_by_key(|&suit| {
+            for card in my_hand.iter() {
+                match (models::get_rank(card), models::get_suit(card)) {
+                    (Some(r), Some(s)) if r == rank && s == suit => return true, // sort later
+                    _ => {},
+                }
+            }
+
+            false // sort earlier
+        });
+
+        suits
+    }
+
     fn question_for_known_card_with_rank(
         &self,
         rank: Rank,
+        my_hand: &Hand,
         my_id: HandId
     ) -> Option<(Suit, HandId)> {
-        // TODO? randomize order of suits? Prioritize them somehow?
-        for suit in Suit::ALL {
+        for suit in Memory::prioritized_suits(rank, my_hand) {
             let location = self.locations[models::fish_card(rank, suit) as usize];
             match location {
                 Location::Known(id) if id != my_id => {
@@ -184,11 +205,12 @@ impl Memory {
     fn question_for_likely_card_with_rank(
         &self,
         rank: Rank,
+        my_hand: &Hand,
         my_id: HandId
     ) -> Option<(Suit, HandId)> {
         let mut best = None;
-        // TODO? randomize order of suits? Prioritize them somehow?
-        for suit in Suit::ALL {
+
+        for suit in Memory::prioritized_suits(rank, my_hand) {
             let card = models::fish_card(rank, suit);
 
             let location = self.locations[card as usize];
@@ -397,6 +419,7 @@ impl Memory {
             if let Some(rank) = models::get_rank(card) {
                 let question = self.question_for_known_card_with_rank(
                     rank,
+                    my_hand,
                     my_hand_id,
                 );
 
@@ -410,6 +433,7 @@ impl Memory {
             if let Some(rank) = models::get_rank(card) {
                 let question = self.question_for_likely_card_with_rank(
                     rank,
+                    my_hand,
                     my_hand_id,
                 );
 
