@@ -20,8 +20,8 @@ Maybe don't play divine intervention against two-fisted fisherman unless *you* w
 Really seems like they are sometimes asking for stuff that the same person was asked for, even when there have been no draws, becasue the "fish pond" is empty
     Upon reflection, part of the issue is that we don't record what that player asked other players for already at all
         Or should we be able to derive what to ask for from other parts than that?
-CPU players should check for times that players asked for cards they have 4 of first, since the other asking player guarenteed has the 5th one
 CPU players shouldn't ask for 5 different cards, using the lure, since that should have resulted in a basket already
+    Not sure what this meant. Don't ask for things that wuld be left over from the dead scuba diver basket?
 Game ending seems to be messed up/not implemented in general
     Player going out didn't end the game
     Player being "Dead in the water" seems to lock up the game.
@@ -1407,54 +1407,110 @@ impl State {
                             HandId::Cpu3 => &mut self.cards.cpu3_baskets,
                         };
 
-                        fn remove_basket(hand: &mut Hand) -> Option<Basket> {
-                            let mut indexes = [None; Suit::COUNT as usize];
+                        fn get_baskets_indexes(hand: &Hand) -> models::BasketsIndexes {
+                            let mut output = models::BasketsIndexes::default();
 
-                            // TODO? Do we care about this being O(n^2), given that
-                            // we know n is bounded by `DECK_SIZE`, and in fact
-                            // would be smaller in practice?
-                            'outer: for first_card in hand.iter() {
-                                let Some(rank) = get_rank(first_card) else {
-                                    continue
-                                };
-                                indexes = [None; Suit::COUNT as usize];
-                                for (card_i, card) in hand.enumerated_iter() {
-                                    match models::get_rank(card) {
-                                        Some(r) if rank == r => {
-                                            for i in 0..Suit::COUNT as usize {
-                                                if indexes[i].is_none() {
-                                                    indexes[i] = Some(card_i);
-                                                    if i >= Suit::COUNT as usize - 1 {
-                                                        break 'outer
-                                                    } else {
-                                                        break
-                                                    }
-                                                }
-                                            }
+                            let mut partials: [[Option<CardIndex>; models::BASKET_LENGTH]; Rank::COUNT as usize] = <_>::default();
+
+                            let mut rank = None;
+
+                            // We need proof there is at least one rank.
+                            for card in hand.iter() {
+                                if let Some(r) = models::get_rank(card) {
+                                    rank = Some(r);
+                                    break;
+                                }
+                            }
+
+                            let Some(mut rank) = rank else {
+                                return output;
+                            };
+
+                            for (card_i, card) in hand.iter().enumerate() {
+                                if card == zingers::DEAD_SCUBA_DIVER {
+                                    // We expect the dead scuba diver to be at the end of the rank it is 
+                                    // associated with.
+                                    let rank_i = rank as usize;
+
+                                    partials[rank_i][models::DSD_INDEX] = Some(card_i as CardIndex);
+                                } else if let Some(r) = models::get_rank(card) {
+                                    if r != rank {
+                                        rank = r;
+                                    }
+
+                                    let rank_i = rank as usize;
+
+                                    for index_opt in partials[rank_i].iter_mut() {
+                                        if index_opt.is_none() {
+                                            *index_opt = Some(card_i as CardIndex);
+                                            break
                                         }
-                                        _ => {}
                                     }
                                 }
                             }
 
-                            match indexes {
-                                [Some(a), Some(b), Some(c), Some(d), Some(e)] => {
-                                    const MSG: &str = "remove_basket indexes should be valid!";
-                                    // We assume that the indexes are in ascending
-                                    // order, so removing in reverse order doesn't
-                                    // invalidate any indexes.
-                                    let c1 = hand.remove(e).expect(MSG);
-                                    let c2 = hand.remove(d).expect(MSG);
-                                    let c3 = hand.remove(c).expect(MSG);
-                                    let c4 = hand.remove(b).expect(MSG);
-                                    let c5 = hand.remove(a).expect(MSG);
-
-                                    Some([c1, c2, c3, c4, c5])
+                            // Write partials to output
+                            for (partial_i, partial) in partials.iter().enumerate() {
+                                match partial {
+                                    [Some(a), Some(b), Some(c), Some(d), Some(e), None] => {
+                                        output[partial_i] = Some([*a, *b, *c, *d, *e, <_>::default()]);
+                                    }
+                                    [Some(a), Some(b), Some(c), Some(d), Some(e), Some(dsd)] => {
+                                        output[partial_i] = Some([*a, *b, *c, *d, *e, *dsd]);
+                                    }
+                                    [Some(a), Some(b), Some(c), Some(d), None, Some(dsd)] => {
+                                        // TODO confirm this case is detectable. Might need a different type.
+                                        output[partial_i] = Some([*a, *b, *c, *d, <_>::default(), *dsd]);
+                                    }
+                                    _ => {},
                                 }
-                                _ => None,
                             }
+
+                            output
                         }
 
+                        fn remove_basket(hand: &mut Hand) -> Option<Basket> {
+                            let baskets_indexes = get_baskets_indexes(hand);
+                            
+                            for basket_indexes_opt in baskets_indexes {
+                                let Some(basket_indexes) = basket_indexes_opt else {
+                                    continue
+                                };
+
+                                match basket_indexes {
+                                    [a, b, c, d, e, dead_scuba_diver] => {
+                                        const MSG: &str = "remove_basket indexes should be valid!";
+                                        // We assume that the indexes are in ascending
+                                        // order, so removing in reverse order doesn't
+                                        // invalidate any indexes.
+
+                                        let c6 = if dead_scuba_diver != 0 {
+                                            hand.remove(dead_scuba_diver).expect(MSG)
+                                        } else {
+                                            Card::default()
+                                        };
+
+                                        let c5 = if e != 0 {
+                                            hand.remove(e).expect(MSG)
+                                        } else {
+                                            // TODO is case okay?
+                                            Card::default()
+                                        };
+
+                                        let c4 = hand.remove(d).expect(MSG);
+                                        let c3 = hand.remove(c).expect(MSG);
+                                        let c2 = hand.remove(b).expect(MSG);
+                                        let c1 = hand.remove(a).expect(MSG);
+
+                                        return Some([c1, c2, c3, c4, c5, c6])
+                                    }
+                                }
+                            }
+
+                            None
+                        }
+
+                        // TODO remove all baskets in one pass?
                         while let Some(basket) = remove_basket(hand) {
                             self.memories.basket_removed(basket);
                             // TODO? animate gathering together and heading to a
@@ -2489,8 +2545,17 @@ fn useful_the_lure_play(
 
     let memory = memories.memory(own_id);
 
+    
+
+    let someone_elses_sixth_rank = None;
+
     // TODO? sort by point total, descending?
     for rank in Rank::ALL {
+        // No reason to ever ask for this rank if it is 
+        if someone_elses_sixth_rank == Some(rank) {
+            continue
+        }
+
         for suit in Suit::ALL {
             // If the hand doesn't contain it, then that's a better play
             if !hand.contains(fish_card(rank, suit)) {

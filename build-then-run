@@ -1,0 +1,1 @@
+RUSTFLAGS='-D warnings' cargo b --release --bin twisted-fish --color=always 2>&1 | bat &&  RUSTFLAGS='-D warnings' cargo r --release --bin twisted-fish > /tmp/twisted-fish-output 2>&1

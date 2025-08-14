@@ -103,14 +103,35 @@ impl CardOption {
 
 // TODO? Tighter representation that still allows representing Dead Scuba Diver
 // but doesn't allow non-matched cards?
-pub type Basket = [Card; Suit::COUNT as usize];
+
+/// + 1 for the dead scuba diver.
+pub const BASKET_LENGTH: usize = (Suit::COUNT + 1) as usize;
+
+/// The Dead Scuba Diver index.
+pub const DSD_INDEX: usize = Suit::COUNT as usize;
+/// We expect the dead scuba diver to be at the end of the rank it is 
+/// associated with if present. This implies that the dead scuba diver
+/// slot can only be the zero card. So we can interpret that slot as 
+/// an Option<Card>.
+// TODO Do we ensure that the last non-DSD can never legitimately be the default card?
+// TODO? Wrap this in a struct to prevent misuse?
+pub type Basket = [Card; BASKET_LENGTH];
+
+/// We expect the dead scuba diver to be at the end of the rank it is 
+/// associated with. This implies that the dead scuba diver index can 
+/// only be zero when the dead scuba diver is not present. So we can
+/// interpret that slot as an Option<CardIndex>.
+// TODO? Wrap this in a struct to prevent misuse?
+pub type BasketIndexes = [CardIndex; BASKET_LENGTH];
+
+pub type BasketsIndexes = [Option<BasketIndexes>; Rank::COUNT as _];
 
 pub type AlmostCompleteBasket = [CardIndex; (Suit::COUNT - 1) as _];
 
 pub type AlmostCompleteBaskets = [Option<AlmostCompleteBasket>; Rank::COUNT as _];
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Rank {
     // Worth 5 points {
     #[default]
