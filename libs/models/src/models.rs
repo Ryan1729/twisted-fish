@@ -109,20 +109,76 @@ pub const BASKET_LENGTH: usize = (Suit::COUNT + 1) as usize;
 
 /// The Dead Scuba Diver index.
 pub const DSD_INDEX: usize = Suit::COUNT as usize;
-/// We expect the dead scuba diver to be at the end of the rank it is 
-/// associated with if present. This implies that the dead scuba diver
-/// slot can only be the zero card. So we can interpret that slot as 
-/// an Option<Card>.
-// TODO Do we ensure that the last non-DSD can never legitimately be the default card?
-// TODO? Wrap this in a struct to prevent misuse?
-pub type Basket = [Card; BASKET_LENGTH];
 
-/// We expect the dead scuba diver to be at the end of the rank it is 
-/// associated with. This implies that the dead scuba diver index can 
-/// only be zero when the dead scuba diver is not present. So we can
-/// interpret that slot as an Option<CardIndex>.
-// TODO? Wrap this in a struct to prevent misuse?
-pub type BasketIndexes = [CardIndex; BASKET_LENGTH];
+const BASKET_PREFIX_LENGTH: usize = (Suit::COUNT - 1) as usize;
+
+#[derive(Clone, Copy)]
+pub enum BasketSuffix<Element> {
+    LastOnly(Element),
+    DeadScubaDiverOnly(Element),
+    Both(Element, Element),
+}
+
+#[derive(Clone, Copy)]
+pub struct BasketOf<Element>
+{
+    pub prefix: [Element; BASKET_PREFIX_LENGTH],
+    pub suffix: BasketSuffix<Element>,
+}
+
+pub type Basket = BasketOf<Card>;
+pub type BasketIndexes = BasketOf<CardIndex>;
+
+impl <Element> IntoIterator for BasketOf<Element>
+where Element: Clone + Copy {
+    type Item = Element;
+    type IntoIter = BasketOfIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        BasketOfIter {
+            index: 0,
+            basket: self,
+        }
+    }
+}
+
+pub struct BasketOfIter<Element> {
+    index: usize,
+    basket: BasketOf<Element>,
+}
+
+impl <Element> Iterator for BasketOfIter<Element>
+where Element: Clone + Copy {
+    type Item = Element;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let index = self.index;
+
+            self.index += 1;
+            match index {
+                i if i < BASKET_PREFIX_LENGTH => {
+                    return Some(self.basket.prefix[index])
+                },
+                i if i == BASKET_PREFIX_LENGTH => {
+                    match self.basket.suffix {
+                        BasketSuffix::LastOnly(e) => { return Some(e) },
+                        BasketSuffix::DeadScubaDiverOnly(_dsd) => { /* next loop */ },
+                        BasketSuffix::Both(e, _dsd) => { return Some(e) },
+                    }
+                },
+                i if i == BASKET_PREFIX_LENGTH + 1 => {
+                    match self.basket.suffix {
+                        BasketSuffix::LastOnly(_e) => { /* next loop */ },
+                        BasketSuffix::DeadScubaDiverOnly(dsd) => { return Some(dsd) },
+                        BasketSuffix::Both(_e, dsd) => { return Some(dsd) },
+                    }
+                },
+                _ => return None,
+            }
+        }
+    }
+}
 
 pub type BasketsIndexes = [Option<BasketIndexes>; Rank::COUNT as _];
 

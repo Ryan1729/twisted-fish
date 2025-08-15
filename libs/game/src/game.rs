@@ -1407,8 +1407,11 @@ impl State {
                             HandId::Cpu3 => &mut self.cards.cpu3_baskets,
                         };
 
-                        fn get_baskets_indexes(hand: &Hand) -> models::BasketsIndexes {
-                            let mut output = models::BasketsIndexes::default();
+                        use models::{BasketSuffix, BasketIndexes, BasketsIndexes};
+
+                        fn get_baskets_indexes(hand: &Hand) -> BasketsIndexes {
+
+                            let mut output = BasketsIndexes::default();
 
                             let mut partials: [[Option<CardIndex>; models::BASKET_LENGTH]; Rank::COUNT as usize] = <_>::default();
 
@@ -1453,14 +1456,22 @@ impl State {
                             for (partial_i, partial) in partials.iter().enumerate() {
                                 match partial {
                                     [Some(a), Some(b), Some(c), Some(d), Some(e), None] => {
-                                        output[partial_i] = Some([*a, *b, *c, *d, *e, <_>::default()]);
+                                        output[partial_i] = Some(BasketIndexes {
+                                            prefix: [*a, *b, *c, *d],
+                                            suffix: BasketSuffix::LastOnly(*e),
+                                        });
                                     }
                                     [Some(a), Some(b), Some(c), Some(d), Some(e), Some(dsd)] => {
-                                        output[partial_i] = Some([*a, *b, *c, *d, *e, *dsd]);
+                                        output[partial_i] = Some(BasketIndexes {
+                                            prefix: [*a, *b, *c, *d],
+                                            suffix: BasketSuffix::Both(*e, *dsd),
+                                        });
                                     }
                                     [Some(a), Some(b), Some(c), Some(d), None, Some(dsd)] => {
-                                        // TODO confirm this case is detectable. Might need a different type.
-                                        output[partial_i] = Some([*a, *b, *c, *d, <_>::default(), *dsd]);
+                                        output[partial_i] = Some(BasketIndexes {
+                                            prefix: [*a, *b, *c, *d],
+                                            suffix: BasketSuffix::DeadScubaDiverOnly(*dsd),
+                                        });
                                     }
                                     _ => {},
                                 }
@@ -1477,24 +1488,22 @@ impl State {
                                     continue
                                 };
 
-                                match basket_indexes {
-                                    [a, b, c, d, e, dead_scuba_diver] => {
+                                match basket_indexes.prefix {
+                                    [a, b, c, d] => {
                                         const MSG: &str = "remove_basket indexes should be valid!";
                                         // We assume that the indexes are in ascending
                                         // order, so removing in reverse order doesn't
                                         // invalidate any indexes.
 
-                                        let c6 = if dead_scuba_diver != 0 {
-                                            hand.remove(dead_scuba_diver).expect(MSG)
-                                        } else {
-                                            Card::default()
-                                        };
+                                        let suffix = match basket_indexes.suffix {
+                                            BasketSuffix::Both(e, dsd) => {
+                                                let dsd = hand.remove(dsd).expect(MSG);
+                                                let e = hand.remove(e).expect(MSG);
 
-                                        let c5 = if e != 0 {
-                                            hand.remove(e).expect(MSG)
-                                        } else {
-                                            // TODO is case okay?
-                                            Card::default()
+                                                BasketSuffix::Both(e, dsd)
+                                            },
+                                            BasketSuffix::DeadScubaDiverOnly(dsd) => BasketSuffix::DeadScubaDiverOnly(hand.remove(dsd).expect(MSG)),
+                                            BasketSuffix::LastOnly(e) => BasketSuffix::LastOnly(hand.remove(e).expect(MSG)),
                                         };
 
                                         let c4 = hand.remove(d).expect(MSG);
@@ -1502,7 +1511,10 @@ impl State {
                                         let c2 = hand.remove(b).expect(MSG);
                                         let c1 = hand.remove(a).expect(MSG);
 
-                                        return Some([c1, c2, c3, c4, c5, c6])
+                                        return Some(Basket {
+                                            prefix: [c1, c2, c3, c4],
+                                            suffix,
+                                        })
                                     }
                                 }
                             }
