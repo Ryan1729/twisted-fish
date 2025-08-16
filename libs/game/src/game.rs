@@ -85,7 +85,7 @@ macro_rules! cpu_handle_negative_response {
                     card,
                     at,
                     target,
-                    action: AnimationAction::AddToHand(hand_id),
+                    action: AnimationAction::AddToHand{ got_by_asking: false, id: hand_id },
                     .. <_>::default()
                 });
 
@@ -301,7 +301,7 @@ pub enum AfterDiscard {
 pub enum AnimationAction {
     #[default]
     DoNothing,
-    AddToHand(HandId),
+    AddToHand{ got_by_asking: bool, id: HandId },
     PerformGameWarden,
     AddToDiscard(AfterDiscard),
     AnimateBackToHand(HandId),
@@ -1298,7 +1298,7 @@ impl State {
                     card,
                     at: DECK_XY,
                     target,
-                    action: AnimationAction::AddToHand(id),
+                    action: AnimationAction::AddToHand{ got_by_asking: false, id },
                     delay: card_i
                         .saturating_mul(HandId::ALL.len() as u8)
                         .saturating_add(id_i as u8),
@@ -1390,7 +1390,7 @@ impl State {
 
                 match &anim.action {
                     AnimationAction::DoNothing => {},
-                    AnimationAction::AddToHand(id) => {
+                    AnimationAction::AddToHand{ got_by_asking, id } => {
                         let hand = match id {
                             HandId::Player => &mut self.cards.player,
                             HandId::Cpu1 => &mut self.cards.cpu1,
@@ -1535,6 +1535,11 @@ impl State {
 
                         speaker.request_sfx(SFX::CardPlace);
 
+                        if *got_by_asking && hand.is_empty() {
+                            // The hand is over!
+                            todo!("The hand is over!");
+                        }
+
                         back_to_selecting!(id);
                     },
                     AnimationAction::PerformGameWarden => {
@@ -1570,7 +1575,7 @@ impl State {
                             card: anim.card,
                             at: anim.target,
                             target,
-                            action: AnimationAction::AddToHand(id),
+                            action: AnimationAction::AddToHand{ got_by_asking: false, id },
                             .. <_>::default()
                         })
                     }
@@ -4439,7 +4444,7 @@ fn playing_update_and_render(
                                                             card,
                                                             at,
                                                             target,
-                                                            action: AnimationAction::AddToHand(HandId::Player),
+                                                            action: AnimationAction::AddToHand{ got_by_asking: false, id: HandId::Player },
                                                             .. <_>::default()
                                                         });
                                                     }
@@ -4607,7 +4612,7 @@ fn playing_update_and_render(
                                                                     card,
                                                                     at,
                                                                     target,
-                                                                    action: AnimationAction::AddToHand(HandId::Player),
+                                                                    action: AnimationAction::AddToHand{ got_by_asking: true, id: HandId::Player },
                                                                     shown: true,
                                                                     .. <_>::default()
                                                                 });
@@ -4878,7 +4883,7 @@ fn playing_update_and_render(
                                                     card,
                                                     at,
                                                     target,
-                                                    action: AnimationAction::AddToHand(HandId::Player),
+                                                    action: AnimationAction::AddToHand{ got_by_asking: false, id: HandId::Player },
                                                     .. <_>::default()
                                                 });
                                             } else {
@@ -5213,7 +5218,7 @@ fn playing_update_and_render(
                                                         card,
                                                         at,
                                                         target,
-                                                        action: AnimationAction::AddToHand(id.into()),
+                                                        action: AnimationAction::AddToHand{ got_by_asking: true, id: id.into() },
                                                         shown: true,
                                                         .. <_>::default()
                                                     });
@@ -5372,7 +5377,7 @@ fn playing_update_and_render(
                                                     card,
                                                     at,
                                                     target,
-                                                    action: AnimationAction::AddToHand(hand_id),
+                                                    action: AnimationAction::AddToHand{ got_by_asking: false, id: hand_id },
                                                     .. <_>::default()
                                                 });
                                             } else {
@@ -5486,7 +5491,7 @@ fn playing_update_and_render(
                                                 card,
                                                 at,
                                                 target,
-                                                action: AnimationAction::AddToHand(HandId::Player),
+                                                action: AnimationAction::AddToHand{ got_by_asking: false, id: HandId::Player },
                                                 .. <_>::default()
                                             });
                                         }
@@ -5542,7 +5547,7 @@ fn playing_update_and_render(
                                                         card,
                                                         at,
                                                         target,
-                                                        action: AnimationAction::AddToHand(source),
+                                                        action: AnimationAction::AddToHand{ got_by_asking: false, id: source },
                                                         .. <_>::default()
                                                     });
                                                 }
@@ -5649,7 +5654,7 @@ fn playing_update_and_render(
                                                         card,
                                                         at,
                                                         target,
-                                                        action: AnimationAction::AddToHand(HandId::Player),
+                                                        action: AnimationAction::AddToHand{ got_by_asking: true, id: HandId::Player },
                                                         shown: true,
                                                         .. <_>::default()
                                                     });
@@ -5686,7 +5691,7 @@ fn playing_update_and_render(
                                                 card,
                                                 at,
                                                 target,
-                                                action: AnimationAction::AddToHand(source),
+                                                action: AnimationAction::AddToHand{ got_by_asking: false, id: source },
                                                 .. <_>::default()
                                             });
                                         }
@@ -5782,7 +5787,7 @@ fn playing_update_and_render(
                                                         card,
                                                         at,
                                                         target,
-                                                        action: AnimationAction::AddToHand(source),
+                                                        action: AnimationAction::AddToHand{ got_by_asking: true, id: source },
                                                         shown: true,
                                                         .. <_>::default()
                                                     });
