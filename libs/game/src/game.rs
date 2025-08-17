@@ -954,6 +954,13 @@ pub struct Paused {
     memories: MemoriesState,
 }
 
+#[derive(Clone, Copy, Default)]
+pub enum HandState {
+    #[default]
+    Playing,
+    Scoring,
+}
+
 #[derive(Clone, Default)]
 pub struct State {
     pub rng: Xs,
@@ -970,6 +977,7 @@ pub struct State {
     pub cpu_menu: CpuMenu,
     pub done_something_this_turn: bool,
     pub paused: Paused,
+    pub hand_state: HandState,
 }
 
 impl State {
@@ -1431,7 +1439,7 @@ impl State {
 
                             for (card_i, card) in hand.iter().enumerate() {
                                 if card == zingers::DEAD_SCUBA_DIVER {
-                                    // We expect the dead scuba diver to be at the end of the rank it is 
+                                    // We expect the dead scuba diver to be at the end of the rank it is
                                     // associated with.
                                     let rank_i = rank as usize;
 
@@ -1482,7 +1490,7 @@ impl State {
 
                         fn remove_basket(hand: &mut Hand) -> Option<Basket> {
                             let baskets_indexes = get_baskets_indexes(hand);
-                            
+
                             for basket_indexes_opt in baskets_indexes {
                                 let Some(basket_indexes) = basket_indexes_opt else {
                                     continue
@@ -1537,10 +1545,10 @@ impl State {
 
                         if *got_by_asking && hand.is_empty() {
                             // The hand is over!
-                            todo!("The hand is over!");
+                            self.hand_state = HandState::Scoring;
+                        } else {
+                            back_to_selecting!(id);
                         }
-
-                        back_to_selecting!(id);
                     },
                     AnimationAction::PerformGameWarden => {
                         // TODO Animate all cards in deck moving to random targets
@@ -2562,13 +2570,13 @@ fn useful_the_lure_play(
 
     let memory = memories.memory(own_id);
 
-    
+
 
     let someone_elses_sixth_rank = None;
 
     // TODO? sort by point total, descending?
     for rank in Rank::ALL {
-        // No reason to ever ask for this rank if it is 
+        // No reason to ever ask for this rank if it is
         if someone_elses_sixth_rank == Some(rank) {
             continue
         }
@@ -3478,8 +3486,8 @@ pub fn update_and_render(
     input: Input,
     speaker: &mut Speaker
 ) {
-    match state.paused.kind {
-        PausedStateKind::Paused(paused_kind) => {
+    match (state.paused.kind, state.hand_state) {
+        (PausedStateKind::Paused(paused_kind), _) => {
             paused_update_and_render(
                 commands,
                 state,
@@ -3488,8 +3496,16 @@ pub fn update_and_render(
                 paused_kind
             );
         },
-        PausedStateKind::Un => {
+        (PausedStateKind::Un, HandState::Playing) => {
             playing_update_and_render(
+                commands,
+                state,
+                input,
+                speaker,
+            );
+        },
+        (PausedStateKind::Un, HandState::Scoring) => {
+            scoring_update_and_render(
                 commands,
                 state,
                 input,
@@ -3595,6 +3611,62 @@ fn paused_update_and_render(
     if input.pressed_this_frame(Button::START) {
         state.paused.kind = PausedStateKind::Un;
     }
+}
+
+fn scoring_update_and_render(
+    commands: &mut Commands,
+    _state: &mut State,
+    _input: Input,
+    _speaker: &mut Speaker
+) {
+    commands.draw_nine_slice(gfx::NineSlice::Window, SCORING_WINDOW);
+
+    let base_xy = SCORING_WINDOW.xy()
+        + WINDOW_CONTENT_OFFSET;
+
+    let column_width = (gfx::CHAR_ADVANCE_W * 16).get();
+
+    let column_base_xy = base_xy + (gfx::CHAR_ADVANCE_W * 6).get() + H(4);
+
+    commands.print_line(
+        b"Player",
+        column_base_xy,
+        WHITE,
+    );
+
+    commands.print_line(
+        b"CPU 1",
+        column_base_xy + column_width,
+        WHITE,
+    );
+
+    commands.print_line(
+        b"CPU 2",
+        column_base_xy + column_width + column_width,
+        WHITE,
+    );
+
+    commands.print_line(
+        b"CPU 3",
+        column_base_xy + column_width + column_width + column_width,
+        WHITE,
+    );
+
+    let mut xy = column_base_xy + (gfx::CHAR_ADVANCE_H * 2).get();
+
+    let mut score = 100;
+
+    for _id in HandId::ALL {
+        commands.print_line(
+            format!("{score}").as_bytes(),
+            xy,
+            WHITE,
+        );
+        score += 100;
+
+        xy += column_width;
+    }
+
 }
 
 fn playing_update_and_render(
@@ -6414,5 +6486,15 @@ const PAUSED_RECT: unscaled::Rect = {
         y: Y(0),
         w: W(command::WIDTH),
         h: PAUSED_HEIGHT,
+    }
+};
+
+const SCORING_WINDOW: unscaled::Rect = {
+    const OFFSET: unscaled::Inner = 8;
+    unscaled::Rect {
+        x: X(OFFSET),
+        y: Y(OFFSET),
+        w: W(command::WIDTH - OFFSET * 2),
+        h: H(command::HEIGHT - OFFSET * 2),
     }
 };
