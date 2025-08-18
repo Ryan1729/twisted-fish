@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{Basket, Card, CardIndex, CpuId, Hand, HandId, HandOrdering, Predicate, LurePredicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, fish_card, get_rank, get_suit, zingers};
+use models::{BasketSuffix, BasketIndexes, BasketsIndexes, Basket, Card, CardIndex, CpuId, Hand, HandId, HandOrdering, Predicate, LurePredicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, fish_card, get_rank, get_suit, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -1415,79 +1415,6 @@ impl State {
                             HandId::Cpu3 => &mut self.cards.cpu3_baskets,
                         };
 
-                        use models::{BasketSuffix, BasketIndexes, BasketsIndexes};
-
-                        fn get_baskets_indexes(hand: &Hand) -> BasketsIndexes {
-
-                            let mut output = BasketsIndexes::default();
-
-                            let mut partials: [[Option<CardIndex>; models::BASKET_LENGTH]; Rank::COUNT as usize] = <_>::default();
-
-                            let mut rank = None;
-
-                            // We need proof there is at least one rank.
-                            for card in hand.iter() {
-                                if let Some(r) = models::get_rank(card) {
-                                    rank = Some(r);
-                                    break;
-                                }
-                            }
-
-                            let Some(mut rank) = rank else {
-                                return output;
-                            };
-
-                            for (card_i, card) in hand.iter().enumerate() {
-                                if card == zingers::DEAD_SCUBA_DIVER {
-                                    // We expect the dead scuba diver to be at the end of the rank it is
-                                    // associated with.
-                                    let rank_i = rank as usize;
-
-                                    partials[rank_i][models::DSD_INDEX] = Some(card_i as CardIndex);
-                                } else if let Some(r) = models::get_rank(card) {
-                                    if r != rank {
-                                        rank = r;
-                                    }
-
-                                    let rank_i = rank as usize;
-
-                                    for index_opt in partials[rank_i].iter_mut() {
-                                        if index_opt.is_none() {
-                                            *index_opt = Some(card_i as CardIndex);
-                                            break
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Write partials to output
-                            for (partial_i, partial) in partials.iter().enumerate() {
-                                match partial {
-                                    [Some(a), Some(b), Some(c), Some(d), Some(e), None] => {
-                                        output[partial_i] = Some(BasketIndexes {
-                                            prefix: [*a, *b, *c, *d],
-                                            suffix: BasketSuffix::LastOnly(*e),
-                                        });
-                                    }
-                                    [Some(a), Some(b), Some(c), Some(d), Some(e), Some(dsd)] => {
-                                        output[partial_i] = Some(BasketIndexes {
-                                            prefix: [*a, *b, *c, *d],
-                                            suffix: BasketSuffix::Both(*e, *dsd),
-                                        });
-                                    }
-                                    [Some(a), Some(b), Some(c), Some(d), None, Some(dsd)] => {
-                                        output[partial_i] = Some(BasketIndexes {
-                                            prefix: [*a, *b, *c, *d],
-                                            suffix: BasketSuffix::DeadScubaDiverOnly(*dsd),
-                                        });
-                                    }
-                                    _ => {},
-                                }
-                            }
-
-                            output
-                        }
-
                         fn remove_basket(hand: &mut Hand) -> Option<Basket> {
                             let baskets_indexes = get_baskets_indexes(hand);
 
@@ -2871,6 +2798,76 @@ fn play_divine_intervention(
     }
 }
 
+fn get_baskets_indexes(hand: &Hand) -> BasketsIndexes {
+    let mut output = BasketsIndexes::default();
+
+    let mut partials: [[Option<CardIndex>; models::BASKET_LENGTH]; Rank::COUNT as usize] = <_>::default();
+
+    let mut rank = None;
+
+    // We need proof there is at least one rank.
+    for card in hand.iter() {
+        if let Some(r) = models::get_rank(card) {
+            rank = Some(r);
+            break;
+        }
+    }
+
+    let Some(mut rank) = rank else {
+        return output;
+    };
+
+    for (card_i, card) in hand.iter().enumerate() {
+        if card == zingers::DEAD_SCUBA_DIVER {
+            // We expect the dead scuba diver to be at the end of the rank it is
+            // associated with.
+            let rank_i = rank as usize;
+
+            partials[rank_i][models::DSD_INDEX] = Some(card_i as CardIndex);
+        } else if let Some(r) = models::get_rank(card) {
+            if r != rank {
+                rank = r;
+            }
+
+            let rank_i = rank as usize;
+
+            for index_opt in partials[rank_i].iter_mut() {
+                if index_opt.is_none() {
+                    *index_opt = Some(card_i as CardIndex);
+                    break
+                }
+            }
+        }
+    }
+
+    // Write partials to output
+    for (partial_i, partial) in partials.iter().enumerate() {
+        match partial {
+            [Some(a), Some(b), Some(c), Some(d), Some(e), None] => {
+                output[partial_i] = Some(BasketIndexes {
+                    prefix: [*a, *b, *c, *d],
+                    suffix: BasketSuffix::LastOnly(*e),
+                });
+            }
+            [Some(a), Some(b), Some(c), Some(d), Some(e), Some(dsd)] => {
+                output[partial_i] = Some(BasketIndexes {
+                    prefix: [*a, *b, *c, *d],
+                    suffix: BasketSuffix::Both(*e, *dsd),
+                });
+            }
+            [Some(a), Some(b), Some(c), Some(d), None, Some(dsd)] => {
+                output[partial_i] = Some(BasketIndexes {
+                    prefix: [*a, *b, *c, *d],
+                    suffix: BasketSuffix::DeadScubaDiverOnly(*dsd),
+                });
+            }
+            _ => {},
+        }
+    }
+
+    output
+}
+
 fn play_dead_scuba_diver(
     cards: &mut Cards,
     id: HandId,
@@ -3615,7 +3612,7 @@ fn paused_update_and_render(
 
 fn scoring_update_and_render(
     commands: &mut Commands,
-    _state: &mut State,
+    state: &mut State,
     _input: Input,
     _speaker: &mut Speaker
 ) {
@@ -3654,15 +3651,38 @@ fn scoring_update_and_render(
 
     let mut xy = column_base_xy + (gfx::CHAR_ADVANCE_H * 2).get();
 
-    let mut score = 100;
+    for id in HandId::ALL {
+        let baskets = match id {
+            HandId::Player => &mut state.cards.player_baskets,
+            HandId::Cpu1 => &mut state.cards.cpu1_baskets,
+            HandId::Cpu2 => &mut state.cards.cpu2_baskets,
+            HandId::Cpu3 => &mut state.cards.cpu3_baskets,
+        };
 
-    for _id in HandId::ALL {
+        let baskets_indexes = get_baskets_indexes(baskets);
+
+        let mut score = 0;
+
+        for rank in Rank::ALL {
+            let Some(basket_indexes) = baskets_indexes[rank as usize].as_ref() else {
+                continue
+            };
+
+            score += rank.score() * (
+                basket_indexes.prefix.len()
+                + match basket_indexes.suffix {
+                    BasketSuffix::LastOnly(..)
+                    | BasketSuffix::Both(..) => 1,
+                    BasketSuffix::DeadScubaDiverOnly(..) => 0,
+                }
+            );
+        }
+
         commands.print_line(
             format!("{score}").as_bytes(),
             xy,
             WHITE,
         );
-        score += 100;
 
         xy += column_width;
     }

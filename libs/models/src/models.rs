@@ -211,6 +211,30 @@ pub enum Rank {
     // }
 }
 
+pub type Score = usize;
+
+impl Rank {
+    pub fn score(self) -> Score {
+        use Rank::*;
+
+        match self {
+            Barnacle
+            | Crab
+            | Dogfish
+            | Eel
+            | FlyingFish
+            | Hammerhead
+            | Jellyfish
+            | Shrimp => 5,
+            Blowfish
+            | Clownfish
+            | Starfish
+            | Whale => 10,
+            CardShark => 15,
+        }    
+    }
+}
+
 impl From<Rank> for u8 {
     fn from(rank: Rank) -> u8 {
         rank as u8
