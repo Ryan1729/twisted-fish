@@ -82,6 +82,7 @@ impl Memory {
     pub fn append_debug_info(&self, output: &mut Vec<u8>) {
         use std::io::Write;
 
+        // Locations
         for card_i in 0..self.locations.len() {
             let mut no_location_line_this_time = false;
 
@@ -158,6 +159,38 @@ impl Memory {
                 output.push(b'\n');
             }
         }
+
+        output.push(b'\n');
+
+        // Hand Knowledge
+        for hand_id in HandId::ALL {
+            let label = match hand_id {
+                HandId::Player => b"Player".as_slice(),
+                HandId::Cpu1 => b"Cpu1".as_slice(),
+                HandId::Cpu2 => b"Cpu2".as_slice(),
+                HandId::Cpu3 => b"Cpu3".as_slice(),
+            };
+
+            output.extend_from_slice(label);
+            output.push(b' ');
+
+            match &self.hand_knowledge[hand_id as usize] {
+                HandKnowledge::CouldBeAnything => output.extend_from_slice(b"???"),
+                HandKnowledge::DidNotHave(predicates) => {
+                    output.extend_from_slice(b"none of: \n");
+
+                    for predicate in predicates {
+                        output.extend_from_slice(b"    ");
+                        predicate.append_debug_info(output);
+                        output.push(b'\n');
+                    }
+                },
+            }
+
+            output.push(b'\n');
+        }
+
+        output.push(b'\n');
     }
 
     fn prioritized_suits(
@@ -330,6 +363,9 @@ impl Memory {
 
     pub fn drew_card(&mut self, hand_id: HandId) {
         // TODO We could take completed baskets into account, and the known locations, and then count cards.
+        // TODO While this is techncially true, asking for the same thing over and over is still dumb, since
+        //      there's only a small likelyhood that they drew the card that was asked for before. So let's
+        //      deprioritize the ones that were previously marked as DidNotHave.
         self.hand_knowledge[hand_id as usize] = HandKnowledge::CouldBeAnything;
     }
 

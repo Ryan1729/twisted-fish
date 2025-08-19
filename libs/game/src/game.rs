@@ -898,7 +898,7 @@ enum HardcodedMode {
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = PlayerOnlyOneCardSharksCpu1FourCardSharks;
+const HARDCODED_MODE: HardcodedMode = DebugRelease;
 
 const IS_DEBUG: bool = cfg!(debug_assertions) || !matches!(HardcodedMode::Release, HARDCODED_MODE);
 

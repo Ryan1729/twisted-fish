@@ -214,6 +214,10 @@ pub enum Rank {
 pub type Score = usize;
 
 impl Rank {
+    pub fn append_debug_info(&self, output: &mut Vec<u8>) {
+        output.extend_from_slice(Self::TEXT[*self as usize]);
+    }
+
     pub fn score(self) -> Score {
         use Rank::*;
 
@@ -396,6 +400,10 @@ macro_rules! suit_text {
 }
 
 impl Suit {
+    pub fn append_debug_info(&self, output: &mut Vec<u8>) {
+        output.extend_from_slice(Self::TEXT[*self as usize]);
+    }
+
     pub const COUNT: u8 = 5;
 
     pub const ALL: [Suit; Suit::COUNT as usize] = [
@@ -983,6 +991,14 @@ impl Default for NetPredicate {
 }
 
 impl NetPredicate {
+    pub fn append_debug_info(&self, output: &mut Vec<u8>) {
+        use NetPredicate::*;
+        match self {
+            Suit(suit) => suit.append_debug_info(output),
+            Rank(rank) => rank.append_debug_info(output),
+        }
+    }
+
     pub fn matches(self, card: Card) -> bool {
         use NetPredicate::*;
         match self {
@@ -1268,6 +1284,20 @@ pub enum Predicate {
 }
 
 impl Predicate {
+    pub fn append_debug_info(&self, output: &mut Vec<u8>) {
+        use Predicate::*;
+        match self {
+            RankSuit(rank, suit) => {
+                rank.append_debug_info(output);
+                output.push(b' ');
+                suit.append_debug_info(output);
+            },
+            Net(net_predicate) => {
+                net_predicate.append_debug_info(output);
+            },
+        }
+    }
+
     pub fn matches(self, card: Card) -> bool {
         use Predicate::*;
         match self {
