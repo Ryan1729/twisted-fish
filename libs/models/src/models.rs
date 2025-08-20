@@ -1288,9 +1288,9 @@ impl Predicate {
         use Predicate::*;
         match self {
             RankSuit(rank, suit) => {
-                rank.append_debug_info(output);
-                output.push(b' ');
                 suit.append_debug_info(output);
+                output.push(b' ');
+                rank.append_debug_info(output);
             },
             Net(net_predicate) => {
                 net_predicate.append_debug_info(output);

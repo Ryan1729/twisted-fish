@@ -57,10 +57,8 @@ impl Default for Location {
 type PredicateSet = std::collections::BTreeSet<Predicate>;
 
 #[derive(Clone, Debug, Default)]
-enum HandKnowledge {
-    #[default]
-    CouldBeAnything,
-    DidNotHave(PredicateSet),
+struct HandKnowledge {
+    did_not_have: PredicateSet
 }
 
 #[derive(Clone, Debug)]
@@ -174,9 +172,8 @@ impl Memory {
             output.extend_from_slice(label);
             output.push(b' ');
 
-            match &self.hand_knowledge[hand_id as usize] {
-                HandKnowledge::CouldBeAnything => output.extend_from_slice(b"???"),
-                HandKnowledge::DidNotHave(predicates) => {
+            match &self.hand_knowledge[hand_id as usize].did_not_have {
+                predicates => {
                     output.extend_from_slice(b"none of: \n");
 
                     for predicate in predicates {
@@ -250,18 +247,18 @@ impl Memory {
             match location {
                 Location::Incomplete(incomplete) => {
                     let my_index = my_id as _;
-                    for (hand_i, evidence) in incomplete.iter().enumerate() {
+                    'evidence: for (hand_i, evidence) in incomplete.iter().enumerate() {
                         if hand_i == my_index { continue }
 
-                        match &self.hand_knowledge[hand_i] {
-                            HandKnowledge::DidNotHave(predicates) => {
+                        // Skip the ones that we saw they didn't have before
+                        match &self.hand_knowledge[hand_i].did_not_have {
+                            predicates => {
                                 for predicate in predicates {
                                     if predicate.matches(card) {
-                                        continue
+                                        continue 'evidence;
                                     }
                                 }
                             },
-                            HandKnowledge::CouldBeAnything => {},
                         }
 
                         match (*evidence, best) {
@@ -280,6 +277,39 @@ impl Memory {
                 },
                 | Location::Known(_)
                 | Location::KnownGone => {},
+            }
+        }
+
+        if best.is_none() {
+            for suit in Memory::prioritized_suits(rank, my_hand) {
+                let card = models::fish_card(rank, suit);
+    
+                let location = self.locations[card as usize];
+                match location {
+                    Location::Incomplete(incomplete) => {
+                        let my_index = my_id as _;
+                        for (hand_i, evidence) in incomplete.iter().enumerate() {
+                            if hand_i == my_index { continue }
+    
+                            // This time, check the ones that we saw they didn't have before
+
+                            match (*evidence, best) {
+                                (Evidence::AskedForSimilar(count), None) => {
+                                    best = Some((count, (suit, HandId::ALL[hand_i])));
+                                },
+                                (Evidence::AskedForSimilar(count), Some((prev_count, _))) => {
+                                    if count > prev_count {
+                                        best = Some((count, (suit, HandId::ALL[hand_i])));
+                                    }
+                                }
+                                (Evidence::Unknown | Evidence::DidNotHave, _) => {}
+                            }
+    
+                        }
+                    },
+                    | Location::Known(_)
+                    | Location::KnownGone => {},
+                }
             }
         }
 
@@ -347,26 +377,17 @@ impl Memory {
     }
 
     pub fn did_not_have(&mut self, hand_id: HandId, predicate: Predicate) {
-        match self.hand_knowledge[hand_id as usize] {
-            HandKnowledge::DidNotHave(ref mut predicates) => {
-                predicates.insert(predicate);
-            }
-            HandKnowledge::CouldBeAnything => {
-                let mut predicates: PredicateSet = <_>::default();
+        let knowledge = &mut self.hand_knowledge[hand_id as usize];
 
-                predicates.insert(predicate);
-
-                self.hand_knowledge[hand_id as usize] = HandKnowledge::DidNotHave(predicates);
-            }
-        }
+        knowledge.did_not_have.insert(predicate);
     }
 
-    pub fn drew_card(&mut self, hand_id: HandId) {
+    /// Update memory based on the fact that the given player drew a card
+    pub fn drew_card(&mut self, _hand_id: HandId) {
         // TODO We could take completed baskets into account, and the known locations, and then count cards.
-        // TODO While this is techncially true, asking for the same thing over and over is still dumb, since
-        //      there's only a small likelyhood that they drew the card that was asked for before. So let's
-        //      deprioritize the ones that were previously marked as DidNotHave.
-        self.hand_knowledge[hand_id as usize] = HandKnowledge::CouldBeAnything;
+        
+        // This used to be here, but became obsolete
+        //self.hand_knowledge[hand_id as usize] = HandKnowledge::CouldBeAnything;
     }
 
     pub fn known(&mut self, hand_id: HandId, card: Card) {

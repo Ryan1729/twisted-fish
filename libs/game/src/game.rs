@@ -895,6 +895,7 @@ enum HardcodedMode {
     Cpu1GlassBottomBoatPlayerOtherZingers,
     PlayerOnlyFourCardSharksCpu1CardShark,
     PlayerOnlyOneCardSharksCpu1FourCardSharks,
+    PlayerOneCardSharksCpu1OneCardSharkRestInPond,
 }
 use HardcodedMode::*;
 
@@ -1030,6 +1031,7 @@ impl State {
             | PlayerDivineInterventionCpu1OtherZingers
             | PlayerOnlyFourCardSharksCpu1CardShark
             | PlayerOnlyOneCardSharksCpu1FourCardSharks
+            | PlayerOneCardSharksCpu1OneCardSharkRestInPond
             | Cpu1GameWardenPlayerOtherZingers => {},
         }
 
@@ -1279,6 +1281,22 @@ impl State {
                     );
                 }
             }
+            PlayerOneCardSharksCpu1OneCardSharkRestInPond => {
+                for suit in Suit::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        fish_card(Rank::CardShark, suit),
+                        // Something besides Red, so we don't accidentally have it work only by default
+                        if suit == Suit::Yellow {
+                            FullHandId::Player
+                        } else if suit == Suit::Red {
+                            FullHandId::Cpu1
+                        } else {
+                            FullHandId::Discard
+                        }
+                    );
+                }
+            },
             PlayerMultipleZingers
             | Cpu1GameWarden
             | PlayerGlassBottomBoat
@@ -5006,7 +5024,6 @@ fn playing_update_and_render(
                                         if hand.is_empty() {
                                             *menu = CpuMenu::DeadInTheWater;
                                         } else {
-                                            //TODO restore
                                             if let CpuMenu::Selecting = *menu {
                                                 if let Some((rank, suit, target)) = state.memories.memory(id)
                                                     .informed_question(hand, hand_id) {
