@@ -1,4 +1,4 @@
-use models::{Basket, Card, CpuId, Hand, HandId, NetPredicate, Predicate, Rank, Suit, DECK_SIZE, append_card_text};
+use models::{Basket, Card, CardBaskets, CpuId, Hand, HandId, NetPredicate, Predicate, Rank, Suit, DECK_SIZE, append_card_text};
 
 /// It seems intuitive that counting an amount of asks larger than the amount of
 /// suits would not be needed, but I don't have an explicitly worked out reason for
@@ -215,9 +215,12 @@ impl Memory {
         &self,
         rank: Rank,
         my_hand: &Hand,
-        my_id: HandId
+        my_id: HandId,
+        baskets: &CardBaskets,
     ) -> Option<(Suit, HandId)> {
         for suit in Memory::prioritized_suits(rank, my_hand) {
+            if baskets.any_of_suit(suit) && !baskets.any_of_suit_in(suit, my_id) { continue }
+
             let location = self.locations[models::fish_card(rank, suit) as usize];
             match location {
                 Location::Known(id) if id != my_id => {
@@ -236,11 +239,14 @@ impl Memory {
         &self,
         rank: Rank,
         my_hand: &Hand,
-        my_id: HandId
+        my_id: HandId,
+        baskets: &CardBaskets,
     ) -> Option<(Suit, HandId)> {
         let mut best = None;
 
         for suit in Memory::prioritized_suits(rank, my_hand) {
+            if baskets.any_of_suit(suit) && !baskets.any_of_suit_in(suit, my_id) { continue }
+
             let card = models::fish_card(rank, suit);
 
             let location = self.locations[card as usize];
@@ -282,15 +288,17 @@ impl Memory {
 
         if best.is_none() {
             for suit in Memory::prioritized_suits(rank, my_hand) {
+                if baskets.any_of_suit(suit) && !baskets.any_of_suit_in(suit, my_id) { continue }
+
                 let card = models::fish_card(rank, suit);
-    
+
                 let location = self.locations[card as usize];
                 match location {
                     Location::Incomplete(incomplete) => {
                         let my_index = my_id as _;
                         for (hand_i, evidence) in incomplete.iter().enumerate() {
                             if hand_i == my_index { continue }
-    
+
                             // This time, check the ones that we saw they didn't have before
 
                             match (*evidence, best) {
@@ -304,7 +312,7 @@ impl Memory {
                                 }
                                 (Evidence::Unknown | Evidence::DidNotHave, _) => {}
                             }
-    
+
                         }
                     },
                     | Location::Known(_)
@@ -337,7 +345,7 @@ impl Memory {
                                     Evidence::AskedForSimilar(count.saturating_inc())
                                 }
                             };
-        
+
                             *loc = Location::Incomplete(incomplete);
                         },
                     }
@@ -346,7 +354,7 @@ impl Memory {
             Net(net_predicate) => {
                 match net_predicate {
                     NetPredicate::Rank(rank) => {
-                        // TODO is the information gained here different than if the 
+                        // TODO is the information gained here different than if the
                         // predicate was not used?
                         for suit in Suit::ALL {
                             let loc = &mut self.locations[models::fish_card(rank, suit) as usize];
@@ -362,7 +370,7 @@ impl Memory {
                                             Evidence::AskedForSimilar(count.saturating_inc())
                                         }
                                     };
-                
+
                                     *loc = Location::Incomplete(incomplete);
                                 },
                             }
@@ -385,7 +393,7 @@ impl Memory {
     /// Update memory based on the fact that the given player drew a card
     pub fn drew_card(&mut self, _hand_id: HandId) {
         // TODO We could take completed baskets into account, and the known locations, and then count cards.
-        
+
         // This used to be here, but became obsolete
         //self.hand_knowledge[hand_id as usize] = HandKnowledge::CouldBeAnything;
     }
@@ -401,7 +409,7 @@ impl Memory {
     }
 
     pub fn likely_to_fill_basket_soon(&self, target_id: HandId) -> Option<Rank> {
-        // Do high scoring ranks first so we will return them when there are 
+        // Do high scoring ranks first so we will return them when there are
         // multiple options.
         for &rank in Rank::ALL.iter().rev() {
             if self.is_likely_to_fill_rank_soon(target_id, rank) {
@@ -427,10 +435,10 @@ impl Memory {
                 Incomplete(incomplete) => match incomplete[target_id as usize] {
                     Unknown | DidNotHave => {},
                     AskedForSimilar(AskCount::One | AskCount::Two) => {
-                        score += 1;    
+                        score += 1;
                     },
                     AskedForSimilar(_) => {
-                        score += 2;    
+                        score += 2;
                     },
                 },
                 Known(id) if id == target_id => {
@@ -438,7 +446,7 @@ impl Memory {
                 },
                 Known(_) => {},
                 KnownGone => break,
-            }   
+            }
         }
 
         // TODO? check this actually produces the behaviour we want?
@@ -459,13 +467,14 @@ impl Memory {
                 incomplete.iter().all(|x| matches!(x, Unknown))
             },
             _ => false,
-        }   
+        }
     }
 
     pub fn informed_question(
         &self,
         my_hand: &Hand,
-        my_hand_id: HandId
+        my_hand_id: HandId,
+        baskets: &CardBaskets,
     ) -> Option<(Rank, Suit, HandId)> {
         // TODO? maybe prioritize questions which
         // are known to result in full baskets?
@@ -478,6 +487,7 @@ impl Memory {
                     rank,
                     my_hand,
                     my_hand_id,
+                    baskets,
                 );
 
                 if question.is_some() {
@@ -492,6 +502,7 @@ impl Memory {
                     rank,
                     my_hand,
                     my_hand_id,
+                    baskets,
                 );
 
                 if question.is_some() {

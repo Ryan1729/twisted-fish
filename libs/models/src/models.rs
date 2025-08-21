@@ -717,6 +717,32 @@ impl Hand {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct CardBaskets {
+    pub player_baskets: Hand,
+    pub cpu1_baskets: Hand,
+    pub cpu2_baskets: Hand,
+    pub cpu3_baskets: Hand,
+}
+
+impl CardBaskets {
+    pub fn any_of_suit(&self, suit: Suit) -> bool {
+        self.player_baskets.iter().any(|c| { get_suit(c) == Some(suit) })
+        || self.cpu1_baskets.iter().any(|c| { get_suit(c) == Some(suit) })
+        || self.cpu2_baskets.iter().any(|c| { get_suit(c) == Some(suit) })
+        || self.cpu3_baskets.iter().any(|c| { get_suit(c) == Some(suit) })
+    }
+
+    pub fn any_of_suit_in(&self, suit: Suit, hand_id: HandId) -> bool {
+        (match hand_id {
+            HandId::Player => &self.player_baskets,
+            HandId::Cpu1 => &self.cpu1_baskets,
+            HandId::Cpu2 => &self.cpu2_baskets,
+            HandId::Cpu3 => &self.cpu3_baskets,
+        }).iter().any(|c| { get_suit(c) == Some(suit) })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct HandOrdering([CardIndex; DECK_SIZE as usize]);
 
@@ -1314,3 +1340,4 @@ impl Predicate {
         }
     }
 }
+

@@ -1,5 +1,5 @@
 use memories::Memories;
-use models::{BasketSuffix, BasketIndexes, BasketsIndexes, Basket, Card, CardIndex, CpuId, Hand, HandId, HandOrdering, Predicate, LurePredicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, fish_card, get_rank, get_suit, zingers};
+use models::{BasketSuffix, BasketIndexes, BasketsIndexes, Basket, Card, CardBaskets, CardIndex, CpuId, Hand, HandId, HandOrdering, Predicate, LurePredicate, NetPredicate, Rank, Suit, Targeting, Zinger, DECK_SIZE, fish_card, get_rank, get_suit, zingers};
 use gfx::{Commands, CHEVRON_H, WINDOW_CONTENT_OFFSET};
 use platform_types::{
     command,
@@ -575,10 +575,7 @@ pub struct Cards {
     pub cpu1: Hand,
     pub cpu2: Hand,
     pub cpu3: Hand,
-    pub player_baskets: Hand,
-    pub cpu1_baskets: Hand,
-    pub cpu2_baskets: Hand,
-    pub cpu3_baskets: Hand,
+    pub baskets: CardBaskets,
     pub discard: Hand,
 }
 
@@ -619,10 +616,10 @@ impl Cards {
         let mut count = 0;
 
         for hand in [
-            &self.player_baskets,
-            &self.cpu1_baskets,
-            &self.cpu2_baskets,
-            &self.cpu3_baskets,
+            &self.baskets.player_baskets,
+            &self.baskets.cpu1_baskets,
+            &self.baskets.cpu2_baskets,
+            &self.baskets.cpu3_baskets,
             &self.discard,
         ] {
             for card in hand.iter() {
@@ -695,10 +692,10 @@ impl FullHandId {
             Cpu1 => &cards.cpu1,
             Cpu2 => &cards.cpu2,
             Cpu3 => &cards.cpu3,
-            PlayerBaskets => &cards.player_baskets,
-            Cpu1Baskets => &cards.cpu1_baskets,
-            Cpu2Baskets => &cards.cpu2_baskets,
-            Cpu3Baskets => &cards.cpu3_baskets,
+            PlayerBaskets => &cards.baskets.player_baskets,
+            Cpu1Baskets => &cards.baskets.cpu1_baskets,
+            Cpu2Baskets => &cards.baskets.cpu2_baskets,
+            Cpu3Baskets => &cards.baskets.cpu3_baskets,
             Discard => &cards.discard,
         }
     }
@@ -712,10 +709,10 @@ impl FullHandId {
             Cpu1 => &mut cards.cpu1,
             Cpu2 => &mut cards.cpu2,
             Cpu3 => &mut cards.cpu3,
-            PlayerBaskets => &mut cards.player_baskets,
-            Cpu1Baskets => &mut cards.cpu1_baskets,
-            Cpu2Baskets => &mut cards.cpu2_baskets,
-            Cpu3Baskets => &mut cards.cpu3_baskets,
+            PlayerBaskets => &mut cards.baskets.player_baskets,
+            Cpu1Baskets => &mut cards.baskets.cpu1_baskets,
+            Cpu2Baskets => &mut cards.baskets.cpu2_baskets,
+            Cpu3Baskets => &mut cards.baskets.cpu3_baskets,
             Discard => &mut cards.discard,
         }
     }
@@ -736,10 +733,10 @@ pub fn force_into_start_of_hand(
         &mut state.cards.cpu1,
         &mut state.cards.cpu2,
         &mut state.cards.cpu3,
-        &mut state.cards.player_baskets,
-        &mut state.cards.cpu1_baskets,
-        &mut state.cards.cpu2_baskets,
-        &mut state.cards.cpu3_baskets,
+        &mut state.cards.baskets.player_baskets,
+        &mut state.cards.baskets.cpu1_baskets,
+        &mut state.cards.baskets.cpu2_baskets,
+        &mut state.cards.baskets.cpu3_baskets,
         &mut state.cards.discard,
     ];
 
@@ -1427,10 +1424,10 @@ impl State {
                         hand.push(anim.card);
 
                         let baskets = match id {
-                            HandId::Player => &mut self.cards.player_baskets,
-                            HandId::Cpu1 => &mut self.cards.cpu1_baskets,
-                            HandId::Cpu2 => &mut self.cards.cpu2_baskets,
-                            HandId::Cpu3 => &mut self.cards.cpu3_baskets,
+                            HandId::Player => &mut self.cards.baskets.player_baskets,
+                            HandId::Cpu1 => &mut self.cards.baskets.cpu1_baskets,
+                            HandId::Cpu2 => &mut self.cards.baskets.cpu2_baskets,
+                            HandId::Cpu3 => &mut self.cards.baskets.cpu3_baskets,
                         };
 
                         fn remove_basket(hand: &mut Hand) -> Option<Basket> {
@@ -2902,10 +2899,10 @@ fn play_dead_scuba_diver(
     to_remove.sort();
 
     let baskets = match id {
-        HandId::Player => &mut cards.player_baskets,
-        HandId::Cpu1 => &mut cards.cpu1_baskets,
-        HandId::Cpu2 => &mut cards.cpu2_baskets,
-        HandId::Cpu3 => &mut cards.cpu3_baskets,
+        HandId::Player => &mut cards.baskets.player_baskets,
+        HandId::Cpu1 => &mut cards.baskets.cpu1_baskets,
+        HandId::Cpu2 => &mut cards.baskets.cpu2_baskets,
+        HandId::Cpu3 => &mut cards.baskets.cpu3_baskets,
     };
 
     let hand = match id {
@@ -3671,10 +3668,10 @@ fn scoring_update_and_render(
 
     for id in HandId::ALL {
         let baskets = match id {
-            HandId::Player => &mut state.cards.player_baskets,
-            HandId::Cpu1 => &mut state.cards.cpu1_baskets,
-            HandId::Cpu2 => &mut state.cards.cpu2_baskets,
-            HandId::Cpu3 => &mut state.cards.cpu3_baskets,
+            HandId::Player => &mut state.cards.baskets.player_baskets,
+            HandId::Cpu1 => &mut state.cards.baskets.cpu1_baskets,
+            HandId::Cpu2 => &mut state.cards.baskets.cpu2_baskets,
+            HandId::Cpu3 => &mut state.cards.baskets.cpu3_baskets,
         };
 
         let baskets_indexes = get_baskets_indexes(baskets);
@@ -5026,7 +5023,7 @@ fn playing_update_and_render(
                                         } else {
                                             if let CpuMenu::Selecting = *menu {
                                                 if let Some((rank, suit, target)) = state.memories.memory(id)
-                                                    .informed_question(hand, hand_id) {
+                                                    .informed_question(hand, hand_id, &state.cards.baskets) {
                                                     let question = Question::new(
                                                         Targeting {
                                                             target,
