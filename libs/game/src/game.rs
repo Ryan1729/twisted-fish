@@ -824,6 +824,16 @@ impl PlayKind {
             | Self::TheLure { .. } => true,
         }
     }
+
+    fn source(&self) -> HandId {
+        match self {
+            Self::FishedUnsuccessfully { source }
+            | Self::TwoFistedFisherman { source, .. } => *source,
+            Self::NoFishing { question, .. } => question.targeting.source,
+            | Self::TheNet { targeting, .. }
+            | Self::TheLure { targeting, .. } => targeting.source,
+        }
+    }
 }
 
 impl TryFrom<PlayKind> for DivineTarget {
@@ -893,6 +903,7 @@ enum HardcodedMode {
     PlayerOnlyFourCardSharksCpu1CardShark,
     PlayerOnlyOneCardSharksCpu1FourCardSharks,
     PlayerOneCardSharksCpu1OneCardSharkRestInPond,
+    PlayerNoFishingAndDivineIntervention,
 }
 use HardcodedMode::*;
 
@@ -1019,6 +1030,10 @@ impl State {
             Cpu1GlassBottomBoatPlayerOtherZingers => {
                 // Causes Cpu1 to use the Glass Bottom Boat when asking for the red eel, for currently unexamined reasons
                 seed = [231, 248, 53, 220, 104, 33, 218, 65, 210, 53, 53, 134, 13, 152, 3, 62];
+            }
+            PlayerNoFishingAndDivineIntervention => {
+                // What it says on the tin.
+                seed = [37, 235, 12, 89, 86, 39, 218, 65, 162, 106, 206, 164, 156, 147, 3, 62]
             }
             Cpu1PlayLurePlayerNoFishing
             | PlayerStuckWithDivineIntervention
@@ -1300,6 +1315,7 @@ impl State {
             | PlayerGameWardenAndGlassBottomBoat
             | Cpu2DeadScubaDiverAndNoFishing
             | PlayerNetAndNoFishing
+            | PlayerNoFishingAndDivineIntervention
             | Release | DebugRelease => {}
         }
 
@@ -2033,8 +2049,11 @@ impl AvailablePlayAnytime {
                 let mut divine_targets_raw = 0;
 
                 for play in stack.iter() {
-                    if let Ok(divine_targets) = DivineTargets::try_from(play.kind.clone()) {
-                        divine_targets_raw |= divine_targets.get();
+                    if let Ok(divine_targets) = DivineTargets::try_from(play.kind.clone())
+                    {
+                        if play.kind.source() != HandId::Player {
+                            divine_targets_raw |= divine_targets.get();
+                        }
                     }
                 }
 
