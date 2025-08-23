@@ -211,7 +211,7 @@ pub enum Rank {
     // }
 }
 
-pub type Score = usize;
+pub type Score = isize;
 
 impl Rank {
     pub fn append_debug_info(&self, output: &mut Vec<u8>) {

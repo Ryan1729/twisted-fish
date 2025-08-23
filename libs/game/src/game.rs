@@ -17,15 +17,12 @@ use xs::{Xs, Seed};
 
 /* Unlocalized TODOs:
 Maybe don't play divine intervention against two-fisted fisherman unless *you* were just asked something?
-Really seems like they are sometimes asking for stuff that the same person was asked for, even when there have been no draws, becasue the "fish pond" is empty
-    Upon reflection, part of the issue is that we don't record what that player asked other players for already at all
-        Or should we be able to derive what to ask for from other parts than that?
-CPU players shouldn't ask for 5 different cards, using the lure, since that should have resulted in a basket already
-    Not sure what this meant. Don't ask for things that wuld be left over from the dead scuba diver basket?
-Game ending seems to be messed up/not implemented in general
-    Player going out didn't end the game
-    Player being "Dead in the water" seems to lock up the game.
 Cpu should probably try to count cards in cases where players are dead in the water
+I think that when a CPU uses no fishing on another CPU the player doesn't get to see what was asked for, and they should
+Cpu shouldn't ask for a card that they asked and got this round, even as a feint
+Could add a hard mode where the CPU players gang up on you, by focusing on you first
+Seems like the CPU players are holding on to
+    Maybe like timestamp them somehow and forget them? Or remove the did_not_have entry when the given player gets the card?
 */
 
 macro_rules! allow_to_respond {
@@ -3687,29 +3684,51 @@ fn scoring_update_and_render(
 
     for id in HandId::ALL {
         let baskets = match id {
-            HandId::Player => &mut state.cards.baskets.player_baskets,
-            HandId::Cpu1 => &mut state.cards.baskets.cpu1_baskets,
-            HandId::Cpu2 => &mut state.cards.baskets.cpu2_baskets,
-            HandId::Cpu3 => &mut state.cards.baskets.cpu3_baskets,
+            HandId::Player => &state.cards.baskets.player_baskets,
+            HandId::Cpu1 => &state.cards.baskets.cpu1_baskets,
+            HandId::Cpu2 => &state.cards.baskets.cpu2_baskets,
+            HandId::Cpu3 => &state.cards.baskets.cpu3_baskets,
         };
 
         let baskets_indexes = get_baskets_indexes(baskets);
 
         let mut score = 0;
 
+        // Add score for baskets
         for rank in Rank::ALL {
             let Some(basket_indexes) = baskets_indexes[rank as usize].as_ref() else {
                 continue
             };
 
             score += rank.score() * (
-                basket_indexes.prefix.len()
+                (basket_indexes.prefix.len() as models::Score)
                 + match basket_indexes.suffix {
                     BasketSuffix::LastOnly(..)
                     | BasketSuffix::Both(..) => 1,
                     BasketSuffix::DeadScubaDiverOnly(..) => 0,
                 }
             );
+        }
+
+        // Subtract leftover Zingers and fish.
+
+        let hand = match id {
+            HandId::Player => &state.cards.player,
+            HandId::Cpu1 => &state.cards.cpu1,
+            HandId::Cpu2 => &state.cards.cpu2,
+            HandId::Cpu3 => &state.cards.cpu3,
+        };
+
+        for card in hand.iter() {
+            match get_rank(card) {
+                Some(rank) => {
+                    score -= rank.score();
+                },
+                None => {
+                    // Must be a zinger
+                    score -= 25;
+                },
+            }
         }
 
         commands.print_line(
