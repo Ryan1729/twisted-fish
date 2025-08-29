@@ -65,6 +65,7 @@ struct HandKnowledge {
 pub struct Memory {
     locations: [Location; DECK_SIZE as _],
     hand_knowledge: [HandKnowledge; HandId::ALL.len()],
+    this_turn: PredicateSet,
 }
 
 impl Default for Memory {
@@ -72,6 +73,7 @@ impl Default for Memory {
         Self {
             locations: [Location::default(); models::DECK_SIZE as _],
             hand_knowledge: core::array::from_fn(|_| <_>::default()),
+            this_turn: PredicateSet::default(),
         }
     }
 }
@@ -219,6 +221,8 @@ impl Memory {
         baskets: &CardBaskets,
     ) -> Option<(Suit, HandId)> {
         for suit in Memory::prioritized_suits(rank, my_hand) {
+            if self.this_turn.contains(&Predicate::RankSuit(rank, suit)) { continue }
+
             if baskets.any_of_suit(suit) && !baskets.any_of_suit_in(suit, my_id) { continue }
 
             let location = self.locations[models::fish_card(rank, suit) as usize];
@@ -245,6 +249,8 @@ impl Memory {
         let mut best = None;
 
         for suit in Memory::prioritized_suits(rank, my_hand) {
+            if self.this_turn.contains(&Predicate::RankSuit(rank, suit)) { continue }
+
             if baskets.any_of_suit(suit) && !baskets.any_of_suit_in(suit, my_id) { continue }
 
             let card = models::fish_card(rank, suit);
@@ -288,6 +294,8 @@ impl Memory {
 
         if best.is_none() {
             for suit in Memory::prioritized_suits(rank, my_hand) {
+                if self.this_turn.contains(&Predicate::RankSuit(rank, suit)) { continue }
+
                 if baskets.any_of_suit(suit) && !baskets.any_of_suit_in(suit, my_id) { continue }
 
                 let card = models::fish_card(rank, suit);
@@ -324,7 +332,7 @@ impl Memory {
         best.map(|(_, out)| out)
     }
 
-    fn asked_for(&mut self, hand_id: HandId, predicate: Predicate) {
+    fn asked_for(&mut self, own_id: CpuId, hand_id: HandId, predicate: Predicate) {
         use Predicate::*;
         match predicate {
             RankSuit(rank, _asked_suit) => {
@@ -382,6 +390,11 @@ impl Memory {
                 }
             },
         }
+
+        // If this is us asking
+        if HandId::from(own_id) == hand_id {
+            self.this_turn.insert(predicate);
+        }
     }
 
     pub fn did_not_have(&mut self, hand_id: HandId, predicate: Predicate) {
@@ -406,6 +419,10 @@ impl Memory {
         for card in basket {
             self.locations[card as usize] = Location::KnownGone;
         }
+    }
+
+    fn start_turn(&mut self) {
+        self.this_turn.clear();
     }
 
     pub fn likely_to_fill_basket_soon(&self, target_id: HandId) -> Option<Rank> {
@@ -589,7 +606,7 @@ impl Memories {
     /// A (different) player asked for something.
     pub fn asked_for(&mut self, hand_id: HandId, predicate: Predicate) {
         for cpu_id in CpuId::ALL {
-            self.memory_mut(cpu_id).asked_for(hand_id, predicate);
+            self.memory_mut(cpu_id).asked_for(cpu_id, hand_id, predicate);
         }
     }
 
@@ -618,6 +635,13 @@ impl Memories {
     pub fn basket_removed(&mut self, basket: Basket) {
         for cpu_id in CpuId::ALL {
             self.memory_mut(cpu_id).basket_removed(basket);
+        }
+    }
+
+    // Note the turn started, and thus any memories of "this turn" are obsolete.
+    pub fn start_turn(&mut self) {
+        for cpu_id in CpuId::ALL {
+            self.memory_mut(cpu_id).start_turn();
         }
     }
 }

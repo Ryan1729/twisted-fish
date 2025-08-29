@@ -19,9 +19,8 @@ use xs::{Xs, Seed};
 Maybe don't play divine intervention against two-fisted fisherman unless *you* were just asked something?
 Cpu should probably try to count cards in cases where players are dead in the water
 I think that when a CPU uses no fishing on another CPU the player doesn't get to see what was asked for, and they should
-Cpu shouldn't ask for a card that they asked and got this round, even as a feint
 Could add a hard mode where the CPU players gang up on you, by focusing on you first
-Seems like the CPU players are holding on to
+Seems like the CPU players are holding on to did_not_have too long
     Maybe like timestamp them somehow and forget them? Or remove the did_not_have entry when the given player gets the card?
 */
 
@@ -124,6 +123,7 @@ macro_rules! to_next_turn {
         $state.selection.player_menu = Default::default();
         $state.cpu_menu = CpuMenu::default();
         $state.done_something_this_turn = false;
+        $state.memories.start_turn();
     }
 }
 
