@@ -18,7 +18,6 @@ use xs::{Xs, Seed};
 /* Unlocalized TODOs:
 Maybe don't play divine intervention against two-fisted fisherman unless *you* were just asked something?
 Cpu should probably try to count cards in cases where players are dead in the water
-I think that when a CPU uses no fishing on another CPU the player doesn't get to see what was asked for, and they should
 Could add a hard mode where the CPU players gang up on you, by focusing on you first
 Seems like the CPU players are holding on to did_not_have too long
     Maybe like timestamp them somehow and forget them? Or remove the did_not_have entry when the given player gets the card?
@@ -5430,6 +5429,11 @@ fn playing_update_and_render(
                                                         text: b"Play",
                                                     }
                                                 ) {
+                                                    state.memories.asked_for(
+                                                        id.into(),
+                                                        question.predicate,
+                                                    );
+    
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
@@ -5457,6 +5461,11 @@ fn playing_update_and_render(
                                                     question.predicate,
                                                     state.cards.active_count(),
                                                 ) {
+                                                    state.memories.asked_for(
+                                                        id.into(),
+                                                        question.predicate,
+                                                    );
+
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
