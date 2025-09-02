@@ -21,6 +21,10 @@ Cpu should probably try to count cards in cases where players are dead in the wa
 Could add a hard mode where the CPU players gang up on you, by focusing on you first
 Seems like the CPU players are holding on to did_not_have too long
     Maybe like timestamp them somehow and forget them? Or remove the did_not_have entry when the given player gets the card?
+There's some menus that flicker. Seem to be related to zingers
+Putting the leftover card into the dead scuba diver basket is not implemented yer
+Cpu players still seem to ask for the same thing as they did last round
+Player asked with net for a hammerhead, they used divine intervention, but that player got the hammerhead anyway!
 */
 
 macro_rules! allow_to_respond {
@@ -903,7 +907,7 @@ enum HardcodedMode {
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = DebugRelease;
+const HARDCODED_MODE: HardcodedMode = Release;
 
 const IS_DEBUG: bool = cfg!(debug_assertions) || !matches!(HardcodedMode::Release, HARDCODED_MODE);
 
@@ -3643,9 +3647,22 @@ fn paused_update_and_render(
 fn scoring_update_and_render(
     commands: &mut Commands,
     state: &mut State,
-    _input: Input,
-    _speaker: &mut Speaker
+    input: Input,
+    speaker: &mut Speaker
 ) {
+    macro_rules! new_group {
+        () => {
+            &mut ui::Group {
+                commands,
+                ctx: &mut state.ctx,
+                input,
+                speaker,
+            }
+        }
+    }
+
+    state.ctx.frame_init();
+
     commands.draw_nine_slice(gfx::NineSlice::Window, SCORING_WINDOW);
 
     let base_xy = SCORING_WINDOW.xy()
@@ -3739,6 +3756,24 @@ fn scoring_update_and_render(
         xy += column_width;
     }
 
+    xy.x = base_xy.x;
+    xy += (gfx::CHAR_ADVANCE_H * 2).get();
+
+    state.ctx.set_next_hot(Submit);
+
+    if do_button(
+        new_group!(),
+        ButtonSpec {
+            id: Submit,
+            rect: dbg!(fit_to_rest_of_window(
+                xy,
+                SCORING_WINDOW,
+            )),
+            text: b"New Game",
+        }
+    ) {
+        *state = State::new(xs::new_seed(&mut state.rng))
+    }
 }
 
 fn playing_update_and_render(
