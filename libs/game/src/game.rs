@@ -22,7 +22,6 @@ Could add a hard mode where the CPU players gang up on you, by focusing on you f
 Seems like the CPU players are holding on to did_not_have too long
     Maybe like timestamp them somehow and forget them? Or remove the did_not_have entry when the given player gets the card?
 There's some menus that flicker. Seem to be related to zingers
-Putting the leftover card into the dead scuba diver basket is not implemented yer
 Cpu players still seem to ask for the same thing as they did last round
 Player asked with net for a hammerhead, they used divine intervention, but that player got the hammerhead anyway!
 */
@@ -1492,10 +1491,43 @@ impl State {
                         while let Some(basket) = remove_basket(hand) {
                             self.memories.basket_removed(basket);
                             // TODO? animate gathering together and heading to a
-                            // separate pile? Or maybe poofing in an expolsion of
+                            // separate pile? Or maybe poofing in an explosion of
                             // particles?
                             for card in basket {
                                 baskets.push(card);
+                            }
+                        }
+
+                        // There can be at most one to be filled dead scuba diver basket.
+                        {
+                            let baskets_indexes = get_baskets_indexes(baskets);
+
+                            for basket_indexes_opt in baskets_indexes {
+                                let Some(basket_indexes) = basket_indexes_opt else {
+                                    continue
+                                };
+
+                                match basket_indexes.suffix {
+                                    BasketSuffix::DeadScubaDiverOnly(..) => {
+                                        match basket_indexes.prefix {
+                                            [fish_index, ..] => {
+                                                // TODO have the dead scuba diver card go to the discard pile?
+                                                // The rules techically say that happens, but I don't think 
+                                                // that makes a difference.
+                                                if let Some(rank) = baskets.get(fish_index).and_then(get_rank) {
+                                                    let remove_index = hand.iter()
+                                                        .position(|c| get_rank(c) == Some(rank));
+                                                    if let Some(remove_index) = remove_index {
+                                                        if let Some(card) = hand.remove(remove_index as u8) {
+                                                            baskets.insert(fish_index, card);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    BasketSuffix::Both(..) | BasketSuffix::LastOnly(..) => {},
+                                }
                             }
                         }
 

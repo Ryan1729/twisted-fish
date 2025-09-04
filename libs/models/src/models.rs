@@ -633,6 +633,12 @@ impl Hand {
         debug_assert!(pushed);
     }
 
+    pub fn insert(&mut self, card: Card, index: CardIndex) {
+        let index = index as _;
+        self.0[index..].rotate_right(1);
+        self.0[index] = CardOption::some(card);
+    }
+
     #[allow(dead_code)]
     // Currently used only in tests
     pub fn swap_insert_top(&mut self, card: Card) {
