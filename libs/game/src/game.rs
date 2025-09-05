@@ -24,6 +24,8 @@ Seems like the CPU players are holding on to did_not_have too long
 There's some menus that flicker. Seem to be related to zingers
 Cpu players still seem to ask for the same thing as they did last round
 Player asked with net for a hammerhead, they used divine intervention, but that player got the hammerhead anyway!
+A Cpu player asked for a thing with the net, but the player got the card?
+Cpu players with only zingers seem to be incorrectly saying they are dead in the water.
 */
 
 macro_rules! allow_to_respond {
@@ -903,10 +905,13 @@ enum HardcodedMode {
     PlayerOnlyOneCardSharksCpu1FourCardSharks,
     PlayerOneCardSharksCpu1OneCardSharkRestInPond,
     PlayerNoFishingAndDivineIntervention,
+    PlayerHasOneOfEachRank,
+    PlayerHasOneOfEachRankCpu1HasTheRestOfTheFish,
+    PlayerHasOneOfEachRankCpu1HasTheRestOfTheFishCpu2HasTheNet,
 }
 use HardcodedMode::*;
 
-const HARDCODED_MODE: HardcodedMode = Release;
+const HARDCODED_MODE: HardcodedMode = PlayerHasOneOfEachRankCpu1HasTheRestOfTheFishCpu2HasTheNet;//Release;
 
 const IS_DEBUG: bool = cfg!(debug_assertions) || !matches!(HardcodedMode::Release, HARDCODED_MODE);
 
@@ -1035,6 +1040,9 @@ impl State {
                 seed = [37, 235, 12, 89, 86, 39, 218, 65, 162, 106, 206, 164, 156, 147, 3, 62]
             }
             Cpu1PlayLurePlayerNoFishing
+            | PlayerHasOneOfEachRank
+            | PlayerHasOneOfEachRankCpu1HasTheRestOfTheFish
+            | PlayerHasOneOfEachRankCpu1HasTheRestOfTheFishCpu2HasTheNet
             | PlayerStuckWithDivineIntervention
             | PlayerAllZingers
             | Cpu1NoFishingAndDogfishes
@@ -1307,6 +1315,59 @@ impl State {
                         }
                     );
                 }
+            },
+            PlayerHasOneOfEachRank => {
+                for rank in Rank::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        fish_card(rank, Suit::Blue),
+                        FullHandId::Player,
+                    );
+                }
+            },
+            PlayerHasOneOfEachRankCpu1HasTheRestOfTheFish => {
+                for suit in Suit::ALL {
+                    for rank in Rank::ALL {
+                        force_into_start_of_hand(
+                            &mut state,
+                            fish_card(rank, suit),
+                            FullHandId::Cpu1,
+                        );
+                    }
+                }
+
+                for rank in Rank::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        fish_card(rank, Suit::Blue),
+                        FullHandId::Player,
+                    );
+                }
+            },
+            PlayerHasOneOfEachRankCpu1HasTheRestOfTheFishCpu2HasTheNet => {
+                for suit in Suit::ALL {
+                    for rank in Rank::ALL {
+                        force_into_start_of_hand(
+                            &mut state,
+                            fish_card(rank, suit),
+                            FullHandId::Cpu1,
+                        );
+                    }
+                }
+
+                for rank in Rank::ALL {
+                    force_into_start_of_hand(
+                        &mut state,
+                        fish_card(rank, Suit::Blue),
+                        FullHandId::Player,
+                    );
+                }
+
+                force_into_start_of_hand(
+                    &mut state,
+                    models::zingers::THE_NET,
+                    FullHandId::Cpu2,
+                );
             },
             PlayerMultipleZingers
             | Cpu1GameWarden
