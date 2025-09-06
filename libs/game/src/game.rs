@@ -26,6 +26,7 @@ Cpu players still seem to ask for the same thing as they did last round
 Player asked with net for a hammerhead, they used divine intervention, but that player got the hammerhead anyway!
 A Cpu player asked for a thing with the net, but the player got the card?
 Cpu players with only zingers seem to be incorrectly saying they are dead in the water.
+Should test that both kinds of players can use Divine Intervention on all other zingers
 */
 
 macro_rules! allow_to_respond {
@@ -808,10 +809,12 @@ pub enum PlayKind {
     TheNet {
         targeting: Targeting,
         predicate: NetPredicate,
+        user_acknowledged: bool,
     },
     TheLure {
         targeting: Targeting,
         predicate: LurePredicate,
+        user_acknowledged: bool,
     },
 }
 
@@ -2814,6 +2817,7 @@ fn discard_lure(
             kind: PlayKind::TheLure {
                 targeting,
                 predicate,
+                user_acknowledged: false,
             }
         }),
     )
@@ -2836,6 +2840,7 @@ fn discard_net(
             kind: PlayKind::TheNet {
                 targeting,
                 predicate,
+                user_acknowledged: false,
             }
         }),
     )
@@ -5425,6 +5430,7 @@ fn playing_update_and_render(
                                                         }
                                                     }
                                                     ZingerToPlay::Lure(target, predicate) => {
+                                                        // TODO Display question to the player
                                                         discard_lure(
                                                             &mut state.cards,
                                                             &mut state.animations,
@@ -5792,7 +5798,9 @@ fn playing_update_and_render(
                                     go_again = true;
                                 }
                             }
-                            PlayKind::TheNet{ targeting: Targeting{ source, target }, predicate } => {
+                            PlayKind::TheNet{ targeting: Targeting{ source, target }, predicate, user_acknowledged } => {
+                                // We want to display the question to the user, even if a CPU player will counter it.
+
                                 match CpuId::try_from(target) {
                                     Err(()) => {
                                         let menu = &mut state.cpu_menu;
@@ -5806,150 +5814,234 @@ fn playing_update_and_render(
                                         go_again = true;
                                     }
                                     Ok(target_id) => {
-                                        macro_rules! net_handle_negative_response {
-                                            () => {
-                                                let len = state.cards.hand(source).len();
+                                        if !user_acknowledged {
+                                            // TODO replace this with a more descriptive, and less UI version
 
-                                                let drew = state.cards.deck.draw();
-
-                                                state.memories.did_not_have(target, models::Predicate::Net(predicate));
-
-                                                if let Some(card) = drew {
-                                                    state.memories.drew_card(source);
-
-                                                    let at = DECK_XY;
-
-                                                    let target = get_card_insert_position(
-                                                        spread(source),
-                                                        len
-                                                    );
-
-                                                    state.animations.push(Animation {
-                                                        card,
-                                                        at,
-                                                        target,
-                                                        action: AnimationAction::AddToHand{ got_by_asking: false, id: source },
-                                                        .. <_>::default()
-                                                    });
-                                                }
-
-                                                // This card counts as a turn, so just go on to the next turn.
-                                                to_next_turn!(state);
-                                            }
-                                        }
-
-                                        if state.cards.hand(target)
-                                            .contains(zingers::NO_FISHING)
-                                        && should_use_no_fishing_against(
-                                            state.memories.memory(target_id),
-                                            state.cards.hand(target),
-                                            source,
-                                            Predicate::Net(predicate),
-                                            state.cards.active_count(),
-                                        ) {
-                                            discard_no_fishing(
-                                                &mut state.cards,
-                                                &mut state.animations,
-                                                target.with_target(source),
-                                                Predicate::Net(predicate)
+                                            commands.draw_nine_slice(
+                                                gfx::NineSlice::Window,
+                                                PLAYER_NET_WINDOW
                                             );
-                                            net_handle_negative_response!();
+
+                                            let base_xy = PLAYER_NET_WINDOW.xy()
+                                                + WINDOW_CONTENT_OFFSET;
+
+                                            let label_card_xy = base_xy;
+
+                                            commands.draw_card(
+                                                zingers::THE_NET,
+                                                label_card_xy
+                                            );
+
+                                            let target_base_xy = label_card_xy + CARD_WIDTH;
+
+                                            let group = new_group!();
+
+                                            let card_xy = target_base_xy + CPU_ID_SELECT_WH.w;
+
+                                            group.commands.draw_net_predicate_card(
+                                                predicate,
+                                                card_xy
+                                            );
+
+                                            let predicate_select_xy = card_xy + CARD_WIDTH;
+
+                                            let predicate_select_rect = Rect::xy_wh(
+                                                predicate_select_xy,
+                                                NET_PREDICATE_SELECT_WH,
+                                            );
+
+                                            group.commands.print_centered(
+                                                NetPredicate::TEXT[predicate.index_of()],
+                                                Rect::xy_wh(
+                                                    predicate_select_xy + NET_PREDICATE_SELECT_TEXT_OFFSET.w,
+                                                    NET_PREDICATE_SELECT_TEXT_WH,
+                                                ),
+                                                WHITE,
+                                            );
+
+                                            ui::draw_quick_select(
+                                                group,
+                                                predicate_select_rect,
+                                                NetPredicate,
+                                            );
+
+                                            let submit_xy = predicate_select_xy + NET_PREDICATE_SELECT_WH.w;
+
+                                            let mut user_acknowledged = user_acknowledged;
+
+                                            group.ctx.set_next_hot(Submit);
+
+                                            if do_button(
+                                                group,
+                                                ButtonSpec {
+                                                    id: Submit,
+                                                    rect: fit_to_rest_of_window(
+                                                        submit_xy,
+                                                        PLAYER_NET_WINDOW,
+                                                    ),
+                                                    text: b"Ok",
+                                                }
+                                            ) {                                            
+                                                user_acknowledged = true;
+                                            }
+
+                                            state.stack.push(
+                                                Play {
+                                                    sub_turn_ids: play.sub_turn_ids,
+                                                    sub_turn_index: play.sub_turn_index,
+                                                    kind: PlayKind::TheNet{
+                                                        targeting: Targeting{ source, target },
+                                                        predicate,
+                                                        user_acknowledged
+                                                    },
+                                                }
+                                            );
                                         } else {
-                                            let len = state.cards.hand(source).len();
-                                            let target_hand = state.cards.hand_mut(target);
-
-                                            state.memories.asked_for(
-                                                source,
-                                                Predicate::Net(predicate)
-                                            );
-
-                                            let memory = state.memories.memory(target_id);
-                                            let mut found = None;
-                                            match predicate {
-                                                NetPredicate::Rank(rank) => {
-                                                    for (i, card) in target_hand.enumerated_iter() {
-                                                        match (get_rank(card), get_suit(card)) {
-                                                            (Some(r), Some(suit)) if r == rank => {
-                                                                found = Some((rank, suit, i));
-                                                                // TODO? pick best one to give up, when there's no unlikely ones left?
-                                                                // If this is an undesirable to give up card, keep looking.
-                                                                if memory.is_likely_to_fill_rank_soon(
-                                                                    target,
-                                                                    rank
-                                                                ) || memory.is_likely_to_fill_rank_soon(
-                                                                    source,
-                                                                    rank
-                                                                ) {
-                                                                    continue
-                                                                }
-                                                                break
-                                                            }
-                                                            _ => {}
-                                                        }
+                                            macro_rules! net_handle_negative_response {
+                                                () => {
+                                                    let len = state.cards.hand(source).len();
+    
+                                                    let drew = state.cards.deck.draw();
+    
+                                                    state.memories.did_not_have(target, models::Predicate::Net(predicate));
+    
+                                                    if let Some(card) = drew {
+                                                        state.memories.drew_card(source);
+    
+                                                        let at = DECK_XY;
+    
+                                                        let target = get_card_insert_position(
+                                                            spread(source),
+                                                            len
+                                                        );
+    
+                                                        state.animations.push(Animation {
+                                                            card,
+                                                            at,
+                                                            target,
+                                                            action: AnimationAction::AddToHand{ got_by_asking: false, id: source },
+                                                            .. <_>::default()
+                                                        });
                                                     }
-                                                }
-                                                NetPredicate::Suit(suit) => {
-                                                    for (i, card) in target_hand.enumerated_iter() {
-                                                        match (get_rank(card), get_suit(card)) {
-                                                            (Some(rank), Some(s)) if s == suit => {
-                                                                found = Some((rank, suit, i));
-                                                                // TODO? pick best one to give up, when there's no unlikely ones left?
-                                                                // If this is an undesirable to give up card, keep looking.
-                                                                if memory.is_likely_to_fill_rank_soon(
-                                                                    target,
-                                                                    rank
-                                                                ) || memory.is_likely_to_fill_rank_soon(
-                                                                    source,
-                                                                    rank
-                                                                ) {
-                                                                    continue
-                                                                }
-                                                                break
-                                                            }
-                                                            _ => {}
-                                                        }
-                                                    }
+    
+                                                    // This card counts as a turn, so just go on to the next turn.
+                                                    to_next_turn!(state);
                                                 }
                                             }
-
-                                            if let Some((rank, suit, i)) = found {
-                                                state.memories.found(
-                                                    source,
-                                                    models::fish_card(rank, suit)
+    
+                                            if state.cards.hand(target)
+                                                .contains(zingers::NO_FISHING)
+                                            && should_use_no_fishing_against(
+                                                state.memories.memory(target_id),
+                                                state.cards.hand(target),
+                                                source,
+                                                Predicate::Net(predicate),
+                                                state.cards.active_count(),
+                                            ) {
+                                                discard_no_fishing(
+                                                    &mut state.cards,
+                                                    &mut state.animations,
+                                                    target.with_target(source),
+                                                    Predicate::Net(predicate)
                                                 );
-                                                let at = get_card_position(
-                                                    spread(target),
-                                                    target_hand.len(),
-                                                    i,
-                                                );
-
-                                                let removed = target_hand.remove(i);
-                                                debug_assert!(removed.is_some());
-                                                if let Some(card) = removed {
-                                                    let target = get_card_insert_position(
-                                                        spread(source),
-                                                        len
-                                                    );
-
-                                                    state.animations.push(Animation {
-                                                        card,
-                                                        at,
-                                                        target,
-                                                        action: AnimationAction::AddToHand{ got_by_asking: true, id: HandId::Player },
-                                                        shown: true,
-                                                        .. <_>::default()
-                                                    });
-                                                }
-
-                                                to_next_turn!(state);
-                                            } else {
                                                 net_handle_negative_response!();
+                                            } else {
+                                                let len = state.cards.hand(source).len();
+                                                let target_hand = state.cards.hand_mut(target);
+    
+                                                state.memories.asked_for(
+                                                    source,
+                                                    Predicate::Net(predicate)
+                                                );
+    
+                                                let memory = state.memories.memory(target_id);
+                                                let mut found = None;
+                                                match predicate {
+                                                    NetPredicate::Rank(rank) => {
+                                                        for (i, card) in target_hand.enumerated_iter() {
+                                                            match (get_rank(card), get_suit(card)) {
+                                                                (Some(r), Some(suit)) if r == rank => {
+                                                                    found = Some((rank, suit, i));
+                                                                    // TODO? pick best one to give up, when there's no unlikely ones left?
+                                                                    // If this is an undesirable to give up card, keep looking.
+                                                                    if memory.is_likely_to_fill_rank_soon(
+                                                                        target,
+                                                                        rank
+                                                                    ) || memory.is_likely_to_fill_rank_soon(
+                                                                        source,
+                                                                        rank
+                                                                    ) {
+                                                                        continue
+                                                                    }
+                                                                    break
+                                                                }
+                                                                _ => {}
+                                                            }
+                                                        }
+                                                    }
+                                                    NetPredicate::Suit(suit) => {
+                                                        for (i, card) in target_hand.enumerated_iter() {
+                                                            match (get_rank(card), get_suit(card)) {
+                                                                (Some(rank), Some(s)) if s == suit => {
+                                                                    found = Some((rank, suit, i));
+                                                                    // TODO? pick best one to give up, when there's no unlikely ones left?
+                                                                    // If this is an undesirable to give up card, keep looking.
+                                                                    if memory.is_likely_to_fill_rank_soon(
+                                                                        target,
+                                                                        rank
+                                                                    ) || memory.is_likely_to_fill_rank_soon(
+                                                                        source,
+                                                                        rank
+                                                                    ) {
+                                                                        continue
+                                                                    }
+                                                                    break
+                                                                }
+                                                                _ => {}
+                                                            }
+                                                        }
+                                                    }
+                                                }
+    
+                                                if let Some((rank, suit, i)) = found {
+                                                    state.memories.found(
+                                                        source,
+                                                        models::fish_card(rank, suit)
+                                                    );
+                                                    let at = get_card_position(
+                                                        spread(target),
+                                                        target_hand.len(),
+                                                        i,
+                                                    );
+    
+                                                    let removed = target_hand.remove(i);
+                                                    debug_assert!(removed.is_some());
+                                                    if let Some(card) = removed {
+                                                        let target = get_card_insert_position(
+                                                            spread(source),
+                                                            len
+                                                        );
+    
+                                                        state.animations.push(Animation {
+                                                            card,
+                                                            at,
+                                                            target,
+                                                            action: AnimationAction::AddToHand{ got_by_asking: true, id: HandId::Player },
+                                                            shown: true,
+                                                            .. <_>::default()
+                                                        });
+                                                    }
+    
+                                                    to_next_turn!(state);
+                                                } else {
+                                                    net_handle_negative_response!();
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                            PlayKind::TheLure{ targeting: Targeting{ source, target }, predicate } => {
+                            PlayKind::TheLure{ targeting: Targeting{ source, target }, predicate, user_acknowledged: _ } => {
                                 // TODO? Reduce dupluplication with PlayKind::TheNet case?
                                 macro_rules! lure_handle_negative_response {
                                     () => {
