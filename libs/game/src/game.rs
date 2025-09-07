@@ -312,17 +312,88 @@ pub enum AnimationAction {
 mod question {
     use super::*;
 
+    pub trait PredicateTrait: Copy {
+        fn append_description(self, description: &mut Vec<u8>);
+        fn matches(self, card: Card) -> bool;
+    }
+
+    impl PredicateTrait for Predicate {
+        fn append_description(self, description: &mut Vec<u8>) {
+            match self {
+                Predicate::RankSuit(rank, suit) => {
+                    description.extend_from_slice(
+                        b"the "
+                    );
+
+                    description.extend_from_slice(
+                        Suit::TEXT[usize::from(suit as u8)]
+                    );
+
+                    description.push(b' ');
+
+                    description.extend_from_slice(
+                        Rank::TEXT[usize::from(rank as u8)]
+                    );
+                },
+                Predicate::Net(net_predicate) => {
+                    net_predicate.append_description(description);
+                },
+            }
+        }
+
+        fn matches(self, card: Card) -> bool {
+            Predicate::matches(self, card)
+        }
+    }
+
+    impl PredicateTrait for NetPredicate {
+        fn append_description(self, description: &mut Vec<u8>) {
+            match self {
+                NetPredicate::Suit(suit) => {
+                    description.extend_from_slice(
+                        b"a "
+                    );
+
+                    description.extend_from_slice(
+                        Suit::TEXT[usize::from(suit as u8)]
+                    );
+
+                    description.extend_from_slice(
+                        b" card"
+                    );
+                },
+                NetPredicate::Rank(rank) => {
+                    description.extend_from_slice(
+                        b"a "
+                    );
+
+                    description.extend_from_slice(
+                        Rank::TEXT[usize::from(rank as u8)]
+                    );
+
+                    description.extend_from_slice(
+                        b" card"
+                    );
+                },
+            }
+        }
+
+        fn matches(self, card: Card) -> bool {
+            NetPredicate::matches(self, card)
+        }
+    }
+
     #[derive(Clone, Debug)]
-    pub struct Question {
+    pub struct Question<Pred = Predicate> {
         pub targeting: Targeting,
-        pub predicate: Predicate,
+        pub predicate: Pred,
         description: Vec<u8>,
     }
 
-    impl Question {
+    impl <Pred: PredicateTrait> Question<Pred> {
         pub fn new(
             targeting: Targeting,
-            predicate: Predicate,
+            predicate: Pred,
         ) -> Self {
             Self {
                 targeting,
@@ -431,49 +502,7 @@ mod question {
         fn append_predicate_description(
             &mut self,
         ) {
-            match self.predicate {
-                Predicate::RankSuit(rank, suit) => {
-                    self.description.extend_from_slice(
-                        b"the "
-                    );
-
-                    self.description.extend_from_slice(
-                        Suit::TEXT[usize::from(suit as u8)]
-                    );
-
-                    self.description.push(b' ');
-
-                    self.description.extend_from_slice(
-                        Rank::TEXT[usize::from(rank as u8)]
-                    );
-                },
-                Predicate::Net(NetPredicate::Suit(suit)) => {
-                    self.description.extend_from_slice(
-                        b"a "
-                    );
-
-                    self.description.extend_from_slice(
-                        Suit::TEXT[usize::from(suit as u8)]
-                    );
-
-                    self.description.extend_from_slice(
-                        b" card"
-                    );
-                },
-                Predicate::Net(NetPredicate::Rank(rank)) => {
-                    self.description.extend_from_slice(
-                        b"a "
-                    );
-
-                    self.description.extend_from_slice(
-                        Rank::TEXT[usize::from(rank as u8)]
-                    );
-
-                    self.description.extend_from_slice(
-                        b" card"
-                    );
-                },
-            }
+            self.predicate.append_description(&mut self.description);
         }
     }
 }
@@ -807,8 +836,7 @@ pub enum PlayKind {
         cancelled: bool,
     },
     TheNet {
-        targeting: Targeting,
-        predicate: NetPredicate,
+        question: Question<NetPredicate>,
         user_acknowledged: bool,
     },
     TheLure {
@@ -834,7 +862,7 @@ impl PlayKind {
             Self::FishedUnsuccessfully { source }
             | Self::TwoFistedFisherman { source, .. } => *source,
             Self::NoFishing { question, .. } => question.targeting.source,
-            | Self::TheNet { targeting, .. }
+            Self::TheNet { question, .. } => question.targeting.source,
             | Self::TheLure { targeting, .. } => targeting.source,
         }
     }
@@ -1576,7 +1604,7 @@ impl State {
                                         match basket_indexes.prefix {
                                             [fish_index, ..] => {
                                                 // TODO have the dead scuba diver card go to the discard pile?
-                                                // The rules techically say that happens, but I don't think 
+                                                // The rules techically say that happens, but I don't think
                                                 // that makes a difference.
                                                 if let Some(rank) = baskets.get(fish_index).and_then(get_rank) {
                                                     let remove_index = hand.iter()
@@ -2540,7 +2568,7 @@ fn anytime_play(
                 })
                 | Some(Play {
                     kind: PlayKind::TheNet {
-                        targeting: Targeting { source, .. },
+                        question: Question { targeting: Targeting { source, .. }, .. },
                         ..
                     },
                     ..
@@ -2838,8 +2866,7 @@ fn discard_net(
             sub_turn_ids: targeting.source.next_to_current(),
             sub_turn_index: 0,
             kind: PlayKind::TheNet {
-                targeting,
-                predicate,
+                question: Question::new(targeting, predicate),
                 user_acknowledged: false,
             }
         }),
@@ -5567,7 +5594,7 @@ fn playing_update_and_render(
                                                         id.into(),
                                                         question.predicate,
                                                     );
-    
+
                                                     discard_no_fishing(
                                                         &mut state.cards,
                                                         &mut state.animations,
@@ -5798,8 +5825,11 @@ fn playing_update_and_render(
                                     go_again = true;
                                 }
                             }
-                            PlayKind::TheNet{ targeting: Targeting{ source, target }, predicate, user_acknowledged } => {
+                            PlayKind::TheNet{ mut question, user_acknowledged } => {
                                 // We want to display the question to the user, even if a CPU player will counter it.
+
+                                let Targeting{ source, target } = question.targeting;
+                                let predicate = question.predicate;
 
                                 match CpuId::try_from(target) {
                                     Err(()) => {
@@ -5815,73 +5845,31 @@ fn playing_update_and_render(
                                     }
                                     Ok(target_id) => {
                                         if !user_acknowledged {
-                                            // TODO replace this with a more descriptive, and less UI version
+                                            commands.draw_nine_slice(gfx::NineSlice::Window, CPU_ASKING_WINDOW);
 
-                                            commands.draw_nine_slice(
-                                                gfx::NineSlice::Window,
-                                                PLAYER_NET_WINDOW
+                                            let base_xy = CPU_ASKING_WINDOW.xy() + WINDOW_CONTENT_OFFSET;
+
+                                            let description_base_xy = base_xy;
+
+                                            let description_base_rect = fit_to_rest_of_window(
+                                                description_base_xy,
+                                                CPU_ASKING_WINDOW,
                                             );
 
-                                            let base_xy = PLAYER_NET_WINDOW.xy()
-                                                + WINDOW_CONTENT_OFFSET;
-
-                                            let label_card_xy = base_xy;
-
-                                            commands.draw_card(
-                                                zingers::THE_NET,
-                                                label_card_xy
+                                            let description = question.fresh_cpu_ask_description(
+                                                description_base_rect.w,
                                             );
 
-                                            let target_base_xy = label_card_xy + CARD_WIDTH;
-
-                                            let group = new_group!();
-
-                                            let card_xy = target_base_xy + CPU_ID_SELECT_WH.w;
-
-                                            group.commands.draw_net_predicate_card(
-                                                predicate,
-                                                card_xy
-                                            );
-
-                                            let predicate_select_xy = card_xy + CARD_WIDTH;
-
-                                            let predicate_select_rect = Rect::xy_wh(
-                                                predicate_select_xy,
-                                                NET_PREDICATE_SELECT_WH,
-                                            );
-
-                                            group.commands.print_centered(
-                                                NetPredicate::TEXT[predicate.index_of()],
-                                                Rect::xy_wh(
-                                                    predicate_select_xy + NET_PREDICATE_SELECT_TEXT_OFFSET.w,
-                                                    NET_PREDICATE_SELECT_TEXT_WH,
-                                                ),
+                                            commands.print_centered(
+                                                description,
+                                                description_base_rect,
                                                 WHITE,
                                             );
 
-                                            ui::draw_quick_select(
-                                                group,
-                                                predicate_select_rect,
-                                                NetPredicate,
-                                            );
-
-                                            let submit_xy = predicate_select_xy + NET_PREDICATE_SELECT_WH.w;
-
                                             let mut user_acknowledged = user_acknowledged;
 
-                                            group.ctx.set_next_hot(Submit);
-
-                                            if do_button(
-                                                group,
-                                                ButtonSpec {
-                                                    id: Submit,
-                                                    rect: fit_to_rest_of_window(
-                                                        submit_xy,
-                                                        PLAYER_NET_WINDOW,
-                                                    ),
-                                                    text: b"Ok",
-                                                }
-                                            ) {                                            
+                                            if input.pressed_this_frame(Button::A)
+                                            | input.pressed_this_frame(Button::B) {
                                                 user_acknowledged = true;
                                             }
 
@@ -5890,8 +5878,7 @@ fn playing_update_and_render(
                                                     sub_turn_ids: play.sub_turn_ids,
                                                     sub_turn_index: play.sub_turn_index,
                                                     kind: PlayKind::TheNet{
-                                                        targeting: Targeting{ source, target },
-                                                        predicate,
+                                                        question,
                                                         user_acknowledged
                                                     },
                                                 }
@@ -5900,21 +5887,21 @@ fn playing_update_and_render(
                                             macro_rules! net_handle_negative_response {
                                                 () => {
                                                     let len = state.cards.hand(source).len();
-    
+
                                                     let drew = state.cards.deck.draw();
-    
+
                                                     state.memories.did_not_have(target, models::Predicate::Net(predicate));
-    
+
                                                     if let Some(card) = drew {
                                                         state.memories.drew_card(source);
-    
+
                                                         let at = DECK_XY;
-    
+
                                                         let target = get_card_insert_position(
                                                             spread(source),
                                                             len
                                                         );
-    
+
                                                         state.animations.push(Animation {
                                                             card,
                                                             at,
@@ -5923,12 +5910,12 @@ fn playing_update_and_render(
                                                             .. <_>::default()
                                                         });
                                                     }
-    
+
                                                     // This card counts as a turn, so just go on to the next turn.
                                                     to_next_turn!(state);
                                                 }
                                             }
-    
+
                                             if state.cards.hand(target)
                                                 .contains(zingers::NO_FISHING)
                                             && should_use_no_fishing_against(
@@ -5948,12 +5935,12 @@ fn playing_update_and_render(
                                             } else {
                                                 let len = state.cards.hand(source).len();
                                                 let target_hand = state.cards.hand_mut(target);
-    
+
                                                 state.memories.asked_for(
                                                     source,
                                                     Predicate::Net(predicate)
                                                 );
-    
+
                                                 let memory = state.memories.memory(target_id);
                                                 let mut found = None;
                                                 match predicate {
@@ -6002,7 +5989,7 @@ fn playing_update_and_render(
                                                         }
                                                     }
                                                 }
-    
+
                                                 if let Some((rank, suit, i)) = found {
                                                     state.memories.found(
                                                         source,
@@ -6013,7 +6000,7 @@ fn playing_update_and_render(
                                                         target_hand.len(),
                                                         i,
                                                     );
-    
+
                                                     let removed = target_hand.remove(i);
                                                     debug_assert!(removed.is_some());
                                                     if let Some(card) = removed {
@@ -6021,7 +6008,7 @@ fn playing_update_and_render(
                                                             spread(source),
                                                             len
                                                         );
-    
+
                                                         state.animations.push(Animation {
                                                             card,
                                                             at,
@@ -6031,7 +6018,7 @@ fn playing_update_and_render(
                                                             .. <_>::default()
                                                         });
                                                     }
-    
+
                                                     to_next_turn!(state);
                                                 } else {
                                                     net_handle_negative_response!();
