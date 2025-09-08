@@ -1122,6 +1122,12 @@ pub struct LurePredicate {
     pub suit: Suit,
 }
 
+impl LurePredicate {
+    pub fn matches(self, card: Card) -> bool {
+        card == fish_card(self.rank, self.suit)
+    }
+}
+
 macro_rules! l {
     ($suit_index: tt $rank_index: tt) => {
         Self {
@@ -1333,7 +1339,7 @@ impl Predicate {
     pub fn matches(self, card: Card) -> bool {
         use Predicate::*;
         match self {
-            RankSuit(rank, suit) => card == fish_card(rank, suit),
+            RankSuit(rank, suit) => LurePredicate{ rank, suit }.matches(card),
             Net(net_predicate) => net_predicate.matches(card),
         }
     }
